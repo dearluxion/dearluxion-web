@@ -1,2 +1,5 @@
 streamlit
 google-generativeai
+gspread
+google-auth
+oauth2client

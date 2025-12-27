@@ -8,8 +8,17 @@ import base64
 import random
 import google.generativeai as genai
 
+# --- [NEW] ส่วนเสริมสำหรับ Google Sheets ---
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials
+    has_gspread = True
+except ImportError:
+    has_gspread = False
+# ------------------------------------------
+
 # --- 0. ตั้งค่า API KEY (เอา Key ของบอสมาใส่ตรงนี้!) ---
-GEMINI_API_KEY = "เอา_API_KEY_มาใส่ตรงนี้_ห้ามลบฟันหนูนะ" 
+GEMINI_API_KEY = ""
 
 # Config Gemini (อัปเกรดเป็น 2.5-flash)
 try:
@@ -151,43 +160,165 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 2. ระบบจัดการไฟล์ ---
+# --- [SYSTEM] ฟังก์ชันแปลงลิงก์ Google Drive ---
+def convert_drive_link(link):
+    if "drive.google.com" in link:
+        if "/folders/" in link:
+            return "ERROR: นี่คือลิงก์โฟลเดอร์ครับ! ใช้ได้แค่ลิงก์ไฟล์ (คลิกขวาที่รูป > Share > Copy Link)"
+        match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
+        if match:
+            file_id = match.group(1)
+            return f'https://lh3.googleusercontent.com/d/{file_id}'
+    return link 
+
+def convert_drive_video_link(link):
+    if "drive.google.com" in link:
+        if "/folders/" in link:
+             return "ERROR: ลิงก์โฟลเดอร์ใช้ไม่ได้ครับ ต้องเป็นลิงก์ไฟล์วิดีโอ"
+        match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
+        if match:
+            file_id = match.group(1)
+            return f'https://drive.google.com/file/d/{file_id}/preview'
+    return link
+# -------------------------------------------------------------
+
+# --- 2. ระบบจัดการไฟล์ (Google Sheets + JSON Backup) ---
 DB_FILE = "portfolio_db.json"
 PROFILE_FILE = "profile_db.json"
 MAILBOX_FILE = "mailbox_db.json"
 
+# [NEW] เชื่อมต่อ Google Sheets
+def get_gsheet_client():
+    if not has_gspread: return None
+    if "gcp_service_account" not in st.secrets: return None
+    try:
+        scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        client = gspread.authorize(creds)
+        return client.open(st.secrets.get("sheet_name", "streamlit_db"))
+    except Exception as e:
+        return None
+
+# --- Override: Load Data ---
 def load_data():
+    # 1. ลองโหลดจาก Google Sheets
+    sh = get_gsheet_client()
+    if sh:
+        try:
+            ws = sh.worksheet("posts")
+            records = ws.get_all_records()
+            clean_data = []
+            for r in records:
+                if not str(r['id']): continue
+                try:
+                    # แปลงข้อมูล JSON String กลับเป็น Python Object
+                    r['images'] = json.loads(r['images']) if r['images'] else []
+                    r['video'] = json.loads(r['video']) if r['video'] else []
+                    r['reactions'] = json.loads(r['reactions']) if r['reactions'] else {'😻':0,'🙀':0,'😿':0,'😾':0,'🧠':0}
+                    r['comments'] = json.loads(r['comments']) if r['comments'] else []
+                    clean_data.append(r)
+                except: continue
+            return clean_data
+        except: pass
+    
+    # 2. ถ้า Sheets พัง ให้โหลดจากไฟล์เดิม (Backup)
     if not os.path.exists(DB_FILE): return []
     try:
         with open(DB_FILE, "r", encoding="utf-8") as f: return json.load(f)
     except: return []
 
+# --- Override: Save Data ---
 def save_data(data):
+    # 1. บันทึกลง Google Sheets (ถาวร)
+    sh = get_gsheet_client()
+    if sh:
+        try:
+            ws = sh.worksheet("posts")
+            rows = [["id", "date", "content", "images", "video", "color", "price", "likes", "reactions", "comments"]]
+            for p in data:
+                rows.append([
+                    str(p.get('id','')), p.get('date',''), p.get('content',''),
+                    json.dumps(p.get('images', [])),
+                    json.dumps(p.get('video', [])),
+                    p.get('color', '#A370F7'), p.get('price', 0), 0,
+                    json.dumps(p.get('reactions', {})),
+                    json.dumps(p.get('comments', []))
+                ])
+            ws.clear()
+            ws.update(rows)
+        except Exception as e:
+            st.error(f"บันทึกลง Sheets ไม่สำเร็จ: {e}")
+
+    # 2. บันทึกลงไฟล์ (สำรอง)
     try:
         with open(DB_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
-    except: st.error("บันทึกโพสต์ไม่สำเร็จ")
+    except: st.error("บันทึกไฟล์สำรองไม่สำเร็จ")
 
+# --- Override: Load Profile ---
 def load_profile():
+    sh = get_gsheet_client()
+    if sh:
+        try:
+            ws = sh.worksheet("profile")
+            records = ws.get_all_records()
+            pf = {}
+            for r in records:
+                try: val = json.loads(r['value'])
+                except: val = r['value']
+                pf[r['key']] = val
+            return pf
+        except: pass
+        
     if not os.path.exists(PROFILE_FILE): return {}
     try:
         with open(PROFILE_FILE, "r", encoding="utf-8") as f: return json.load(f)
     except: return {}
 
+# --- Override: Save Profile ---
 def save_profile(data):
+    sh = get_gsheet_client()
+    if sh:
+        try:
+            ws = sh.worksheet("profile")
+            rows = [["key", "value"]]
+            for k,v in data.items():
+                val = json.dumps(v) if isinstance(v, (dict, list)) else str(v)
+                rows.append([k, val])
+            ws.clear()
+            ws.update(rows)
+        except: pass
+        
     try:
         with open(PROFILE_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
-    except: st.error("บันทึกโปรไฟล์ไม่สำเร็จ")
+    except: pass
 
+# --- Override: Load Mailbox ---
 def load_mailbox():
+    sh = get_gsheet_client()
+    if sh:
+        try: return sh.worksheet("mailbox").get_all_records()
+        except: pass
+        
     if not os.path.exists(MAILBOX_FILE): return []
     try:
         with open(MAILBOX_FILE, "r", encoding="utf-8") as f: return json.load(f)
     except: return []
 
+# --- Override: Save Mailbox ---
 def save_mailbox(data):
+    sh = get_gsheet_client()
+    if sh:
+        try:
+            ws = sh.worksheet("mailbox")
+            rows = [["date", "text"]]
+            for m in data: rows.append([m['date'], m['text']])
+            ws.clear()
+            ws.update(rows)
+        except: pass
+        
     try:
         with open(MAILBOX_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
-    except: st.error("ส่งจดหมายไม่สำเร็จ")
+    except: pass
 
 # Session Init
 if 'liked_posts' not in st.session_state: st.session_state['liked_posts'] = []
@@ -197,7 +328,7 @@ if 'last_fortune_time' not in st.session_state: st.session_state['last_fortune_t
 if 'last_gossip_time' not in st.session_state: st.session_state['last_gossip_time'] = 0
 if 'last_mailbox_time' not in st.session_state: st.session_state['last_mailbox_time'] = 0
 if 'last_choice_time' not in st.session_state: st.session_state['last_choice_time'] = 0
-if 'last_stock_trade' not in st.session_state: st.session_state['last_stock_trade'] = 0 # [NEW] คูลดาวน์หุ้น
+if 'last_stock_trade' not in st.session_state: st.session_state['last_stock_trade'] = 0
 if 'show_shop' not in st.session_state: st.session_state['show_shop'] = False
 if 'is_admin' not in st.session_state: st.session_state['is_admin'] = False
 
@@ -209,6 +340,10 @@ if 'feed_msg' not in st.session_state: st.session_state['feed_msg'] = None
 if 'bar_tokens' not in st.session_state: st.session_state['bar_tokens'] = 5
 if 'last_bar_regen' not in st.session_state: st.session_state['last_bar_regen'] = time.time()
 if 'bar_result' not in st.session_state: st.session_state['bar_result'] = None
+
+# --- [NEW] Session state สำหรับเก็บจำนวนลิงก์ ---
+if 'num_img_links' not in st.session_state: st.session_state['num_img_links'] = 1
+if 'num_vid_links' not in st.session_state: st.session_state['num_vid_links'] = 1
 
 # --- Token Regen Logic ---
 now = time.time()
@@ -635,30 +770,99 @@ if st.session_state['is_admin']:
             new_desc = st.text_area("เนื้อหา (Story)", height=150)
         with col2:
             new_imgs = st.file_uploader("รูป (เลือกได้หลายรูป)", type=['png','jpg'], accept_multiple_files=True)
-            new_video = st.file_uploader("คลิป", type=['mp4','mov'])
+            
+            # --- [NEW] ระบบเพิ่มลิงก์รูปแบบกดบวกได้ ---
+            st.caption("📷 แปะลิงก์รูป (Google Drive/Web)")
+            img_links = []
+            
+            # ปุ่มเพิ่ม/ลด จำนวนช่อง
+            c_plus, c_minus = st.columns([1,1])
+            with c_plus:
+                if st.button("➕ เพิ่มช่องรูป", key="add_img_field"):
+                    st.session_state['num_img_links'] += 1
+            with c_minus:
+                if st.button("➖ ลบช่องรูป", key="del_img_field"):
+                    if st.session_state['num_img_links'] > 1: st.session_state['num_img_links'] -= 1
+            
+            # วนลูปสร้างช่องตามจำนวน
+            for i in range(st.session_state['num_img_links']):
+                val = st.text_input(f"ลิงก์รูปที่ {i+1}", key=f"img_lnk_{i}", placeholder="https://drive.google.com/...")
+                if val: img_links.append(val)
+            # ----------------------------------------
+
+            # --- [NEW] ระบบวิดีโอจาก Drive ---
+            st.markdown("---")
+            new_video = st.file_uploader("อัปโหลดคลิป (MP4)", type=['mp4','mov'])
+            
+            st.caption("🎥 แปะลิงก์วิดีโอ (Google Drive)")
+            vid_links = []
+            
+            # ปุ่มเพิ่ม/ลด ช่องวิดีโอ
+            v_plus, v_minus = st.columns([1,1])
+            with v_plus:
+                if st.button("➕ เพิ่มช่องคลิป", key="add_vid_field"):
+                    st.session_state['num_vid_links'] += 1
+            with v_minus:
+                if st.button("➖ ลบช่องคลิป", key="del_vid_field"):
+                    if st.session_state['num_vid_links'] > 1: st.session_state['num_vid_links'] -= 1
+            
+            for i in range(st.session_state['num_vid_links']):
+                val = st.text_input(f"ลิงก์คลิปที่ {i+1}", key=f"vid_lnk_{i}", placeholder="https://drive.google.com/...")
+                if val: vid_links.append(val)
+            # ----------------------------------------
+
             post_color = st.color_picker("สีธีม", "#A370F7")
             price = st.number_input("💰 ราคา (ใส่ 0 = ไม่ขาย)", min_value=0, value=0)
 
         if st.button("🚀 โพสต์เลย", use_container_width=True):
-            if new_desc:
+            # --- ตรวจสอบลิงก์ทั้งหมด ---
+            link_errors = []
+            final_img_links = []
+            final_vid_links = []
+            
+            # เช็คลิงก์รูป
+            for lnk in img_links:
+                conv = convert_drive_link(lnk.strip())
+                if conv.startswith("ERROR:"): link_errors.append(f"รูป: {conv}")
+                else: final_img_links.append(conv)
+            
+            # เช็คลิงก์วิดีโอ
+            for lnk in vid_links:
+                conv = convert_drive_video_link(lnk.strip())
+                if conv.startswith("ERROR:"): link_errors.append(f"วิดีโอ: {conv}")
+                else: final_vid_links.append(conv)
+
+            if link_errors:
+                for err in link_errors: st.error(err)
+            elif new_desc:
                 img_paths = []
+                
+                # 1. รูปอัปโหลด
                 if new_imgs:
                     for img_file in new_imgs:
                         fname = f"img_{int(time.time())}_{img_file.name}"
                         with open(fname, "wb") as f: f.write(img_file.getbuffer())
                         img_paths.append(fname)
                 
-                video_path = None
+                # 2. รูปจากลิงก์
+                img_paths.extend(final_img_links)
+                
+                # 3. วิดีโออัปโหลด
+                video_paths = [] # เปลี่ยนเป็น list รองรับหลายคลิป
                 if new_video:
-                    video_path = new_video.name
-                    with open(video_path, "wb") as f: f.write(new_video.getbuffer())
+                    vname = new_video.name
+                    with open(vname, "wb") as f: f.write(new_video.getbuffer())
+                    video_paths.append(vname)
+                
+                # 4. วิดีโอจากลิงก์
+                video_paths.extend(final_vid_links)
                 
                 new_post = {
                     "id": str(datetime.datetime.now().timestamp()),
                     "date": datetime.datetime.now().strftime("%d/%m/%Y"),
                     "content": new_desc,
                     "images": img_paths,
-                    "video": video_path,
+                    "video": video_paths, # เก็บเป็น list
                     "color": post_color,
                     "price": price,
                     "likes": 0,
@@ -666,7 +870,6 @@ if st.session_state['is_admin']:
                     "comments": []
                 }
                 
-                # Myla Auto-Reply Logic (Using AI if available)
                 myla_reply = ""
                 if ai_available:
                     try:
@@ -689,6 +892,9 @@ if st.session_state['is_admin']:
                 current.append(new_post)
                 save_data(current)
                 st.success("เรียบร้อย!")
+                # Reset จำนวนช่องกลับเป็น 1
+                st.session_state['num_img_links'] = 1
+                st.session_state['num_vid_links'] = 1
                 time.sleep(1); st.rerun()
             else: st.warning("พิมพ์อะไรหน่อยสิครับ")
 
@@ -709,7 +915,6 @@ if st.session_state['is_admin']:
                 st.warning("ลบป้ายไฟเรียบร้อย")
                 st.rerun()
         
-        # [UPDATED FIX] Admin Control for Bar Game
         st.markdown("---")
         st.markdown("### 🍸 จัดการบาร์เทนเดอร์ AI")
         enable_bar = st.checkbox("เปิดใช้งานระบบ Mood Mocktail (เปลือง Token)", value=profile_data.get('settings', {}).get('enable_bar', True))
@@ -717,7 +922,7 @@ if st.session_state['is_admin']:
         if st.button("บันทึกการตั้งค่า"):
             if 'settings' not in profile_data: profile_data['settings'] = {}
             profile_data['settings']['enable_bar'] = enable_bar
-            save_profile(profile_data) # Save directly using loaded data (No NameError)
+            save_profile(profile_data) 
             st.success("บันทึกการตั้งค่าแล้ว!")
             st.rerun()
 
@@ -733,7 +938,6 @@ if st.session_state['is_admin']:
             p_ex = st.text_area("ลิงก์อื่นๆ", value=profile_data.get('extras',''))
             
             if st.form_submit_button("บันทึกข้อมูลส่วนตัว"):
-                # Update specific fields
                 profile_data.update({
                     "name": p_name, "emoji": p_emoji, "status": p_status, "bio": p_bio, 
                     "discord": p_discord, "ig": p_ig, "extras": p_ex
@@ -812,7 +1016,8 @@ if filtered:
                 st.image(post['image'], use_container_width=True)
             
             if post.get('images'):
-                valid_imgs = [img for img in post['images'] if os.path.exists(img)]
+                # --- เช็คว่ารูปมีอยู่จริง หรือ เป็นลิงก์เว็บ ---
+                valid_imgs = [img for img in post['images'] if img.startswith("http") or os.path.exists(img)]
                 if valid_imgs:
                     if len(valid_imgs) == 1:
                         st.image(valid_imgs[0], use_container_width=True)
@@ -822,7 +1027,18 @@ if filtered:
                             with img_cols[idx % 3]:
                                 st.image(img, use_container_width=True)
 
-            if post.get('video') and os.path.exists(post['video']): st.video(post['video'])
+            # --- [UPDATED] แสดงวิดีโอ (รองรับทั้งไฟล์เดียวและหลายไฟล์) ---
+            videos = post.get('video')
+            if videos:
+                if isinstance(videos, str): videos = [videos] # แปลงของเก่าให้เป็น list
+                for vid in videos:
+                    # ถ้าเป็นลิงก์ Google Drive ต้องใช้ Iframe
+                    if "drive.google.com" in vid and "preview" in vid:
+                         st.markdown(f'<iframe src="{vid}" width="100%" height="300" style="border:none; border-radius:10px;"></iframe>', unsafe_allow_html=True)
+                    # ถ้าเป็น YouTube หรือไฟล์ MP4 ปกติ ใช้ st.video
+                    elif vid.startswith("http") or os.path.exists(vid):
+                        st.video(vid)
+            # ----------------------------------------------------
             
             content = post['content']
             yt = re.search(r'(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})', content)
