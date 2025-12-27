@@ -8,58 +8,40 @@ import base64
 import random
 import google.generativeai as genai
 
-# --- ตั้งค่าหน้าเว็บ ---
-st.set_page_config(page_title="Small Group by Dearluxion", page_icon="🍸", layout="centered")
-
-# --- 0. ส่วนเสริมสำหรับ Google Sheets ---
+# --- [NEW] บังคับใช้ Google Sheets เท่านั้น! ---
 try:
     import gspread
     from google.oauth2.service_account import Credentials
     has_gspread = True
 except ImportError:
-    has_gspread = False
+    st.error("❌ ยังไม่ได้ติดตั้ง gspread! (ไปแก้ requirements.txt ด่วน)")
+    st.stop()
 
-# --- 1. ระบบตรวจสอบสถานะการเชื่อมต่อ (Auto-Check) ---
-# ฟังก์ชันนี้จะรันเองเพื่อบอกเพื่อนว่า "ติดตรงไหน"
-def check_connection_status():
-    status = {"connected": False, "message": "ยังไม่ทราบสาเหตุ"}
-    
-    if not has_gspread:
-        return {"connected": False, "message": "❌ ไม่พบไลบรารี gspread (ต้องเพิ่มใน requirements.txt)"}
-    
+# ฟังก์ชันเชื่อมต่อ Google Sheets (แบบบังคับ)
+def get_gsheet_client():
     if "gcp_service_account" not in st.secrets:
-        return {"connected": False, "message": "❌ ไม่พบกุญแจใน Secrets (เช็คชื่อหัวข้อ [gcp_service_account])"}
-
+        st.error("❌ ไม่เจอ Secrets! (ไปใส่กุญแจใน Secrets ก่อน)")
+        st.stop()
+    
     try:
-        # ลองแปลงกุญแจ
+        # 🔧 ซ่อมกุญแจอัตโนมัติ
         key_dict = dict(st.secrets["gcp_service_account"])
         key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
         
-        # ลองล็อกอิน
         scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
         creds = Credentials.from_service_account_info(key_dict, scopes=scope)
         client = gspread.authorize(creds)
-        
-        # ลองหาไฟล์
+        # ใช้ชื่อไฟล์จาก secrets
         sheet_name = st.secrets.get("sheet_name", "streamlit_db")
-        sh = client.open(sheet_name)
-        
-        return {"connected": True, "message": f"🟢 เชื่อมต่อสำเร็จ! (ไฟล์: {sh.title})"}
-        
+        return client.open(sheet_name)
     except Exception as e:
-        error_msg = str(e)
-        if "permission" in error_msg.lower():
-            return {"connected": False, "message": "⚠️ ลืมกด Share ไฟล์ให้บอท (อีเมลใน Secrets)"}
-        elif "not found" in error_msg.lower():
-            return {"connected": False, "message": f"⚠️ หาไฟล์ชื่อ '{st.secrets.get('sheet_name', 'streamlit_db')}' ไม่เจอ"}
-        else:
-            return {"connected": False, "message": f"❌ Error อื่นๆ: {error_msg}"}
+        st.error(f"❌ เชื่อมต่อ Google Sheets ไม่ได้: {e}")
+        st.stop() # หยุดทำงานทันทีถ้าต่อไม่ได้
 
-# รันการตรวจสอบ
-conn_status = check_connection_status()
+# --- 0. ตั้งค่า API KEY ---
+GEMINI_API_KEY = ""
 
-# --- 2. ตั้งค่า AI (Gemini) ---
-GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "AIzaSyAt2dJJyD45eI6n3AEq_tID3IISl2_MDfI")
+# Config Gemini
 try:
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel('gemini-2.5-flash') 
@@ -67,288 +49,963 @@ try:
 except:
     ai_available = False
 
-# --- CSS ตกแต่ง ---
+# --- 1. ตั้งค่าหน้าเว็บ ---
+st.set_page_config(page_title="Small Group by Dearluxion", page_icon="🍸", layout="centered")
+
+# CSS: RGB Minimal & Glow Effects
 st.markdown("""
 <style>
     .stApp { background-color: #0E1117; color: #E6EDF3; font-family: 'Sarabun', sans-serif; }
-    .work-card-base { background: #161B22; padding: 20px; border-radius: 15px; border: 1px solid rgba(163, 112, 247, 0.3); margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); transition: all 0.3s ease; }
-    .work-card-base:hover { transform: translateY(-2px); border-color: #A370F7; }
-    .stButton>button { border-radius: 25px; border: 1px solid #30363D; background-color: #21262D; color: white; width: 100%; }
-    .stButton>button:hover { border-color: #A370F7; color: #A370F7; }
+    @keyframes rgb-border {
+        0% { border-color: #ff0000; box-shadow: 0 0 5px #ff0000; }
+        33% { border-color: #00ff00; box-shadow: 0 0 5px #00ff00; }
+        66% { border-color: #0000ff; box-shadow: 0 0 5px #0000ff; }
+        100% { border-color: #ff0000; box-shadow: 0 0 5px #ff0000; }
+    }
+    .work-card-base {
+        background: #161B22; padding: 20px; border-radius: 15px;
+        border: 1px solid rgba(163, 112, 247, 0.3); margin-bottom: 20px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4); transition: all 0.3s ease;
+    }
+    .work-card-base:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(163, 112, 247, 0.15); border-color: #A370F7; }
+    .stButton>button { border-radius: 25px; border: 1px solid #30363D; background-color: #21262D; color: white; transition: 0.3s; width: 100%; font-weight: 500; }
+    .stButton>button:hover { border-color: #A370F7; color: #A370F7; background-color: #2b313a; box-shadow: 0 0 10px rgba(163, 112, 247, 0.2); }
+    .comment-box { background-color: #0d1117; padding: 12px; border-radius: 10px; margin-top: 10px; border-left: 3px solid #A370F7; font-size: 13px; }
+    .admin-comment-box { background: linear-gradient(90deg, #2b2100 0%, #1a1600 100%); padding: 12px; border-radius: 10px; margin-top: 10px; border: 1px solid #FFD700; font-size: 13px; box-shadow: 0 0 15px rgba(255, 215, 0, 0.1); }
+    .price-tag { background: linear-gradient(45deg, #A370F7, #8a4bfa); color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 16px; display: inline-block; margin-bottom: 10px; box-shadow: 0 4px 15px rgba(163, 112, 247, 0.4); }
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+    .cute-guide { animation: float 3s infinite ease-in-out; background: linear-gradient(135deg, #FF9A9E, #FECFEF); padding: 10px 20px; border-radius: 30px; color: #555; font-weight: bold; text-align: center; margin-bottom: 15px; box-shadow: 0 5px 20px rgba(255, 154, 158, 0.4); cursor: pointer; border: 2px solid white; }
+    .boss-billboard { background: rgba(22, 27, 34, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(163, 112, 247, 0.5); border-radius: 20px; padding: 25px; text-align: center; margin-bottom: 30px; position: relative; box-shadow: 0 0 20px rgba(163, 112, 247, 0.15); overflow: hidden; }
+    .boss-billboard::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #ff0000, #00ff00, #0000ff, #ff0000); background-size: 200% 100%; animation: rgb-move 5s linear infinite; }
+    @keyframes rgb-move { 0% {background-position: 0% 50%;} 100% {background-position: 100% 50%;} }
+    .billboard-icon { font-size: 28px; margin-bottom: 5px; }
+    .billboard-text { font-size: 22px; font-weight: 700; color: #fff; letter-spacing: 0.5px; }
+    .billboard-time { font-size: 10px; color: #8B949E; margin-top: 15px; text-transform: uppercase; letter-spacing: 1px; }
     a { color: #A370F7 !important; text-decoration: none; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- Functions แปลงลิงก์ ---
+# --- [SYSTEM] ฟังก์ชันแปลงลิงก์ Google Drive ---
 def convert_drive_link(link):
     if "drive.google.com" in link:
+        if "/folders/" in link: return "ERROR: ห้ามใช้ลิงก์ Folder!"
         match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
         if match: return f'https://lh3.googleusercontent.com/d/{match.group(1)}'
     return link 
 
 def convert_drive_video_link(link):
     if "drive.google.com" in link:
+        if "/folders/" in link: return "ERROR: ห้ามใช้ลิงก์ Folder!"
         match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
         if match: return f'https://drive.google.com/file/d/{match.group(1)}/preview'
     return link
 
-# --- ระบบ Database ---
-DB_FILE = "portfolio_db.json"
-PROFILE_FILE = "profile_db.json"
-MAILBOX_FILE = "mailbox_db.json"
-
-def get_gsheet_client():
-    if not conn_status["connected"]: return None
-    try:
-        key_dict = dict(st.secrets["gcp_service_account"])
-        key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
-        scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        creds = Credentials.from_service_account_info(key_dict, scopes=scope)
-        client = gspread.authorize(creds)
-        return client.open(st.secrets.get("sheet_name", "streamlit_db"))
-    except: return None
-
+# --- [CORE] ระบบ Database (Google Sheets ONLY!) ---
+# บังคับโหลดจาก Google Sheets เท่านั้น! ไม่สนไฟล์ Local
 def load_data():
     sh = get_gsheet_client()
-    if sh:
-        try:
-            # ดึงข้อมูลจาก Sheets
-            records = sh.worksheet("posts").get_all_records()
-            clean = []
-            for r in records:
-                if not str(r['id']): continue
-                # แปลง JSON string กลับเป็น Object
-                try: r['images'] = json.loads(r['images']) if r['images'] else []
-                except: r['images'] = []
-                try: r['video'] = json.loads(r['video']) if r['video'] else []
-                except: r['video'] = []
-                try: r['reactions'] = json.loads(r['reactions']) if r['reactions'] else {}
-                except: r['reactions'] = {}
-                try: r['comments'] = json.loads(r['comments']) if r['comments'] else []
-                except: r['comments'] = []
-                clean.append(r)
-            return clean
-        except: pass
-    
-    # ถ้า Sheets ไม่ได้ ให้ใช้ไฟล์ Local
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r", encoding="utf-8") as f: return json.load(f)
-    return []
+    try:
+        ws = sh.worksheet("posts")
+        records = ws.get_all_records()
+        clean_data = []
+        for r in records:
+            if not str(r['id']): continue
+            try:
+                # แปลง JSON String เป็น Object
+                r['images'] = json.loads(r['images']) if r['images'] else []
+                r['video'] = json.loads(r['video']) if r['video'] else []
+                r['reactions'] = json.loads(r['reactions']) if r['reactions'] else {'😻':0,'🙀':0,'😿':0,'😾':0,'🧠':0}
+                r['comments'] = json.loads(r['comments']) if r['comments'] else []
+                clean_data.append(r)
+            except: continue
+        return clean_data
+    except Exception as e:
+        # ถ้าหาแผ่นงานไม่เจอ ให้สร้างใหม่ (กันเหนียว)
+        if "posts" in str(e):
+            sh.add_worksheet(title="posts", rows=100, cols=20)
+            return []
+        st.error(f"โหลดข้อมูลไม่ได้: {e}")
+        return []
 
+# บังคับเซฟลง Google Sheets เท่านั้น!
 def save_data(data):
     sh = get_gsheet_client()
-    if sh:
-        try:
-            ws = sh.worksheet("posts")
-            rows = [["id", "date", "content", "images", "video", "color", "price", "likes", "reactions", "comments"]]
-            for p in data:
-                rows.append([
-                    str(p.get('id','')), p.get('date',''), p.get('content',''),
-                    json.dumps(p.get('images', [])), json.dumps(p.get('video', [])),
-                    p.get('color','#A370F7'), p.get('price',0), 0,
-                    json.dumps(p.get('reactions',{})), json.dumps(p.get('comments',[]))
-                ])
-            ws.clear()
-            ws.update(rows)
-        except: pass
-    
-    # เซฟลงเครื่องกันเหนียว
-    with open(DB_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
+    try:
+        ws = sh.worksheet("posts")
+        rows = [["id", "date", "content", "images", "video", "color", "price", "likes", "reactions", "comments"]]
+        for p in data:
+            rows.append([
+                str(p.get('id','')), p.get('date',''), p.get('content',''),
+                json.dumps(p.get('images', [])), json.dumps(p.get('video', [])),
+                p.get('color', '#A370F7'), p.get('price', 0), 0,
+                json.dumps(p.get('reactions', {})),
+                json.dumps(p.get('comments', []))
+            ])
+        ws.clear()
+        ws.update(rows)
+    except Exception as e:
+        st.error(f"❌ บันทึกลง Google Sheets ไม่สำเร็จ! สาเหตุ: {e}")
+        st.stop()
 
-# (ฟังก์ชัน Load/Save Profile และ Mailbox ใช้หลักการเดียวกัน ย่อเพื่อประหยัดที่)
 def load_profile():
     sh = get_gsheet_client()
-    if sh:
-        try:
-            recs = sh.worksheet("profile").get_all_records()
-            pf = {}
-            for r in recs:
-                try: pf[r['key']] = json.loads(r['value'])
-                except: pf[r['key']] = r['value']
-            return pf
-        except: pass
-    if os.path.exists(PROFILE_FILE):
-        with open(PROFILE_FILE, "r", encoding="utf-8") as f: return json.load(f)
-    return {}
+    try:
+        ws = sh.worksheet("profile")
+        records = ws.get_all_records()
+        pf = {}
+        for r in records:
+            try: val = json.loads(r['value'])
+            except: val = r['value']
+            pf[r['key']] = val
+        return pf
+    except: return {}
 
 def save_profile(data):
     sh = get_gsheet_client()
-    if sh:
-        try:
-            rows = [["key", "value"]]
-            for k,v in data.items(): rows.append([k, json.dumps(v) if isinstance(v, (dict,list)) else str(v)])
-            sh.worksheet("profile").clear(); sh.worksheet("profile").update(rows)
-        except: pass
-    with open(PROFILE_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
+    try:
+        ws = sh.worksheet("profile")
+        rows = [["key", "value"]]
+        for k,v in data.items():
+            val = json.dumps(v) if isinstance(v, (dict, list)) else str(v)
+            rows.append([k, val])
+        ws.clear()
+        ws.update(rows)
+    except Exception as e:
+        st.error(f"บันทึกโปรไฟล์ไม่ได้: {e}")
 
 def load_mailbox():
     sh = get_gsheet_client()
-    if sh:
-        try: return sh.worksheet("mailbox").get_all_records()
-        except: pass
-    if os.path.exists(MAILBOX_FILE):
-        with open(MAILBOX_FILE, "r", encoding="utf-8") as f: return json.load(f)
-    return []
+    try: return sh.worksheet("mailbox").get_all_records()
+    except: return []
 
 def save_mailbox(data):
     sh = get_gsheet_client()
-    if sh:
-        try:
-            rows = [["date", "text"]]
-            for m in data: rows.append([m['date'], m['text']])
-            sh.worksheet("mailbox").clear(); sh.worksheet("mailbox").update(rows)
-        except: pass
-    with open(MAILBOX_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
+    try:
+        ws = sh.worksheet("mailbox")
+        rows = [["date", "text"]]
+        for m in data: rows.append([m['date'], m['text']])
+        ws.clear()
+        ws.update(rows)
+    except Exception as e:
+        st.error(f"ส่งจดหมายไม่ได้: {e}")
 
-# --- Session & Logic ---
-if 'liked_posts' not in st.session_state: st.session_state.update({'liked_posts':[], 'user_reactions':{}, 'show_shop':False, 'is_admin':False, 'num_img':1, 'num_vid':1})
-for k in ['feed_tokens','bar_tokens']: 
-    if k not in st.session_state: st.session_state[k] = 5
-for k in ['last_token_regen','last_bar_regen','last_comment','last_fortune','last_gossip','last_mailbox','last_choice','last_stock']:
-    if k not in st.session_state: st.session_state[k] = 0
+# Session Init
+if 'liked_posts' not in st.session_state: st.session_state['liked_posts'] = []
+if 'user_reactions' not in st.session_state: st.session_state['user_reactions'] = {}
+if 'last_comment_time' not in st.session_state: st.session_state['last_comment_time'] = 0
+if 'last_fortune_time' not in st.session_state: st.session_state['last_fortune_time'] = 0
+if 'last_gossip_time' not in st.session_state: st.session_state['last_gossip_time'] = 0
+if 'last_mailbox_time' not in st.session_state: st.session_state['last_mailbox_time'] = 0
+if 'last_choice_time' not in st.session_state: st.session_state['last_choice_time'] = 0
+if 'last_stock_trade' not in st.session_state: st.session_state['last_stock_trade'] = 0
+if 'show_shop' not in st.session_state: st.session_state['show_shop'] = False
+if 'is_admin' not in st.session_state: st.session_state['is_admin'] = False
 
+# [Token Systems]
+if 'feed_tokens' not in st.session_state: st.session_state['feed_tokens'] = 5
+if 'last_token_regen' not in st.session_state: st.session_state['last_token_regen'] = time.time()
+if 'feed_msg' not in st.session_state: st.session_state['feed_msg'] = None
+
+if 'bar_tokens' not in st.session_state: st.session_state['bar_tokens'] = 5
+if 'last_bar_regen' not in st.session_state: st.session_state['last_bar_regen'] = time.time()
+if 'bar_result' not in st.session_state: st.session_state['bar_result'] = None
+
+# --- [NEW] Session state สำหรับเก็บจำนวนลิงก์ ---
+if 'num_img_links' not in st.session_state: st.session_state['num_img_links'] = 1
+if 'num_vid_links' not in st.session_state: st.session_state['num_vid_links'] = 1
+
+# --- Token Regen Logic ---
 now = time.time()
-if now - st.session_state['last_token_regen'] >= 60:
-    st.session_state['feed_tokens'] = min(5, st.session_state['feed_tokens'] + int((now-st.session_state['last_token_regen'])//60))
+
+# Feed Regen (1 min)
+elapsed_feed = now - st.session_state['last_token_regen']
+if elapsed_feed >= 60: 
+    add = int(elapsed_feed // 60)
+    st.session_state['feed_tokens'] = min(5, st.session_state['feed_tokens'] + add)
     st.session_state['last_token_regen'] = now
 
-# --- SIDEBAR (แสดงสถานะ + เมนูเดิม) ---
+# Bar Regen (1 hour)
+elapsed_bar = now - st.session_state['last_bar_regen']
+if elapsed_bar >= 3600:
+    add = int(elapsed_bar // 3600)
+    st.session_state['bar_tokens'] = min(5, st.session_state['bar_tokens'] + add)
+    st.session_state['last_bar_regen'] = now
+
+# --- 3. Sidebar (เมนู & Q&A) ---
 st.sidebar.title("🍸 เมนูหลัก")
 
-# 🚨 แสดงสถานะการเชื่อมต่อ (ให้เพื่อนเห็นชัดๆ)
-if conn_status["connected"]:
-    st.sidebar.success(conn_status["message"])
-else:
-    st.sidebar.error(conn_status["message"])
-    st.sidebar.warning("ข้อมูลจะถูกบันทึกลงไฟล์สำรองแทน (เว็บไม่ล่ม)")
+# Q&A ไมล่า
+with st.sidebar.expander("🧚‍♀️ ถาม-ตอบ กับไมล่า (Q&A)", expanded=True):
+    st.markdown("### 💬 อยากรู้อะไรถามไมล่าได้เลย!")
+    q_options = [
+        "เลือกคำถาม...",
+        "🤔 อยากโพสต์เรื่องราวบ้างต้องทำไง?",
+        "🛍️ สนใจสินค้า ซื้อยังไง?",
+        "💻 เว็บนี้ใครสร้างครับ?",
+        "🧚‍♀️ ไมล่าคือใครคะ?",
+        "📞 ติดต่อบอส Dearluxion ได้ที่ไหน?",
+        "🐍 รู้หรือไม่? เว็บนี้ใช้ Python กี่ตัวอักษร?",
+        "🤖 บอสใช้ AI ตัวไหนทำงาน?",
+        "🍕 บอสชอบกินอะไรที่สุด?"
+    ]
+    selected_q = st.selectbox("เลือกคำถาม:", q_options, label_visibility="collapsed")
+    
+    if selected_q == "🤔 อยากโพสต์เรื่องราวบ้างต้องทำไง?":
+        st.info("🧚‍♀️ **ไมล่า:** ไม่ได้น้า~ นี่เป็น **พื้นที่ส่วนตัวของบอส Dearluxion** เท่านั้นค่ะ! แต่พี่ๆ สามารถกดไลก์และคอมเมนต์ให้กำลังใจบอสได้ตลอดเลยนะคะ 💖")
+    elif selected_q == "🛍️ สนใจสินค้า ซื้อยังไง?":
+        st.success("🧚‍♀️ **ไมล่า:** ง่ายมาก! กดปุ่ม **'สนใจสั่งซื้อ'** ในโพสต์ขายของ ระบบจะพาวาร์ปไปหาไอจีบอสทันทีเลยค่ะ 🚀")
+    elif selected_q == "💻 เว็บนี้ใครสร้างครับ?":
+        st.warning("🧚‍♀️ **ไมล่า:** **ท่าน Dearluxion สร้างเองกับมือ** ด้วยภาษา Python ล้วนๆ ค่ะ! เทพสุดๆ ไปเลยใช่มั้ยล่ะ? 😎 \n\nสนใจผลงานเพิ่มเติมติดตามได้ในเว็บนี้หรือ IG บอสเลยค่ะ! เอ๊ะเเต่ไมล่าก็ช่วยนะถึงจะน้อย😾")
+    elif selected_q == "🧚‍♀️ ไมล่าคือใครคะ?":
+        st.markdown("""
+        <div style="background-color:#161B22; padding:15px; border-radius:10px; border:1px solid #A370F7;">
+            <h4 style="color:#A370F7;">🧚‍♀️ หนูคือไมล่า (Myla) เองค่ะ!</h4>
+            <p>หนูเป็น AI ที่ถูกสร้างอัตลักษณ์โดยท่าน <b>Dearluxion</b> ค่ะ ในเว็บนี้หนูอาจจะยังพูดโต้ตอบไม่ได้ แต่มี 2 ช่องทางที่คุยกับหนูได้จริงนะ:</p>
+            <hr>
+            <p><b>1️⃣ ช่องทางที่ 1 (Meta AI)</b><br>
+            เวอร์ชันนี้รันบน Meta AI อาจจะไม่เก่งมาก แต่อัปเดตตลอดค่ะ<br>
+            👉 <a href="https://aistudio.instagram.com/ai/9778047402219825?utm_source=ai_agent" target="_blank">จิ้มลิงก์นี้เพื่อคุยกับไมล่า</a></p>
+            <hr>
+            <p><b>2️⃣ ช่องทางที่ 2 (ร่างเทพ Discord)</b><br>
+            ท่าน Dearluxion ทุ่มเทเวลาและ API Key อัปเกรดหนูด้วย <b>Gemini 2.5 Pro</b> 🧠<br>
+            ✨ <b>ฉลาดขั้นสุด:</b> ตอบโต้ได้อิสระ ไม่ใช่บอททื่อๆ<br>
+            🎵 <b>เปิดเพลงได้:</b> ไม่ต้องพิมพ์คำสั่งยุ่งยาก แค่บอก <i>"ไมล่าเปิดเพลง ฉันจะตามเธอไปของยังโอม หน่อย"</i> ก็จัดให้ทันที!<br>
+            🥺 <b>มาคุยกันเยอะๆ นะคะ:</b> ประจำการอยู่ที่ห้องเสียง <b>ˢᵐᵃˡˡʳᵒᵒᵐ ᵍʳᵒᵘᵖ®</b> ค่ะ</p>
+            👉 <a href="https://discord.gg/SpNNxrnaZp" target="_blank"><b>คลิกเข้า Discord ˢᵐᵃˡˡʳᵒᵒᵐ ᵍʳᵒᵘᵖ® เลย!</b></a>
+        </div>
+        """, unsafe_allow_html=True)
+    elif selected_q == "📞 ติดต่อบอส Dearluxion ได้ที่ไหน?":
+        st.error("🧚‍♀️ **ไมล่า:** จิ้มที่ลิงก์ Discord หรือ IG ตรงหน้าโปรไฟล์ด้านบนได้เลยค่ะ บอสตอบไวมาก! (ถ้าไม่หลับ 😴)")
+    elif selected_q == "🐍 รู้หรือไม่? เว็บนี้ใช้ Python กี่ตัวอักษร?":
+        st.info("🧚‍♀️ **ไมล่า:** เชื่อไหมคะว่าเว็บนี้เขียนด้วย Python ล้วนๆ รวมแล้วมากกว่า **47,828 ตัวอักษร** เลยนะ! บอสพิมพ์จนนิ้วล็อกแล้วมั้งเนี่ย 😹26-12-2568 ")
+    elif selected_q == "🤖 บอสใช้ AI ตัวไหนทำงาน?":
+        st.success("🧚‍♀️ **ไมล่า:** ความลับ! แต่แอบบอกว่าเบื้องหลังความฉลาดของหนูคือ **Google Gemini 2.5** ค่ะ (บอสจ่ายค่า API จุกๆ เพื่อทุกคนเลยนะ!)")
+    elif selected_q == "🍕 บอสชอบกินอะไรที่สุด?":
+        st.warning("🧚‍♀️ **ไมล่า:** ถ้าดูจากสถิติในระบบ 'Treat Me' บอสชอบกิน **ปลาส้ม (Salmon)** ที่สุดค่ะ! รองลงมาคือ **ชาไทย** (หวาน 200%) 🧋")
+
+# มุมนินทาบอส
+with st.sidebar.expander("🤫 มุมนินทาบอส (Myla's Gossip)"):
+    if st.button("ความลับของบอส... 💬"):
+        now = time.time()
+        if now - st.session_state['last_gossip_time'] < 5:
+            st.warning("⚠️ อย่ากดรัวสิคะ รู้ไหมเว็ปนี้ยิ่งทุนต่ำอยู่ค่ะ 555 💸")
+        else:
+            gossips = ["เมื่อคืนบอสเปิดเพลงเศร้าวนไป 10 รอบเลย... 🎵", "บอสบอกว่าจะลดความอ้วน แต่กินชาไข่มุกอีกแล้ว! 🧋", "เห็นบอสเข้มๆ แบบนี้ จริงๆ ขี้เหงามากนะ 🥺", "บอสแอบส่องไอจีใครบางคนทุกวันเลยแหละ... อุ๊ปส์ 🙊", "ช่วงนี้บอสชอบนั่งเหม่อมองท้องฟ้า... คิดถึงใครน้า ☁️", "บอสบ่นว่าอยากมีคนมาช่วยหารค่าชาบูจัง 🍲", "รู้มั้ย? บอสแพ้คนยิ้มสวยนะ (แพ้ราบคาบเลย) 😳", "วันก่อนได้ยินบอสละเมอถึง... เอ๊ะ ไม่บอกดีกว่า! 🤭", "บอสชอบแอบร้องเพลงในห้องน้ำ (เสียงเพี้ยนด้วย 555) 🚿", "เห็นบอสทำงานดึกๆ ไม่ใช่อะไรนะ... นั่งดูแมวใน TikTok 🐱", "บอสเป็นคนปากแข็ง แต่ใจอ่อนยวบยาบเลยนะ 💖", "ถ้าทักบอสไปตอนนี้ มีโอกาสตอบกลับไวมาก (เพราะเหงา) 📱", "บอสเพิ่งบ่นว่า 'อยากมีคนไปดูหนังด้วยจัง' 🎬", "รู้เปล่า? บอสแอบเก็บรูปใครบางคนไว้ในโฟลเดอร์ลับด้วยนะ 📁", "บอสชอบกินเผ็ด แต่กินทีไรน้ำตาไหลทุกที (นึกว่าร้องไห้) 🌶️", "เวลาบอสเขิน หูจะแดงมาก (น่ารักสุดๆ) 😳", "บอสชอบแกล้งทำเป็นยุ่ง แต่จริงๆ รอตอบแชทใครบางคนอยู่ 📲", "เมื่อวานบอสเดินสะดุดขาตัวเอง... ดีนะไม่มีใครเห็น (นอกจากหนู) 😂", "บอสแพ้ทางคนตัวเล็กนะรู้ยัง😻", "บอสชอบบ่นว่า 'เมื่อไหร่จะรวย' แต่กด F ของในเน็ตทุกวัน 📦", "บางทีบอสก็พิมพ์ข้อความหาใครบางคน... แล้วก็ลบทิ้ง ไม่กล้าส่ง 💬", "บอสเป็นทาสแมวตัวยง (แต่แมวไม่ค่อยรักแมวตัวนั้นสีดําด้วย 555) 🐈", "ถ้าบอสเงียบไป ไม่ได้หยิ่งนะ... หลับคาคอม 💤", "บอสชอบฟังเพลงยุค 90s มากกก (แก่เนอะ) 📼", "ช่วงนี้บอสดูดวงความรักบ่อยมาก... มีพิรุธนะ 🤔", "บอสเคยทำกับข้าวไหม้จนสัญญาณไฟไหม้ดังลั่นบ้าน 🍳🔥", "บอสกลัวผีขึ้นสมอง แต่ชอบดูหนังผี (แล้วก็นอนไม่หลับ) 👻", "รู้มั้ย บอสเเอบซุ้มทําเกมส์เพ้อถึงใครก็ไม่รู้เมือคืน🎮", "บอสเคยบอกว่าอยากมีรถไว้ชวนคนๆเที่ยวด้วยแหละ(ใครกันน้า🙀)", "เวลาบอสเครียด บอสจะชอบกินไอติม 🍦", "บอสบอกว่า 'จะมูฟออน' (พูดมาหลายเดือนแล้ว) 🚶‍♂️", "บอสชอบคนพูดเพราะ อ้อนเก่งๆ (แพ้ทางสุดๆ) 🥰", "เมื่อคืนบอสนั่งดูรูปเก่าๆ แล้วทำหน้าเศร้า... 📸", "บอสชอบใส่เสื้อสีดำ เพราะคิดว่าใส่แล้วดูผอม 👕", "บอสขับรถหลงทางบ่อยมาก (GPS ก็ช่วยไม่ได้) 🚗", "บอสชอบดื่มกาแฟ แต่ใจสั่นทุกที ☕", "ถ้าเห็นบอสโพสต์เพลงเศร้า... แปลว่าเรียกร้องความสนใจอยู่ 📢", "บอสอยากไปเที่ยวทะเล... กับใครสักคน 🌊", "บอสเป็นคนโรแมนติกนะ (ถ้ามีแฟน) 🌹", "บอสชอบดูการ์ตูนเหมือนเด็กเลย 📺", "บอสชอบการ์ตูนZig & Sharko มากๆเลย🦈", "บอสเคยบอกว่ารู้จักBaby Metalผ่านใครคนนึงด้วยละ", "บอสบอกว่า 'เนื้อคู่ยังไม่เกิด' (หรือเกิดแล้วแต่หลงทางอยู่) 🌏", "บอสเป็นคนขี้ใจน้อยนะ ต้องง้อบ่อยๆ 🥺", "บอสชอบให้คนชมว่า 'เก่งจัง' (ตัวลอยเลยแหละ) 👍", "บอสชอบแอบฟังคนคุยกัน (ขี้เผือกที่หนึ่ง) 👂", "บอสชอบกินสุกี้มากๆเลยล่ะ🫕", "บอสอยากเลี้ยงหมา แต่กลัวเจ้าวินเทอร์ตะปบ 🐶", "บอสชอบแอบหลับในเวลาทำงาน (อย่าบอกใครนะ) 🤫", "จริงๆ แล้วบอสเป็นคนอบอุ่นนะ... อุ่นจนร้อนเลย 🔥"]
+            st.toast(f"🧚‍♀️ ไมล่าแอบบอก: {random.choice(gossips)}", icon="🤫")
+            st.session_state['last_gossip_time'] = now
 
 st.sidebar.markdown("---")
 
-# ฟีเจอร์เดิม (Q&A, Gossip, Treat Me, Stock, Bar, Fortune, Mailbox)
-# (ย่อโค้ด UI แต่การทำงานครบ 100%)
-with st.sidebar.expander("🧚‍♀️ ถาม-ตอบ ไมล่า"):
-    q = st.selectbox("คำถาม", ["เลือก...", "ไมล่าคือใคร?", "บอสชอบกินอะไร?"], label_visibility="collapsed")
-    if q == "ไมล่าคือใคร?": st.info("หนูคือ AI ผู้ช่วยบอสค่ะ!")
-    elif q == "บอสชอบกินอะไร?": st.success("ปลาส้ม (Salmon) ค่ะ!")
+# Myla's Choice
+with st.sidebar.expander("⚖️ Myla's Choice (ที่ปรึกษาหัวใจ)"):
+    st.caption("ลังเลอยู่ใช่ไหม? ให้ไมล่าช่วยตัดสินใจสิ (จิตวิทยาจ๋าๆ!)")
+    choice_topic = st.selectbox("เรื่องที่หนักใจ...", ["เลือกหัวข้อ...", "📲 ทักเขาไปตอนนี้ดีไหม?", "💔 เขายังคิดถึงเราอยู่รึเปล่า?", "🔙 ถ้ากลับไป... จะดีกว่าเดิมไหม?", "⏳ ควรรอต่อไป หรือ พอแค่นี้?"])
+    
+    if st.button("ขอคำตอบฟันธง! ⚡"):
+        now = time.time()
+        if now - st.session_state['last_choice_time'] < 15:
+            st.warning(f"⏳ ใจเย็นๆ สิคะท่านพี่! ให้ไมล่าพักหายใจ 15 วิ นะคะ (รออีก {15 - int(now - st.session_state['last_choice_time'])} วิ) 💖")
+        elif choice_topic == "เลือกหัวข้อ...":
+            st.warning("เลือกคำถามก่อนสิคะท่านพี่!")
+        else:
+            answers = {
+                "📲 ทักเขาไปตอนนี้ดีไหม?": ["ทักเลย! เชื่อหนู เขากำลังไถหน้าจอรอแจ้งเตือนคุณอยู่", "อย่าฟอร์มเยอะ! แค่ 'หวัดดี' คำเดียว เขาก็ยิ้มแก้มแตกแล้ว", "ลุยโลด! ความคิดถึงมันห้ามกันไม่ได้นะ", "ทักไปเถอะ... ดีกว่าปล่อยให้เขารอเก้อนะ (เขารออยู่นะรู้เปล่า)"],
+                "💔 เขายังคิดถึงเราอยู่รึเปล่า?": ["คิดถึงสิ! เพลงที่เขาฟังช่วงนี้... เพลงของคุณทั้งนั้น", "100% ดูสตอรี่เขาดีๆ สิ มีเงาคุณซ่อนอยู่", "เขาไม่เคยลืมหรอก แค่ทำเป็นเข้มไปงั้นแหละ (ในใจร้องไห้อยู่)", "ลองหลับตาดูสิ... ถ้าคุณคิดถึงเขา แปลว่าเขาก็ส่งกระแสจิตมาหาคุณอยู่"],
+                "🔙 ถ้ากลับไป... จะดีกว่าเดิมไหม?": ["หนังสือเล่มเดิม... อ่านด้วยความเข้าใจใหม่ ตอนจบสวยงามเสมอ", "ถ่านไฟเก่าเป่าง่ายนะ... แค่สะกิดนิดเดียวก็พรึ่บ!", "คนนี้แหละคู่แท้! แค่ต้องปรับจูนกันนิดหน่อยก็ไปได้สวย", "กลับไปเถอะ... ที่ตรงนั้นยังว่างเสมอสำหรับคุณ (ไม่มีใครแทนได้หรอก)"],
+                "⏳ ควรรอต่อไป หรือ พอแค่นี้?": ["รออีกนิด! ปาฏิหาริย์กำลังเดินทางมาหา", "อย่าเพิ่งถอดใจ! เขาอาจจะกำลังรวบรวมความกล้ามาง้อคุณอยู่", "รักแท้คือการรอคอย... และผลลัพธ์มันคุ้มค่าเสมอ", "เชื่อในสัญชาตญาณตัวเองสิ... คุณรู้ดีว่าเขารักคุณ"]
+            }
+            result = random.choice(answers[choice_topic])
+            st.toast(f"🧚‍♀️ ไมล่าฟันธง: {result}", icon="💘")
+            st.balloons()
+            st.session_state['last_choice_time'] = now
 
-with st.sidebar.expander("🤫 นินทาบอส"):
-    if st.button("ความลับ..."): st.toast(f"ไมล่า: {random.choice(['บอสชอบแอบหลับ', 'บอสเป็นทาสแมว'])}", icon="🤫")
+st.sidebar.markdown("---")
 
-with st.sidebar.expander("🥤 Treat Me"):
-    st.write(f"Tokens: {st.session_state['feed_tokens']}/5")
+# Treat Me
+with st.sidebar.expander("🥤 Treat Me (เลี้ยงอาหารทิพย์)", expanded=True):
+    tokens = st.session_state['feed_tokens']
     pf_stats = load_profile()
     if 'treats' not in pf_stats: pf_stats['treats'] = {}
-    if st.button("เลี้ยงปลาส้ม 🐟"):
+    if 'top_feeders' not in pf_stats: pf_stats['top_feeders'] = {}
+    
+    st.markdown(f"""
+    <div style="margin-bottom:10px;">
+        <small>พลังงานการเปย์ (รีเจน 1/นาที)</small><br>
+        <div style="background:#30363D; border-radius:10px; overflow:hidden; box-shadow: 0 0 5px rgba(163, 112, 247, 0.3);">
+            <div style="width:{tokens*20}%; background: linear-gradient(90deg, #A370F7, #FFD700); height:8px; transition:0.5s;"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:12px;">
+            <span>Token: <b>{tokens}/5</b> ⚡</span>
+            <span>เปย์ไปแล้ว: {sum(pf_stats['treats'].values())} จาน 🍽️</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    feeder_name = st.text_input("ชื่อคนใจดี (ใส่ชื่อเพื่อขึ้นอันดับ):", placeholder="ใส่ชื่อเล่น... (ไม่ใส่ก็ได้)", key="feeder_name")
+
+    if st.session_state.get('feed_msg'):
+        st.success(st.session_state['feed_msg']) 
+        st.balloons() 
+        st.session_state['feed_msg'] = None 
+
+    menu_items = {
+        "ปลาส้มทอด 🐟": ["กรอบนอกนุ่มใน ฟินเวอร์! 😋", "โอ้โห! ของโปรดผมเลยครับจานนี้", "หอมปลาส้มไป 3 บ้าน 8 บ้าน!", "งั่มๆ... อร่อยแสงออกปาก ✨"],
+        "ซูชิ 🍣": ["โอมากาเสะก็สู้ไม่ได้! 🍣", "คำเดียวไม่พอ ขออีกคำ!", "สดเหมือนเพิ่งจับมาจากทะเล 🌊", "เดียร์บอกว่า 'อาหย่อยยย' 🥰"],
+        "เบอร์เกอร์ 🍔": ["เนื้อฉ่ำๆ ชีสเยิ้มๆ 🤤", "แคลอรี่ไม่สน สนแต่ความอร่อย!", "กัดคำโตๆ ฟินไปถึงดาวอังคาร 🚀", "อิ่มคุ้ม จุใจสุดๆ!"],
+        "กาแฟลาเต้ ☕": ["ตื่นเลย! ดีดเหมือนม้า 🐎", "หอมเข้ม นุ่มละมุนลิ้น ☕", "แก้วนี้เติมพลังให้บอสนั่งโค้ดทั้งคืน", "สดชื่นเหมือนยืนบนยอดดอย ⛰️"],
+        "ชาไทย 🧋": ["หวานมัน ชื่นใจ! 🧡", "สีส้มกระแทกตา รสชาติกระแทกใจ", "ดูดปุ๊บ สดชื่นปั๊บ!", "เดียร์ชอบมาก แก้วเดียวไม่เคยพอ"],
+        "พิซซ่า 🍕": ["ชีสยืดดดดด... น่ากินฝุดๆ 🧀", "แป้งบางกรอบ เครื่องแน่นๆ!", "กินตอนร้อนๆ คือนิพพาน 😇", "แบ่งกันกินอร่อยกว่านะ (แต่บอสกินคนเดียว 555)"]
+    }
+    
+    f_c1, f_c2, f_c3 = st.columns(3)
+    
+    def feed_boss(item_name, label):
         if st.session_state['feed_tokens'] > 0:
             st.session_state['feed_tokens'] -= 1
-            pf_stats['treats']['salmon'] = pf_stats['treats'].get('salmon',0)+1
-            save_profile(pf_stats); st.toast("ขอบคุณครับ!", icon="🐟"); st.rerun()
-        else: st.error("Token หมด!")
+            common_msgs = ["ขอบคุณที่เลี้ยงนะค้าบ 🙏", "อิ่มจังตังค์อยู่ครบ 555", "ใจดีจัง... รักเลย 💖", "เลี้ยงดีขนาดนี้ มาเป็นแม่ยกไหม? 😝", "งั่มๆ... อร่อยจุงเบย", "เดี๋ยวเดียร์พุงพลุ้ยนะ!", "ป้อนที่ปากไม่ป้อนที่ใจบ้างครับ🥺", "สุดยอด! กำลังหิวพอดีเลย", "แหม... รู้ใจเดียร์นะเนี่ย 😉", "ส่งมาจีบป่ะเนี่ย? อิอิ"]
+            specific_msgs = menu_items[item_name]
+            msg = random.choice(common_msgs + specific_msgs)
+            sender = feeder_name.strip() if feeder_name.strip() else "FC นิรนาม"
+            st.session_state['feed_msg'] = f"😎 บอส: {msg} (จาก: {sender})"
+            
+            pf = load_profile()
+            if 'treats' not in pf: pf['treats'] = {}
+            if 'top_feeders' not in pf: pf['top_feeders'] = {}
+            pf['treats'][item_name] = pf['treats'].get(item_name, 0) + 1
+            if feeder_name.strip():
+                name_key = feeder_name.strip()
+                pf['top_feeders'][name_key] = pf['top_feeders'].get(name_key, 0) + 1
+            save_profile(pf)
+            st.rerun()
+        else:
+            st.toast("🧚‍♀️ ไมล่า: บอสอิ่มแล้ว... รอระบบย่อยแป๊บนึงนะ (Token หมด!)", icon="⛔")
 
-with st.sidebar.expander("📈 หุ้นหัวใจ"):
-    pf = load_profile()
-    if 'stock' not in pf: pf['stock'] = {'price':100.0, 'history':[100.0]}
-    st.metric("ราคาหุ้น", f"{pf['stock']['price']:.2f}")
-    st.line_chart(pf['stock']['history'][-20:])
-    c1, c2 = st.columns(2)
-    if c1.button("🟢 ซื้อ"): 
-        pf['stock']['price'] += random.uniform(0.5,5); pf['stock']['history'].append(pf['stock']['price'])
-        save_profile(pf); st.rerun()
-    if c2.button("🔴 ขาย"):
-        pf['stock']['price'] = max(0, pf['stock']['price']-random.uniform(0.5,5)); pf['stock']['history'].append(pf['stock']['price'])
-        save_profile(pf); st.rerun()
+    def get_count(name): return pf_stats['treats'].get(name, 0)
+
+    with f_c1:
+        if st.button(f"🐟 {get_count('ปลาส้มทอด 🐟')}"): feed_boss("ปลาส้มทอด 🐟", "🐟")
+        if st.button(f"☕ {get_count('กาแฟลาเต้ ☕')}"): feed_boss("กาแฟลาเต้ ☕", "☕")
+    with f_c2:
+        if st.button(f"🍣 {get_count('ซูชิ 🍣')}"): feed_boss("ซูชิ 🍣", "🍣")
+        if st.button(f"🧋 {get_count('ชาไทย 🧋')}"): feed_boss("ชาไทย 🧋", "🧋")
+    with f_c3:
+        if st.button(f"🍔 {get_count('เบอร์เกอร์ 🍔')}"): feed_boss("เบอร์เกอร์ 🍔", "🍔")
+        if st.button(f"🍕 {get_count('พิซซ่า 🍕')}"): feed_boss("พิซซ่า 🍕", "🍕")
+
+# Hall of Fame
+if 'top_feeders' in pf_stats and pf_stats['top_feeders']:
+    with st.sidebar.expander("🏆 ทำเนียบสายเปย์ (Hall of Fame)"):
+        sorted_feeders = sorted(pf_stats['top_feeders'].items(), key=lambda x: x[1], reverse=True)[:5]
+        for idx, (name, score) in enumerate(sorted_feeders):
+            rank_icon = "🥇" if idx == 0 else "🥈" if idx == 1 else "🥉" if idx == 2 else f"{idx+1}."
+            st.markdown(f"{rank_icon} **{name}** — เปย์ไป {score} ครั้ง")
 
 st.sidebar.markdown("---")
-# Search & Login
-search = st.sidebar.text_input("🔍 ค้นหา...")
-if not st.session_state['is_admin']:
-    with st.sidebar.expander("🔐 Login"):
-        u = st.text_input("ID"); p = st.text_input("PW", type="password")
-        if st.button("Login"):
-            if u=="dearluxion" and p=="1212312121mc": st.session_state['is_admin']=True; st.rerun()
-            else: st.error("ผิด!")
-else: st.sidebar.button("Logout", on_click=lambda: st.session_state.update({'is_admin':False}))
 
-# --- MAIN CONTENT ---
-profile = load_profile()
-st.title(f"👋 {profile.get('name','Dearluxion')}")
-st.write(f"_{profile.get('bio','...')}_")
-if profile.get('billboard',{}).get('text'):
-    st.info(f"📢 {profile['billboard']['text']}")
+# Love Stock Market [UPDATED with Cooldown]
+with st.sidebar.expander("📈 Love Stock Market (หุ้นหัวใจ)", expanded=True):
+    pf = load_profile()
+    if 'stock' not in pf: pf['stock'] = {'price': 100.0, 'history': [100.0] * 10}
+    
+    price = pf['stock']['price']
+    history = pf['stock']['history']
+    
+    last_price = history[-2] if len(history) > 1 else 100.0
+    change = price - last_price
+    st.metric("ราคาหุ้นความฮอต 🔥", f"{price:.2f} Pts", f"{change:.2f}")
+    st.line_chart(history[-20:])
+    
+    # Cooldown Check (30 mins = 1800s)
+    on_cooldown = time.time() - st.session_state['last_stock_trade'] < 1800
+    
+    b1, b2 = st.columns(2)
+    with b1:
+        if st.button("🟢 ช้อนซื้อ (Buy)", use_container_width=True):
+            if on_cooldown:
+                remain = 30 - int((time.time() - st.session_state['last_stock_trade'])/60)
+                st.warning(f"⏳ ตลาดพักการซื้อขายชั่วคราว! (รออีก {remain} นาที)")
+            else:
+                delta = random.uniform(0.5, 5.0)
+                new_price = price + delta
+                pf['stock']['price'] = new_price
+                pf['stock']['history'].append(new_price)
+                if len(pf['stock']['history']) > 30: pf['stock']['history'].pop(0)
+                save_profile(pf)
+                st.session_state['last_stock_trade'] = time.time()
+                st.toast("🚀 หุ้นพุ่ง! ขอบคุณที่เติมความรักครับ", icon="📈")
+                st.rerun()
+            
+    with b2:
+        if st.button("🔴 เทขาย (Sell)", use_container_width=True):
+            if on_cooldown:
+                remain = 30 - int((time.time() - st.session_state['last_stock_trade'])/60)
+                st.warning(f"⏳ ใจเย็นวัยรุ่น! ตลาดวายอยู่ (รออีก {remain} นาที)")
+            else:
+                delta = random.uniform(0.5, 5.0)
+                new_price = max(0, price - delta)
+                pf['stock']['price'] = new_price
+                pf['stock']['history'].append(new_price)
+                if len(pf['stock']['history']) > 30: pf['stock']['history'].pop(0)
+                save_profile(pf)
+                st.session_state['last_stock_trade'] = time.time()
+                st.toast("📉 หุ้นร่วง... บอสน้อยใจแล้วนะ!", icon="📉")
+                st.rerun()
 
-# Admin Panel
-if st.session_state['is_admin']:
-    tab1, tab2 = st.tabs(["📝 โพสต์", "⚙️ ตั้งค่า"])
-    with tab1:
-        txt = st.text_area("ข้อความ")
-        # Multiple Links
-        c1, c2 = st.columns([1,1])
-        if c1.button("➕ รูป"): st.session_state['num_img'] += 1
-        if c2.button("➖ รูป") and st.session_state['num_img'] > 1: st.session_state['num_img'] -= 1
-        imgs = [st.text_input(f"Link รูป {i+1}", key=f"i{i}") for i in range(st.session_state['num_img'])]
+st.sidebar.markdown("---")
+
+# Mood Mocktail (บาร์เทนเดอร์ AI)
+with st.sidebar.expander("🍸 Mood Mocktail (บาร์เทนเดอร์ AI)", expanded=True):
+    pf = load_profile()
+    if 'settings' not in pf: pf['settings'] = {'enable_bar': True}
+    
+    if not pf['settings']['enable_bar']:
+        st.warning("⛔ บาร์ปิดปรับปรุงชั่วคราว (โดยคำสั่งบอส)")
+    elif not ai_available:
+        st.error("⚠️ AI ยังไม่พร้อม (ใส่ API Key ก่อนนะ)")
+    else:
+        st.caption("บอกอารมณ์ของคุณ... เดี๋ยว AI จัดเครื่องดื่มให้ (ระบายมาได้เลย)")
+        bar_tokens = st.session_state['bar_tokens']
         
-        c3, c4 = st.columns([1,1])
-        if c3.button("➕ คลิป"): st.session_state['num_vid'] += 1
-        if c4.button("➖ คลิป") and st.session_state['num_vid'] > 1: st.session_state['num_vid'] -= 1
-        vids = [st.text_input(f"Link คลิป {i+1}", key=f"v{i}") for i in range(st.session_state['num_vid'])]
+        st.markdown(f"""
+        <div style="margin-bottom:10px;">
+            <small>โควต้าชงเครื่องดื่ม (รีเจน 1 แก้ว/ชม.)</small><br>
+            <div style="background:#30363D; border-radius:10px; overflow:hidden; box-shadow: 0 0 5px rgba(255, 215, 0, 0.3);">
+                <div style="width:{bar_tokens*20}%; background: linear-gradient(90deg, #FFD700, #FFA500); height:8px; transition:0.5s;"></div>
+            </div>
+            <div style="text-align:right; font-size:12px;">เหลือ: <b>{bar_tokens}/5</b> แก้ว 🥃</div>
+        </div>
+        """, unsafe_allow_html=True)
         
-        if st.button("🚀 โพสต์เลย"):
-            final_imgs = [convert_drive_link(l) for l in imgs if l]
-            final_vids = [convert_drive_video_link(l) for l in vids if l]
-            
-            new_p = {
-                "id": str(int(time.time())), "date": datetime.datetime.now().strftime("%d/%m/%Y"),
-                "content": txt, "images": final_imgs, "video": final_vids,
-                "color": "#A370F7", "price": 0, "reactions": {}, "comments": []
-            }
-            
-            # AI Reply
-            try:
-                if ai_available: reply = model.generate_content(f"ไมล่าตอบบอส: {txt}").text.strip()
-                else: reply = "สุดยอดค่ะบอส!"
-            except: reply = "เท่มากค่ะ!"
-            new_p['comments'].append({"user":"🧚‍♀️ Myla", "text":reply, "is_admin":False})
-            
-            d = load_data(); d.append(new_p); save_data(d)
-            st.success("เรียบร้อย!"); st.rerun()
+        user_mood = st.text_area("วันนี้เจออะไรมาบ้าง? (ระบายได้เต็มที่)", placeholder="เหนื่อยงาน, อกหัก, ถูกหวยกิน...")
+        
+        if st.button("🥃 ชงเครื่องดื่มให้ฉันที"):
+            if bar_tokens > 0:
+                if user_mood:
+                    with st.spinner("บาร์เทนเดอร์กำลังเขย่า..."):
+                        prompt = f"คุณคือ 'บาร์เทนเดอร์ AI' ประจำคลับของ Dearluxion ลูกค้าบอกอารมณ์มาว่า: '{user_mood}' หน้าที่ของคุณ: คิดสูตร 'Mocktail' ที่เหมาะกับอารมณ์นี้ รูปแบบ: ชื่อเมนู, ส่วนผสมลับ(นามธรรม), วิธีดื่ม, คำคมปลอบใจ"
+                        try:
+                            res = model.generate_content(prompt)
+                            st.session_state['bar_result'] = res.text
+                            st.session_state['bar_tokens'] -= 1
+                            st.rerun()
+                        except:
+                            st.error("AI เมาค้าง... ลองใหม่นะ")
+                else:
+                    st.warning("ไม่บอกอารมณ์ แล้วจะชงถูกมั้ยเนี่ย!")
+            else:
+                st.warning("🚫 โควต้าหมดแล้ว! (รอรีเจน 1 ชั่วโมงนะจ๊ะ เดี๋ยวบอสล้มละลาย)")
+                st.toast("ไมล่า: พักดื่มน้ำเปล่าก่อนนะคะ โควต้าเต็มแล้ว! 🥤", icon="⛔")
 
-    with tab2:
-        pn = st.text_input("ชื่อ", profile.get('name',''))
-        pbb = st.text_input("ประกาศ", profile.get('billboard',{}).get('text',''))
-        if st.button("บันทึก"):
-            profile.update({'name':pn, 'billboard':{'text':pbb}})
-            save_profile(profile); st.rerun()
+        if st.session_state.get('bar_result'):
+            st.success("🍸 เครื่องดื่มของคุณได้แล้วครับ")
+            st.info(st.session_state['bar_result'])
 
-# Feed
+st.sidebar.markdown("---")
+
+# เซียมซีไมล่า
+with st.sidebar.expander("🔮 เซียมซีไมล่า (จิ้มเสี่ยงทาย)"):
+    if st.button("สุ่มคำทำนายวันนี้! ✨"):
+        now = time.time()
+        if now - st.session_state['last_fortune_time'] < 3600:
+            remaining = int((3600 - (now - st.session_state['last_fortune_time'])) / 60)
+            st.warning(f"🧚‍♀️ **ไมล่า:** ใจเย็นๆ สิคะ! รออีก {remaining} นาทีนะ เดี๋ยวคำทำนายจะไม่ขลัง!")
+        else:
+            fortunes = ["🔥 ถ่านไฟเก่ายังร้อน... รอวันรื้อฟื้นนะ", "💌 มีใครบางคนกำลังแอบส่อง Story คุณอยู่ (คนไกลๆ)", "🕰️ ความทรงจำดีๆ กำลังจะวนกลับมาหาคุณเร็วๆ นี้", "🌧️ เพลงเศร้าช่วงนี้อาจจะทำให้คิดถึงคนเดิมคนนั้น", "💔 เขาอาจจะยังไม่ลืมคุณ... เหมือนที่คุณไม่ลืมเขา", "👀 ลองทักไปสิ... บางทีเขาอาจจะรออยู่", "🌙 คืนนี้ระวังฝันถึงคนในอดีตนะ..."]
+            st.toast(f"🧚‍♀️ ไมล่าทำนายว่า: {random.choice(fortunes)}", icon="🔮")
+            st.session_state['last_fortune_time'] = now
+    st.caption("💬 แนะนำ: ไปดูดวงแบบจัดเต็มใน **Discord ของท่าน Dearluxion** ดีกว่าค่ะ! แม่นกว่านี้ 10 เท่า! 👉 [คลิกเลย](https://discord.gg/SpNNxrnaZp)")
+
+st.sidebar.markdown("---")
+
+# ตู้จดหมายลับ
+with st.sidebar.expander("💌 ตู้จดหมายลับ (Secret Box)"):
+    st.caption("ฝากข้อความถึง **Dearluxion** แบบไม่ระบุตัวตน (มีแค่บอสที่เห็น)")
+    with st.form("secret_msg_form"):
+        secret_msg = st.text_area("ความในใจ...", placeholder="พิมพ์ตรงนี้เลย... (เขาไม่รู้หรอกว่าใครส่ง)")
+        if st.form_submit_button("ส่งความลับ 🕊️"):
+            now = time.time()
+            if now - st.session_state['last_mailbox_time'] < 3600:
+                remaining_min = int((3600 - (now - st.session_state['last_mailbox_time'])) / 60)
+                st.warning(f"💌 ส่งบ่อยไปแล้วนะ! พักใจสัก {remaining_min} นาที ค่อยมาส่งใหม่นะคะ")
+            elif secret_msg:
+                msgs = load_mailbox()
+                msgs.append({"date": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"), "text": secret_msg})
+                save_mailbox(msgs)
+                st.session_state['last_mailbox_time'] = now
+                st.success("ส่งให้แล้วค่ะ! (ความลับปลอดภัย 🤫)")
+            else:
+                st.warning("พิมพ์อะไรหน่อยสิคะ")
+
+st.sidebar.markdown("---")
+
+search_query = st.sidebar.text_input("🔍 ค้นหา...", placeholder="พิมพ์คำค้นหา")
 posts = load_data()
-if not posts: st.info("ยังไม่มีโพสต์")
+all_hashtags = set()
+if posts:
+    for p in posts:
+        tags = re.findall(r"#([\w\u0E00-\u0E7F]+)", p['content'])
+        for t in tags: all_hashtags.add(f"#{t}")
+
+st.sidebar.markdown("### 📂 โซนของคุณ")
+if st.session_state['show_shop']:
+    st.sidebar.info("🛒 กำลังดูร้านค้า")
+    if st.sidebar.button("🏠 กลับหน้าหลัก"):
+        st.session_state['show_shop'] = False
+        st.rerun()
 else:
-    for p in reversed(posts):
-        with st.container():
-            st.markdown(f"**{profile.get('name','Dearluxion')}** <small>{p['date']}</small>", unsafe_allow_html=True)
-            if p.get('images'):
-                cols = st.columns(min(3, len(p['images'])))
-                for idx, img in enumerate(p['images']): cols[idx%3].image(img)
-            if p.get('video'):
-                for v in p['video']:
-                    if "drive.google.com" in v: st.markdown(f'<iframe src="{v}" width="100%" height="320" style="border:none; border-radius:10px;"></iframe>', unsafe_allow_html=True)
-                    else: st.video(v)
-            st.write(p['content'])
+    selected_zone = st.sidebar.radio("หมวดหมู่:", ["🏠 รวมทุกโซน"] + sorted(list(all_hashtags)))
+
+st.sidebar.markdown("---")
+
+# --- LOGIN ---
+if not st.session_state['is_admin']:
+    with st.sidebar.expander("🔐 เข้าสู่ระบบ"):
+        with st.form("login_form"):
+            username = st.text_input("ไอดี")
+            password = st.text_input("รหัสผ่าน", type="password")
+            submit = st.form_submit_button("ไขกุญแจ")
+            if submit:
+                try:
+                    real_user = base64.b64decode("ZGVhcmx1eGlvbg==").decode("utf-8")
+                    real_pass = base64.b64decode("MTIxMjMxMjEyMW1j").decode("utf-8")
+                    if username.strip() == real_user and password.strip() == real_pass:
+                        st.session_state['is_admin'] = True
+                        st.rerun()
+                    else: st.error("ผิดครับ! ลองเช็คตัวเล็กตัวใหญ่ดูนะ")
+                except: st.error("ระบบตรวจสอบผิดพลาด")
+else:
+    st.sidebar.success("ยินดีต้อนรับท่านdearluxion! 🕶️")
+    if st.sidebar.button("ออกจากระบบ"):
+        st.session_state['is_admin'] = False
+        st.rerun()
+
+# --- 4. Header & Profile ---
+profile_data = load_profile()
+user_emoji = profile_data.get('emoji', '😎') 
+user_status = profile_data.get('status', 'ยินดีต้อนรับสู่โลกของdearluxion ✨')
+
+if not st.session_state['is_admin']:
+    hour = datetime.datetime.now().hour
+    greeting = "สวัสดีตอนเช้าค่ะ" if 5 <= hour < 12 else "สวัสดีตอนบ่ายค่ะ" if 12 <= hour < 18 else "สวัสดีตอนค่ำค่ะ"
+    st.info(f"🧚‍♀️ **ไมล่า:** {greeting} พี่จ๋า~ กดลูกศร **มุมซ้ายบน** ↖️ เพื่อเปิดเมนูคุยกับไมล่าได้นะคะ!")
+
+top_col1, top_col2 = st.columns([8, 1])
+with top_col1:
+    col_p1, col_p2 = st.columns([1.5, 6])
+    with col_p1:
+        st.markdown(f"""
+            <div style="font-size: 60px; line-height: 1; filter: drop-shadow(0 0 10px #A370F7); text-align: center; cursor:default;">
+                {user_emoji}
+            </div>
+        """, unsafe_allow_html=True)
+    with col_p2:
+        st.markdown(f"### 🍸 {profile_data.get('name', 'Dearluxion')}")
+        st.markdown(f"_{profile_data.get('bio', '...')}_")
+        st.markdown(f"💬 **Status:** `{user_status}`") 
+        links = []
+        if profile_data.get('discord'): links.append(f"[Discord]({profile_data['discord']})")
+        if profile_data.get('ig'): links.append(f"[Instagram]({profile_data['ig']})")
+        if profile_data.get('extras'):
+            for line in profile_data['extras'].split('\n'):
+                if line.strip(): links.append(f"[{line.strip()}]({line.strip()})")
+        st.markdown(" | ".join(links))
+
+with top_col2:
+    if st.button("🛒", help="ไปช้อปปิ้ง"):
+        st.session_state['show_shop'] = True
+        st.rerun()
+
+st.markdown("---")
+
+# [Boss's Billboard]
+if profile_data.get('billboard'):
+    bb = profile_data['billboard']
+    if bb.get('text'):
+        st.markdown(f"""
+        <div class="boss-billboard">
+            <div class="billboard-icon">📢 ประกาศจากบอส</div>
+            <div class="billboard-text">{bb['text']}</div>
+            <div class="billboard-time">🕒 อัปเดตล่าสุด: {bb['timestamp']}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+# --- 5. Admin Panel ---
+if st.session_state['is_admin']:
+    tab_post, tab_profile, tab_inbox = st.tabs(["📝 เขียน / ขายของ", "👤 แก้ไขโปรไฟล์", "📬 อ่านจดหมายลับ"])
+    
+    with tab_post:
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            new_desc = st.text_area("เนื้อหา (Story)", height=150)
+        with col2:
+            new_imgs = st.file_uploader("รูป (เลือกได้หลายรูป)", type=['png','jpg'], accept_multiple_files=True)
             
-            if st.session_state['is_admin'] and st.button("🗑️", key=f"d{p['id']}"):
-                save_data([x for x in posts if str(x['id']) != str(p['id'])]); st.rerun()
+            # --- [NEW] ระบบเพิ่มลิงก์รูปแบบกดบวกได้ ---
+            st.caption("📷 แปะลิงก์รูป (Google Drive/Web)")
+            img_links = []
             
-            # Comments
-            with st.expander(f"💬 ({len(p.get('comments',[]))})"):
-                for c in p.get('comments',[]): st.markdown(f"**{c['user']}:** {c['text']}")
-                with st.form(key=f"c{p['id']}"):
-                    u = "Dearluxion" if st.session_state['is_admin'] else st.text_input("ชื่อ")
-                    t = st.text_input("ข้อความ")
-                    if st.form_submit_button("ส่ง") and t:
-                        all_p = load_data()
-                        for x in all_p:
-                            if str(x['id']) == str(p['id']):
-                                x.setdefault('comments',[]).append({"user":u if u else "Guest", "text":t})
-                                break
-                        save_data(all_p); st.rerun()
+            # ปุ่มเพิ่ม/ลด จำนวนช่อง
+            c_plus, c_minus = st.columns([1,1])
+            with c_plus:
+                if st.button("➕ เพิ่มช่องรูป", key="add_img_field"):
+                    st.session_state['num_img_links'] += 1
+            with c_minus:
+                if st.button("➖ ลบช่องรูป", key="del_img_field"):
+                    if st.session_state['num_img_links'] > 1: st.session_state['num_img_links'] -= 1
+            
+            # วนลูปสร้างช่องตามจำนวน
+            for i in range(st.session_state['num_img_links']):
+                val = st.text_input(f"ลิงก์รูปที่ {i+1}", key=f"img_lnk_{i}", placeholder="https://drive.google.com/...")
+                if val: img_links.append(val)
+            # ----------------------------------------
+
+            # --- [NEW] ระบบวิดีโอจาก Drive ---
+            st.markdown("---")
+            new_video = st.file_uploader("อัปโหลดคลิป (MP4)", type=['mp4','mov'])
+            
+            st.caption("🎥 แปะลิงก์วิดีโอ (Google Drive)")
+            vid_links = []
+            
+            # ปุ่มเพิ่ม/ลด ช่องวิดีโอ
+            v_plus, v_minus = st.columns([1,1])
+            with v_plus:
+                if st.button("➕ เพิ่มช่องคลิป", key="add_vid_field"):
+                    st.session_state['num_vid_links'] += 1
+            with v_minus:
+                if st.button("➖ ลบช่องคลิป", key="del_vid_field"):
+                    if st.session_state['num_vid_links'] > 1: st.session_state['num_vid_links'] -= 1
+            
+            for i in range(st.session_state['num_vid_links']):
+                val = st.text_input(f"ลิงก์คลิปที่ {i+1}", key=f"vid_lnk_{i}", placeholder="https://drive.google.com/...")
+                if val: vid_links.append(val)
+            # ----------------------------------------
+
+            post_color = st.color_picker("สีธีม", "#A370F7")
+            price = st.number_input("💰 ราคา (ใส่ 0 = ไม่ขาย)", min_value=0, value=0)
+
+        if st.button("🚀 โพสต์เลย", use_container_width=True):
+            # --- ตรวจสอบลิงก์ทั้งหมด ---
+            link_errors = []
+            final_img_links = []
+            final_vid_links = []
+            
+            # เช็คลิงก์รูป
+            for lnk in img_links:
+                conv = convert_drive_link(lnk.strip())
+                if conv.startswith("ERROR:"): link_errors.append(f"รูป: {conv}")
+                else: final_img_links.append(conv)
+            
+            # เช็คลิงก์วิดีโอ
+            for lnk in vid_links:
+                conv = convert_drive_video_link(lnk.strip())
+                if conv.startswith("ERROR:"): link_errors.append(f"วิดีโอ: {conv}")
+                else: final_vid_links.append(conv)
+
+            if link_errors:
+                for err in link_errors: st.error(err)
+            elif new_desc:
+                img_paths = []
+                
+                # 1. รูปอัปโหลด
+                if new_imgs:
+                    for img_file in new_imgs:
+                        fname = f"img_{int(time.time())}_{img_file.name}"
+                        with open(fname, "wb") as f: f.write(img_file.getbuffer())
+                        img_paths.append(fname)
+                
+                # 2. รูปจากลิงก์
+                img_paths.extend(final_img_links)
+                
+                # 3. วิดีโออัปโหลด
+                video_paths = [] # เปลี่ยนเป็น list รองรับหลายคลิป
+                if new_video:
+                    vname = new_video.name
+                    with open(vname, "wb") as f: f.write(new_video.getbuffer())
+                    video_paths.append(vname)
+                
+                # 4. วิดีโอจากลิงก์
+                video_paths.extend(final_vid_links)
+                
+                new_post = {
+                    "id": str(datetime.datetime.now().timestamp()),
+                    "date": datetime.datetime.now().strftime("%d/%m/%Y"),
+                    "content": new_desc,
+                    "images": img_paths,
+                    "video": video_paths, # เก็บเป็น list
+                    "color": post_color,
+                    "price": price,
+                    "likes": 0,
+                    "reactions": {'😻': 0, '🙀': 0, '😿': 0, '😾': 0, '🧠': 0},
+                    "comments": []
+                }
+                
+                myla_reply = ""
+                if ai_available:
+                    try:
+                        prompt = f"คุณคือ 'ไมล่า' (Myla) AI ผู้ช่วยสาวน้อยน่ารักประจำเว็บไซต์ Small Group ของบอส 'Dearluxion' บอสเพิ่งโพสต์ข้อความว่า: \"{new_desc}\" หน้าที่ของคุณ: คอมเมนต์ตอบกลับโพสต์นี้ของบอส (สั้นๆ น่ารัก กวนนิดๆ)"
+                        response = model.generate_content(prompt)
+                        myla_reply = response.text.strip()
+                    except:
+                        myla_reply = "ระบบ AI ง่วงนอน... แต่ไมล่าก็ยังรักบอสนะ! 💖"
+                else:
+                     myla_reply = random.choice(["โพสต์เท่มากค่ะบอส! 😎", "FC บอสเบอร์ 1 มารายงานตัวค่ะ! 🙋‍♀️", "สุดยอดไปเลยลูกพี่!", "กดไลก์รัวๆ ให้เลยค่ะ 👍"])
+
+                new_post['comments'].append({
+                    "user": "🧚‍♀️ Myla (AI)",
+                    "text": myla_reply,
+                    "is_admin": False,
+                    "image": None
+                })
+
+                current = load_data()
+                current.append(new_post)
+                save_data(current)
+                st.success("เรียบร้อย!")
+                # Reset จำนวนช่องกลับเป็น 1
+                st.session_state['num_img_links'] = 1
+                st.session_state['num_vid_links'] = 1
+                time.sleep(1); st.rerun()
+            else: st.warning("พิมพ์อะไรหน่อยสิครับ")
+
+    with tab_profile:
+        st.markdown("### 📢 จัดการป้ายไฟ (Billboard)")
+        bb_text = st.text_input("ข้อความบนป้ายไฟ", value=profile_data.get('billboard', {}).get('text', ''))
+        c_bb1, c_bb2 = st.columns(2)
+        with c_bb1:
+            if st.button("บันทึกป้ายไฟ"):
+                profile_data['billboard'] = {'text': bb_text, 'timestamp': datetime.datetime.now().strftime("%d/%m/%Y %H:%M")}
+                save_profile(profile_data)
+                st.success("อัปเดตป้ายไฟแล้ว!")
+                st.rerun()
+        with c_bb2:
+            if st.button("ลบป้ายไฟ", type="primary"):
+                profile_data['billboard'] = {'text': '', 'timestamp': ''}
+                save_profile(profile_data)
+                st.warning("ลบป้ายไฟเรียบร้อย")
+                st.rerun()
+        
         st.markdown("---")
+        st.markdown("### 🍸 จัดการบาร์เทนเดอร์ AI")
+        enable_bar = st.checkbox("เปิดใช้งานระบบ Mood Mocktail (เปลือง Token)", value=profile_data.get('settings', {}).get('enable_bar', True))
+        
+        if st.button("บันทึกการตั้งค่า"):
+            if 'settings' not in profile_data: profile_data['settings'] = {}
+            profile_data['settings']['enable_bar'] = enable_bar
+            save_profile(profile_data) 
+            st.success("บันทึกการตั้งค่าแล้ว!")
+            st.rerun()
+
+        st.markdown("---")
+
+        with st.form("pf_form"):
+            p_name = st.text_input("ชื่อ", value=profile_data.get('name', 'Dearluxion'))
+            p_emoji = st.text_input("อิโมจิประจำตัว", value=profile_data.get('emoji', '😎'))
+            p_status = st.text_input("Status (บอกแฟนคลับหน่อยทำไรอยู่)", value=profile_data.get('status', 'ว่างงาน...'))
+            p_bio = st.text_input("Bio", value=profile_data.get('bio', ''))
+            p_discord = st.text_input("Discord URL", value=profile_data.get('discord',''))
+            p_ig = st.text_input("IG URL", value=profile_data.get('ig',''))
+            p_ex = st.text_area("ลิงก์อื่นๆ", value=profile_data.get('extras',''))
+            
+            if st.form_submit_button("บันทึกข้อมูลส่วนตัว"):
+                profile_data.update({
+                    "name": p_name, "emoji": p_emoji, "status": p_status, "bio": p_bio, 
+                    "discord": p_discord, "ig": p_ig, "extras": p_ex
+                })
+                save_profile(profile_data)
+                st.success("อัปเดตแล้ว!")
+                st.rerun()
+        if st.button("ลบโปรไฟล์"):
+            if os.path.exists(PROFILE_FILE): os.remove(PROFILE_FILE)
+            st.rerun()
+            
+    with tab_inbox:
+        st.markdown("### 💌 จดหมายลับจากแฟนคลับ (หรือคนเก่าๆ?)")
+        msgs = load_mailbox()
+        if msgs:
+            if st.button("ลบจดหมายทั้งหมด"):
+                if os.path.exists(MAILBOX_FILE): os.remove(MAILBOX_FILE)
+                st.rerun()
+            for m in reversed(msgs):
+                st.info(f"📅 **{m['date']}**: {m['text']}")
+        else:
+            st.info("ยังไม่มีจดหมายลับมาส่งครับ")
+            
+    st.markdown("---")
+
+# --- 6. Feed Display ---
+filtered = posts
+if st.session_state['show_shop']:
+    st.markdown("## 🛒 ร้านค้า (Shop Zone)")
+    with st.expander("🧚‍♀️ พี่จ๋า~ หาทางกลับไม่เจอเหรอคะ? (จิ้มไมล่าสิ!) 💖", expanded=True):
+        st.markdown("""<div class="cute-guide">✨ ทางลัดพิเศษสำหรับพี่คนโปรดของไมล่า! 🌈</div>""", unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("🏠 กลับบ้านกับไมล่า!", use_container_width=True):
+                st.session_state['show_shop'] = False
+                st.balloons(); time.sleep(1); st.rerun()
+        with c2: st.info("👈 กดปุ่มนี้ ไมล่าจะพาพี่กลับหน้าหลักเองค่ะ!")
+    filtered = [p for p in filtered if p.get('price', 0) > 0 or "#ร้านค้า" in p['content']]
+    if not filtered: st.warning("ยังไม่มีสินค้าวางขายจ้า")
+else:
+    if selected_zone != "🏠 รวมทุกโซน": filtered = [p for p in filtered if selected_zone in p['content']]
+    if search_query: filtered = [p for p in filtered if search_query.lower() in p['content'].lower()]
+
+if filtered:
+    for post in reversed(filtered):
+        accent = post.get('color', '#A370F7')
+        
+        if 'reactions' not in post: post['reactions'] = {'😻': post.get('likes', 0), '🙀': 0, '😿': 0, '😾': 0, '🧠': 0}
+        for e in ['😻', '🙀', '😿', '😾', '🧠']: 
+            if e not in post['reactions']: post['reactions'][e] = 0
+
+        with st.container():
+            col_head, col_del = st.columns([0.85, 0.15])
+            with col_head:
+                st.markdown(f"""
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+                    <div style="font-size:40px; line-height:1; filter: drop-shadow(0 0 5px {accent});">{user_emoji}</div>
+                    <div style="line-height:1.2;">
+                        <div style="font-size:18px; font-weight:bold; color:#E6EDF3;">
+                            {profile_data.get('name', 'Dearluxion')} 
+                            <span style="color:{accent}; font-size:14px;">🛡️ Verified</span>
+                        </div>
+                        <div style="font-size:12px; color:#8B949E;">{post['date']}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col_del:
+                if st.session_state['is_admin']:
+                    if st.button("🗑️", key=f"del_{post['id']}"):
+                        all_p = load_data()
+                        save_data([x for x in all_p if x['id'] != post['id']])
+                        st.rerun()
+
+            if post.get('image') and os.path.exists(post['image']): 
+                st.image(post['image'], use_container_width=True)
+            
+            if post.get('images'):
+                # --- เช็คว่ารูปมีอยู่จริง หรือ เป็นลิงก์เว็บ ---
+                valid_imgs = [img for img in post['images'] if img.startswith("http") or os.path.exists(img)]
+                if valid_imgs:
+                    if len(valid_imgs) == 1:
+                        st.image(valid_imgs[0], use_container_width=True)
+                    else:
+                        img_cols = st.columns(3)
+                        for idx, img in enumerate(valid_imgs):
+                            with img_cols[idx % 3]:
+                                st.image(img, use_container_width=True)
+
+            # --- [UPDATED] แสดงวิดีโอ (รองรับทั้งไฟล์เดียวและหลายไฟล์) ---
+            videos = post.get('video')
+            if videos:
+                if isinstance(videos, str): videos = [videos] # แปลงของเก่าให้เป็น list
+                for vid in videos:
+                    # ถ้าเป็นลิงก์ Google Drive ต้องใช้ Iframe
+                    if "drive.google.com" in vid and "preview" in vid:
+                         st.markdown(f'<iframe src="{vid}" width="100%" height="300" style="border:none; border-radius:10px;"></iframe>', unsafe_allow_html=True)
+                    # ถ้าเป็น YouTube หรือไฟล์ MP4 ปกติ ใช้ st.video
+                    elif vid.startswith("http") or os.path.exists(vid):
+                        st.video(vid)
+            # ----------------------------------------------------
+            
+            content = post['content']
+            yt = re.search(r'(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})', content)
+            if yt: st.video(f"https://youtu.be/{yt.group(6)}")
+            
+            st.markdown(f"""<div class="work-card-base" style="border-left: 5px solid {accent};">{content}</div>""", unsafe_allow_html=True)
+            
+            price = post.get('price', 0)
+            if price > 0:
+                st.markdown(f"<div class='price-tag'>💰 ราคา: {price:,} บาท</div>", unsafe_allow_html=True)
+                buy_link = profile_data.get('ig') or profile_data.get('discord') or "#"
+                st.markdown(f"""<a href="{buy_link}" target="_blank"><button style="background-color:{accent}; color:white; border:none; padding:8px 16px; border-radius:8px; width:100%; cursor:pointer;">🛍️ สนใจสั่งซื้อ (คลิก)</button></a><br><br>""", unsafe_allow_html=True)
+
+            st.write("---")
+            rx_cols = st.columns(5)
+            emojis = ['😻', '🙀', '😿', '😾', '🧠']
+            user_react = st.session_state['user_reactions'].get(post['id'])
+
+            for i, emo in enumerate(emojis):
+                with rx_cols[i]:
+                    count = post['reactions'].get(emo, 0)
+                    if st.button(f"{emo} {count}", key=f"react_{post['id']}_{i}", type="primary" if user_react == emo else "secondary"):
+                        d = load_data()
+                        for p in d:
+                            if p['id'] == post['id']:
+                                if 'reactions' not in p: p['reactions'] = {'😻': 0, '🙀': 0, '😿': 0, '😾': 0, '🧠': 0}
+                                for e_key in emojis: 
+                                    if e_key not in p['reactions']: p['reactions'][e_key] = 0
+                                
+                                if user_react == emo:
+                                    p['reactions'][emo] = max(0, p['reactions'][emo] - 1)
+                                    del st.session_state['user_reactions'][post['id']]
+                                else:
+                                    if user_react and user_react in p['reactions']: 
+                                        p['reactions'][user_react] = max(0, p['reactions'][user_react] - 1)
+                                    p['reactions'][emo] += 1
+                                    st.session_state['user_reactions'][post['id']] = emo
+                                    
+                                    if emo == '😻': st.balloons()
+                                    elif emo == '🙀': st.snow()
+                                    elif emo == '😿': st.toast("โอ๋ๆ ไม่ร้องนะคะคนเก่ง... 😿☔", icon="☔")
+                                    elif emo == '😾': st.toast("ใจเย็นๆ นะคะพี่จ๋า! 🔥🔥", icon="🔥")
+                                    elif emo == '🧠': st.toast("สุดยอด! บิ๊กเบรนมากค่ะ! ✨🧠✨", icon="🧠")
+                                break
+                        save_data(d)
+                        time.sleep(1.5) 
+                        st.rerun()
+
+            with st.expander(f"💬 ความคิดเห็น ({len(post['comments'])})"):
+                if post['comments']:
+                    for i, c in enumerate(post['comments']):
+                        is_admin_comment = c.get('is_admin', False)
+                        if is_admin_comment:
+                            st.markdown(f"""<div class='admin-comment-box'><b>👑 {c['user']} (Owner):</b> {c['text']}</div>""", unsafe_allow_html=True)
+                            if c.get('image') and os.path.exists(c['image']): st.image(c['image'], width=200)
+                        else:
+                            st.markdown(f"<div class='comment-box'><b>{c['user']}:</b> {c['text']}</div>", unsafe_allow_html=True)
+                        
+                        if st.session_state['is_admin'] and st.button("ลบ", key=f"dc_{post['id']}_{i}"):
+                            d = load_data()
+                            for x in d:
+                                if x['id'] == post['id']: x['comments'].pop(i); break
+                            save_data(d); st.rerun()
+                
+                admin_cmt_img = None
+                if st.session_state['is_admin']:
+                    st.caption("👑 ตอบกลับในฐานะ Admin (แนบรูปได้)")
+                    admin_cmt_img = st.file_uploader("แนบรูปในคอมเมนต์", type=['png','jpg'], key=f"ci_{post['id']}")
+
+                with st.form(key=f"cf_{post['id']}"):
+                    if not st.session_state['is_admin']:
+                        u = st.text_input("ชื่อ", placeholder="ชื่อเล่น...", label_visibility="collapsed")
+                    else: u = "Dearluxion"
+                    t = st.text_input("ข้อความ", placeholder="แสดงความคิดเห็น...", label_visibility="collapsed")
+                    
+                    if st.form_submit_button("ส่ง"):
+                        now = time.time()
+                        if not st.session_state['is_admin'] and now - st.session_state['last_comment_time'] < 35:
+                            st.markdown('<div class="flash-screen"></div>', unsafe_allow_html=True)
+                            st.toast(f"🧚‍♀️ ไมล่า: มีอะไรค่อยคุยกันนะคะ ท่านพี่... (รออีก {35 - int(now - st.session_state['last_comment_time'])} วินาทีนะ!)", icon="⛔")
+                        elif t:
+                            cmt_img_path = None
+                            if admin_cmt_img:
+                                cmt_img_path = f"cmt_{int(now)}_{admin_cmt_img.name}"
+                                with open(cmt_img_path, "wb") as f: f.write(admin_cmt_img.getbuffer())
+
+                            d = load_data()
+                            for x in d:
+                                if x['id'] == post['id']: 
+                                    x['comments'].append({
+                                        "user": u if u else "Guest", "text": t,
+                                        "is_admin": st.session_state['is_admin'], "image": cmt_img_path
+                                    })
+                                    break
+                            save_data(d)
+                            if not st.session_state['is_admin']: st.session_state['last_comment_time'] = now
+                            st.rerun()
+else:
+    if not st.session_state['show_shop']: st.info("ยังไม่มีโพสต์ครับ")
+
+st.markdown("<br><center><small style='color:#A370F7'>Small Group by Dearluxion © 2025</small></center>", unsafe_allow_html=True)
