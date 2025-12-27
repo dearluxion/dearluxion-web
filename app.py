@@ -8,40 +8,19 @@ import base64
 import random
 import google.generativeai as genai
 
-# --- [NEW] บังคับใช้ Google Sheets เท่านั้น! ---
+# --- [NEW] ส่วนเสริมสำหรับ Google Sheets (เพิ่มตรงนี้) ---
 try:
     import gspread
     from google.oauth2.service_account import Credentials
     has_gspread = True
 except ImportError:
-    st.error("❌ ยังไม่ได้ติดตั้ง gspread! (ไปแก้ requirements.txt ด่วน)")
-    st.stop()
+    has_gspread = False
+# -----------------------------------------------------
 
-# ฟังก์ชันเชื่อมต่อ Google Sheets (แบบบังคับ)
-def get_gsheet_client():
-    if "gcp_service_account" not in st.secrets:
-        st.error("❌ ไม่เจอ Secrets! (ไปใส่กุญแจใน Secrets ก่อน)")
-        st.stop()
-    
-    try:
-        # 🔧 ซ่อมกุญแจอัตโนมัติ
-        key_dict = dict(st.secrets["gcp_service_account"])
-        key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
-        
-        scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-        creds = Credentials.from_service_account_info(key_dict, scopes=scope)
-        client = gspread.authorize(creds)
-        # ใช้ชื่อไฟล์จาก secrets
-        sheet_name = st.secrets.get("sheet_name", "streamlit_db")
-        return client.open(sheet_name)
-    except Exception as e:
-        st.error(f"❌ เชื่อมต่อ Google Sheets ไม่ได้: {e}")
-        st.stop() # หยุดทำงานทันทีถ้าต่อไม่ได้
-
-# --- 0. ตั้งค่า API KEY ---
+# --- 0. ตั้งค่า API KEY (เอา Key ของบอสมาใส่ตรงนี้!) ---
 GEMINI_API_KEY = ""
 
-# Config Gemini
+# Config Gemini (อัปเกรดเป็น 2.5-flash)
 try:
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel('gemini-2.5-flash') 
@@ -55,32 +34,128 @@ st.set_page_config(page_title="Small Group by Dearluxion", page_icon="🍸", lay
 # CSS: RGB Minimal & Glow Effects
 st.markdown("""
 <style>
+    /* พื้นหลังและฟอนต์ */
     .stApp { background-color: #0E1117; color: #E6EDF3; font-family: 'Sarabun', sans-serif; }
+    
+    /* RGB Glow Border Animation */
     @keyframes rgb-border {
         0% { border-color: #ff0000; box-shadow: 0 0 5px #ff0000; }
         33% { border-color: #00ff00; box-shadow: 0 0 5px #00ff00; }
         66% { border-color: #0000ff; box-shadow: 0 0 5px #0000ff; }
         100% { border-color: #ff0000; box-shadow: 0 0 5px #ff0000; }
     }
+
+    /* การ์ดโพสต์ (Minimal Glow) */
     .work-card-base {
-        background: #161B22; padding: 20px; border-radius: 15px;
-        border: 1px solid rgba(163, 112, 247, 0.3); margin-bottom: 20px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.4); transition: all 0.3s ease;
+        background: #161B22;
+        padding: 20px;
+        border-radius: 15px;
+        border: 1px solid rgba(163, 112, 247, 0.3);
+        margin-bottom: 20px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        transition: all 0.3s ease;
     }
-    .work-card-base:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(163, 112, 247, 0.15); border-color: #A370F7; }
-    .stButton>button { border-radius: 25px; border: 1px solid #30363D; background-color: #21262D; color: white; transition: 0.3s; width: 100%; font-weight: 500; }
-    .stButton>button:hover { border-color: #A370F7; color: #A370F7; background-color: #2b313a; box-shadow: 0 0 10px rgba(163, 112, 247, 0.2); }
-    .comment-box { background-color: #0d1117; padding: 12px; border-radius: 10px; margin-top: 10px; border-left: 3px solid #A370F7; font-size: 13px; }
-    .admin-comment-box { background: linear-gradient(90deg, #2b2100 0%, #1a1600 100%); padding: 12px; border-radius: 10px; margin-top: 10px; border: 1px solid #FFD700; font-size: 13px; box-shadow: 0 0 15px rgba(255, 215, 0, 0.1); }
-    .price-tag { background: linear-gradient(45deg, #A370F7, #8a4bfa); color: white; padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 16px; display: inline-block; margin-bottom: 10px; box-shadow: 0 4px 15px rgba(163, 112, 247, 0.4); }
-    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
-    .cute-guide { animation: float 3s infinite ease-in-out; background: linear-gradient(135deg, #FF9A9E, #FECFEF); padding: 10px 20px; border-radius: 30px; color: #555; font-weight: bold; text-align: center; margin-bottom: 15px; box-shadow: 0 5px 20px rgba(255, 154, 158, 0.4); cursor: pointer; border: 2px solid white; }
-    .boss-billboard { background: rgba(22, 27, 34, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(163, 112, 247, 0.5); border-radius: 20px; padding: 25px; text-align: center; margin-bottom: 30px; position: relative; box-shadow: 0 0 20px rgba(163, 112, 247, 0.15); overflow: hidden; }
-    .boss-billboard::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #ff0000, #00ff00, #0000ff, #ff0000); background-size: 200% 100%; animation: rgb-move 5s linear infinite; }
+    .work-card-base:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px rgba(163, 112, 247, 0.15);
+        border-color: #A370F7;
+    }
+    
+    /* ปุ่มกด (RGB Hover) */
+    .stButton>button {
+        border-radius: 25px;
+        border: 1px solid #30363D;
+        background-color: #21262D;
+        color: white;
+        transition: 0.3s;
+        width: 100%;
+        font-weight: 500;
+    }
+    .stButton>button:hover {
+        border-color: #A370F7;
+        color: #A370F7;
+        background-color: #2b313a;
+        box-shadow: 0 0 10px rgba(163, 112, 247, 0.2);
+    }
+    
+    /* กล่องคอมเมนต์ */
+    .comment-box {
+        background-color: #0d1117;
+        padding: 12px;
+        border-radius: 10px;
+        margin-top: 10px;
+        border-left: 3px solid #A370F7;
+        font-size: 13px;
+    }
+    .admin-comment-box {
+        background: linear-gradient(90deg, #2b2100 0%, #1a1600 100%);
+        padding: 12px;
+        border-radius: 10px;
+        margin-top: 10px;
+        border: 1px solid #FFD700;
+        font-size: 13px;
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.1);
+    }
+
+    /* ป้ายราคา */
+    .price-tag {
+        background: linear-gradient(45deg, #A370F7, #8a4bfa);
+        color: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-weight: bold;
+        font-size: 16px;
+        display: inline-block;
+        margin-bottom: 10px;
+        box-shadow: 0 4px 15px rgba(163, 112, 247, 0.4);
+    }
+    
+    /* Animation น้องไมล่า */
+    @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-6px); }
+    }
+    .cute-guide {
+        animation: float 3s infinite ease-in-out;
+        background: linear-gradient(135deg, #FF9A9E, #FECFEF);
+        padding: 10px 20px;
+        border-radius: 30px;
+        color: #555;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 15px;
+        box-shadow: 0 5px 20px rgba(255, 154, 158, 0.4);
+        cursor: pointer;
+        border: 2px solid white;
+    }
+
+    /* Boss Billboard (RGB Minimal) */
+    .boss-billboard {
+        background: rgba(22, 27, 34, 0.8);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(163, 112, 247, 0.5);
+        border-radius: 20px;
+        padding: 25px;
+        text-align: center;
+        margin-bottom: 30px;
+        position: relative;
+        box-shadow: 0 0 20px rgba(163, 112, 247, 0.15);
+        overflow: hidden;
+    }
+    .boss-billboard::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0; height: 3px;
+        background: linear-gradient(90deg, #ff0000, #00ff00, #0000ff, #ff0000);
+        background-size: 200% 100%;
+        animation: rgb-move 5s linear infinite;
+    }
     @keyframes rgb-move { 0% {background-position: 0% 50%;} 100% {background-position: 100% 50%;} }
+
     .billboard-icon { font-size: 28px; margin-bottom: 5px; }
     .billboard-text { font-size: 22px; font-weight: 700; color: #fff; letter-spacing: 0.5px; }
     .billboard-time { font-size: 10px; color: #8B949E; margin-top: 15px; text-transform: uppercase; letter-spacing: 1px; }
+
     a { color: #A370F7 !important; text-decoration: none; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
@@ -88,106 +163,172 @@ st.markdown("""
 # --- [SYSTEM] ฟังก์ชันแปลงลิงก์ Google Drive ---
 def convert_drive_link(link):
     if "drive.google.com" in link:
-        if "/folders/" in link: return "ERROR: ห้ามใช้ลิงก์ Folder!"
+        if "/folders/" in link:
+            return "ERROR: นี่คือลิงก์โฟลเดอร์ครับ! ใช้ได้แค่ลิงก์ไฟล์ (คลิกขวาที่รูป > Share > Copy Link)"
         match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
-        if match: return f'https://lh3.googleusercontent.com/d/{match.group(1)}'
+        if match:
+            file_id = match.group(1)
+            # สูตรเจาะระบบดึงรูป (lh3)
+            return f'https://lh3.googleusercontent.com/d/{file_id}'
     return link 
 
 def convert_drive_video_link(link):
     if "drive.google.com" in link:
-        if "/folders/" in link: return "ERROR: ห้ามใช้ลิงก์ Folder!"
+        if "/folders/" in link:
+             return "ERROR: ลิงก์โฟลเดอร์ใช้ไม่ได้ครับ ต้องเป็นลิงก์ไฟล์วิดีโอ"
         match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
-        if match: return f'https://drive.google.com/file/d/{match.group(1)}/preview'
+        if match:
+            file_id = match.group(1)
+            # แปลงเป็นลิงก์ Preview เพื่อใช้กับ Iframe
+            return f'https://drive.google.com/file/d/{file_id}/preview'
     return link
+# -------------------------------------------------------------
 
-# --- [CORE] ระบบ Database (Google Sheets ONLY!) ---
-# บังคับโหลดจาก Google Sheets เท่านั้น! ไม่สนไฟล์ Local
+# --- 2. ระบบจัดการไฟล์ (Google Sheets Integration) ---
+# (อัปเกรดตรงนี้ให้เชื่อม Sheets แต่ถ้าพังจะกลับมาใช้ไฟล์เดิม)
+DB_FILE = "portfolio_db.json"
+PROFILE_FILE = "profile_db.json"
+MAILBOX_FILE = "mailbox_db.json"
+
+# ฟังก์ชันเชื่อมต่อ (พร้อมตัวแก้กุญแจ)
+def get_gsheet_client():
+    if not has_gspread: return None
+    if "gcp_service_account" not in st.secrets: return None
+    try:
+        # --- 🛠️ ส่วนซ่อมกุญแจอัตโนมัติ 🛠️ ---
+        key_dict = dict(st.secrets["gcp_service_account"])
+        key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
+        # -----------------------------------
+        
+        scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        creds = Credentials.from_service_account_info(key_dict, scopes=scope)
+        client = gspread.authorize(creds)
+        # ใช้ชื่อไฟล์จาก secrets หรือ default 'streamlit_db'
+        sheet_name = st.secrets.get("sheet_name", "streamlit_db")
+        return client.open(sheet_name)
+    except Exception as e:
+        return None
+
+# --- LOAD DATA ---
 def load_data():
+    # 1. ลองโหลดจาก Google Sheets
     sh = get_gsheet_client()
+    if sh:
+        try:
+            ws = sh.worksheet("posts")
+            records = ws.get_all_records()
+            clean_data = []
+            for r in records:
+                if not str(r['id']): continue
+                try:
+                    # แปลงข้อมูล JSON String กลับเป็น Python Object
+                    r['images'] = json.loads(r['images']) if r['images'] else []
+                    r['video'] = json.loads(r['video']) if r['video'] else []
+                    r['reactions'] = json.loads(r['reactions']) if r['reactions'] else {'😻':0,'🙀':0,'😿':0,'😾':0,'🧠':0}
+                    r['comments'] = json.loads(r['comments']) if r['comments'] else []
+                    clean_data.append(r)
+                except: continue
+            return clean_data
+        except: pass
+    
+    # 2. ถ้า Sheets พัง ให้โหลดจากไฟล์เดิม (Backup)
+    if not os.path.exists(DB_FILE): return []
     try:
-        ws = sh.worksheet("posts")
-        records = ws.get_all_records()
-        clean_data = []
-        for r in records:
-            if not str(r['id']): continue
-            try:
-                # แปลง JSON String เป็น Object
-                r['images'] = json.loads(r['images']) if r['images'] else []
-                r['video'] = json.loads(r['video']) if r['video'] else []
-                r['reactions'] = json.loads(r['reactions']) if r['reactions'] else {'😻':0,'🙀':0,'😿':0,'😾':0,'🧠':0}
-                r['comments'] = json.loads(r['comments']) if r['comments'] else []
-                clean_data.append(r)
-            except: continue
-        return clean_data
-    except Exception as e:
-        # ถ้าหาแผ่นงานไม่เจอ ให้สร้างใหม่ (กันเหนียว)
-        if "posts" in str(e):
-            sh.add_worksheet(title="posts", rows=100, cols=20)
-            return []
-        st.error(f"โหลดข้อมูลไม่ได้: {e}")
-        return []
-
-# บังคับเซฟลง Google Sheets เท่านั้น!
-def save_data(data):
-    sh = get_gsheet_client()
-    try:
-        ws = sh.worksheet("posts")
-        rows = [["id", "date", "content", "images", "video", "color", "price", "likes", "reactions", "comments"]]
-        for p in data:
-            rows.append([
-                str(p.get('id','')), p.get('date',''), p.get('content',''),
-                json.dumps(p.get('images', [])), json.dumps(p.get('video', [])),
-                p.get('color', '#A370F7'), p.get('price', 0), 0,
-                json.dumps(p.get('reactions', {})),
-                json.dumps(p.get('comments', []))
-            ])
-        ws.clear()
-        ws.update(rows)
-    except Exception as e:
-        st.error(f"❌ บันทึกลง Google Sheets ไม่สำเร็จ! สาเหตุ: {e}")
-        st.stop()
-
-def load_profile():
-    sh = get_gsheet_client()
-    try:
-        ws = sh.worksheet("profile")
-        records = ws.get_all_records()
-        pf = {}
-        for r in records:
-            try: val = json.loads(r['value'])
-            except: val = r['value']
-            pf[r['key']] = val
-        return pf
-    except: return {}
-
-def save_profile(data):
-    sh = get_gsheet_client()
-    try:
-        ws = sh.worksheet("profile")
-        rows = [["key", "value"]]
-        for k,v in data.items():
-            val = json.dumps(v) if isinstance(v, (dict, list)) else str(v)
-            rows.append([k, val])
-        ws.clear()
-        ws.update(rows)
-    except Exception as e:
-        st.error(f"บันทึกโปรไฟล์ไม่ได้: {e}")
-
-def load_mailbox():
-    sh = get_gsheet_client()
-    try: return sh.worksheet("mailbox").get_all_records()
+        with open(DB_FILE, "r", encoding="utf-8") as f: return json.load(f)
     except: return []
 
+# --- SAVE DATA ---
+def save_data(data):
+    # 1. บันทึกลง Google Sheets
+    sh = get_gsheet_client()
+    if sh:
+        try:
+            ws = sh.worksheet("posts")
+            rows = [["id", "date", "content", "images", "video", "color", "price", "likes", "reactions", "comments"]]
+            for p in data:
+                rows.append([
+                    str(p.get('id','')), p.get('date',''), p.get('content',''),
+                    json.dumps(p.get('images', [])),
+                    json.dumps(p.get('video', [])),
+                    p.get('color', '#A370F7'), p.get('price', 0), 0,
+                    json.dumps(p.get('reactions', {})),
+                    json.dumps(p.get('comments', []))
+                ])
+            ws.clear()
+            ws.update(rows)
+        except Exception as e:
+            st.error(f"บันทึกลง Sheets ไม่สำเร็จ: {e}")
+
+    # 2. บันทึกลงไฟล์สำรอง
+    try:
+        with open(DB_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
+    except: st.error("บันทึกไฟล์สำรองไม่สำเร็จ")
+
+# --- LOAD PROFILE ---
+def load_profile():
+    sh = get_gsheet_client()
+    if sh:
+        try:
+            ws = sh.worksheet("profile")
+            records = ws.get_all_records()
+            pf = {}
+            for r in records:
+                try: val = json.loads(r['value'])
+                except: val = r['value']
+                pf[r['key']] = val
+            return pf
+        except: pass
+        
+    if not os.path.exists(PROFILE_FILE): return {}
+    try:
+        with open(PROFILE_FILE, "r", encoding="utf-8") as f: return json.load(f)
+    except: return {}
+
+# --- SAVE PROFILE ---
+def save_profile(data):
+    sh = get_gsheet_client()
+    if sh:
+        try:
+            ws = sh.worksheet("profile")
+            rows = [["key", "value"]]
+            for k,v in data.items():
+                val = json.dumps(v) if isinstance(v, (dict, list)) else str(v)
+                rows.append([k, val])
+            ws.clear()
+            ws.update(rows)
+        except: pass
+        
+    try:
+        with open(PROFILE_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
+    except: st.error("บันทึกโปรไฟล์ไม่สำเร็จ")
+
+# --- LOAD MAILBOX ---
+def load_mailbox():
+    sh = get_gsheet_client()
+    if sh:
+        try: return sh.worksheet("mailbox").get_all_records()
+        except: pass
+        
+    if not os.path.exists(MAILBOX_FILE): return []
+    try:
+        with open(MAILBOX_FILE, "r", encoding="utf-8") as f: return json.load(f)
+    except: return []
+
+# --- SAVE MAILBOX ---
 def save_mailbox(data):
     sh = get_gsheet_client()
+    if sh:
+        try:
+            ws = sh.worksheet("mailbox")
+            rows = [["date", "text"]]
+            for m in data: rows.append([m['date'], m['text']])
+            ws.clear()
+            ws.update(rows)
+        except: pass
+        
     try:
-        ws = sh.worksheet("mailbox")
-        rows = [["date", "text"]]
-        for m in data: rows.append([m['date'], m['text']])
-        ws.clear()
-        ws.update(rows)
-    except Exception as e:
-        st.error(f"ส่งจดหมายไม่ได้: {e}")
+        with open(MAILBOX_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
+    except: st.error("ส่งจดหมายไม่สำเร็จ")
 
 # Session Init
 if 'liked_posts' not in st.session_state: st.session_state['liked_posts'] = []
