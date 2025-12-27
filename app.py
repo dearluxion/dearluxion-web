@@ -8,19 +8,19 @@ import base64
 import random
 import google.generativeai as genai
 
-# --- [NEW] ส่วนเสริมสำหรับ Google Sheets ---
+# --- [NEW] ส่วนเสริมสำหรับ Google Sheets (ระบบถาวร) ---
 try:
     import gspread
     from google.oauth2.service_account import Credentials
     has_gspread = True
 except ImportError:
     has_gspread = False
-# ------------------------------------------
+# -----------------------------------------------------
 
-# --- 0. ตั้งค่า API KEY (เอา Key ของบอสมาใส่ตรงนี้!) ---
+# --- 0. ตั้งค่า API KEY ---
 GEMINI_API_KEY = ""
 
-# Config Gemini (อัปเกรดเป็น 2.5-flash)
+# Config Gemini
 try:
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel('gemini-2.5-flash') 
@@ -168,6 +168,7 @@ def convert_drive_link(link):
         match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
         if match:
             file_id = match.group(1)
+            # สูตรเจาะระบบดึงรูป (lh3)
             return f'https://lh3.googleusercontent.com/d/{file_id}'
     return link 
 
@@ -178,6 +179,7 @@ def convert_drive_video_link(link):
         match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
         if match:
             file_id = match.group(1)
+            # แปลงเป็นลิงก์ Preview เพื่อใช้กับ Iframe
             return f'https://drive.google.com/file/d/{file_id}/preview'
     return link
 # -------------------------------------------------------------
@@ -195,7 +197,9 @@ def get_gsheet_client():
         scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
         creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
         client = gspread.authorize(creds)
-        return client.open(st.secrets.get("sheet_name", "streamlit_db"))
+        # ใช้ชื่อไฟล์จาก secrets หรือ default 'streamlit_db'
+        sheet_name = st.secrets.get("sheet_name", "streamlit_db")
+        return client.open(sheet_name)
     except Exception as e:
         return None
 
