@@ -687,7 +687,7 @@ with st.sidebar.expander("🍸 มุมมืดของเอเรียล 
             """
             try:
                 full_prompt = f"{ariel_persona}\n\nUser: {user_msg_eri}\nAriel:"
-                with st.spinner("... [ไปหยิบเงาะกระป๋ฮงแป๊บนึงนะ]"):
+                with st.spinner("... [ไปหยิบเงาะกระป๋องแป๊บนึงนะ]"):
                     response = model.generate_content(full_prompt)
                     ariel_reply = response.text.strip()
                 
