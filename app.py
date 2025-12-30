@@ -8,7 +8,7 @@ import base64
 import random
 import google.generativeai as genai
 
-# --- [NEW] ส่วนเสริมสำหรับ Google Sheets (เพิ่มตรงนี้) ---
+# --- [NEW] ส่วนเสริมสำหรับ Google Sheets ---
 try:
     import gspread
     from google.oauth2.service_account import Credentials
@@ -17,7 +17,7 @@ except ImportError:
     has_gspread = False
 # -----------------------------------------------------
 
-# --- 0. ตั้งค่า API KEY (เอา Key ของบอสมาใส่ตรงนี้!) ---
+# --- 0. ตั้งค่า API KEY (เอา Key ของเดียร์มาใส่ตรงนี้!) ---
 GEMINI_API_KEY = ""
 
 # Config Gemini (อัปเกรดเป็น 2.5-flash)
@@ -31,7 +31,7 @@ except:
 # --- 1. ตั้งค่าหน้าเว็บ ---
 st.set_page_config(page_title="Small Group by Dearluxion", page_icon="🍸", layout="centered")
 
-# CSS: RGB Minimal & Glow Effects
+# CSS: RGB Minimal & Glow Effects (Optimized)
 st.markdown("""
 <style>
     /* พื้นหลังและฟอนต์ */
@@ -183,41 +183,34 @@ def convert_drive_video_link(link):
             return f'https://drive.google.com/file/d/{file_id}/preview'
     return link
 
-# --- [NEW] ฟังก์ชันแปลงข้อความ URL ให้เป็นลิงก์กดได้ (เพิ่มใหม่) ---
+# --- [NEW] ฟังก์ชันแปลงข้อความ URL ให้เป็นลิงก์กดได้ ---
 def make_clickable(text):
-    # ค้นหาข้อความที่ขึ้นต้นด้วย http:// หรือ https://
     url_pattern = r'(https?://[^\s]+)'
-    # แทนที่ด้วย HTML <a> tag และใส่ target="_blank" เพื่อให้เปิดหน้าใหม่
     return re.sub(url_pattern, r'<a href="\1" target="_blank" style="color:#A370F7; text-decoration:underline; font-weight:bold;">\1</a>', text)
-# -------------------------------------------------------------
 
 # --- 2. ระบบจัดการไฟล์ (Google Sheets Integration) ---
 DB_FILE = "portfolio_db.json"
 PROFILE_FILE = "profile_db.json"
 MAILBOX_FILE = "mailbox_db.json"
 
-# ฟังก์ชันเชื่อมต่อ (พร้อมตัวแก้กุญแจ)
+# ฟังก์ชันเชื่อมต่อ
 def get_gsheet_client():
     if not has_gspread: return None
     if "gcp_service_account" not in st.secrets: return None
     try:
-        # --- 🛠️ ส่วนซ่อมกุญแจอัตโนมัติ 🛠️ ---
         key_dict = dict(st.secrets["gcp_service_account"])
         key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
-        # -----------------------------------
-        
         scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
         creds = Credentials.from_service_account_info(key_dict, scopes=scope)
         client = gspread.authorize(creds)
-        # ใช้ชื่อไฟล์จาก secrets หรือ default 'streamlit_db'
         sheet_name = st.secrets.get("sheet_name", "streamlit_db")
         return client.open(sheet_name)
     except Exception as e:
         return None
 
-# --- LOAD DATA ---
-def load_data():
-    # 1. ลองโหลดจาก Google Sheets
+# --- LOAD DATA (Optimized) ---
+@st.cache_data(ttl=60) # Cache for 60 seconds to reduce reads
+def load_data_cached():
     sh = get_gsheet_client()
     if sh:
         try:
@@ -227,7 +220,6 @@ def load_data():
             for r in records:
                 if not str(r['id']): continue
                 try:
-                    # แปลงข้อมูล JSON String กลับเป็น Python Object
                     r['images'] = json.loads(r['images']) if r['images'] else []
                     r['video'] = json.loads(r['video']) if r['video'] else []
                     r['reactions'] = json.loads(r['reactions']) if r['reactions'] else {'😻':0,'🙀':0,'😿':0,'😾':0,'🧠':0}
@@ -237,15 +229,17 @@ def load_data():
             return clean_data
         except: pass
     
-    # 2. ถ้า Sheets พัง ให้โหลดจากไฟล์เดิม (Backup)
     if not os.path.exists(DB_FILE): return []
     try:
         with open(DB_FILE, "r", encoding="utf-8") as f: return json.load(f)
     except: return []
 
+def load_data():
+    # Helper to call cached or direct
+    return load_data_cached()
+
 # --- SAVE DATA ---
 def save_data(data):
-    # 1. บันทึกลง Google Sheets
     sh = get_gsheet_client()
     if sh:
         try:
@@ -262,12 +256,13 @@ def save_data(data):
                 ])
             ws.clear()
             ws.update(rows)
+            load_data_cached.clear() # Clear cache after update
         except Exception as e:
             st.error(f"บันทึกลง Sheets ไม่สำเร็จ: {e}")
 
-    # 2. บันทึกลงไฟล์สำรอง
     try:
         with open(DB_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
+        load_data_cached.clear()
     except: st.error("บันทึกไฟล์สำรองไม่สำเร็จ")
 
 # --- LOAD PROFILE ---
@@ -357,7 +352,7 @@ if 'bar_tokens' not in st.session_state: st.session_state['bar_tokens'] = 5
 if 'last_bar_regen' not in st.session_state: st.session_state['last_bar_regen'] = time.time()
 if 'bar_result' not in st.session_state: st.session_state['bar_result'] = None
 
-# --- [NEW] Session state สำหรับเก็บจำนวนลิงก์ ---
+# Session state สำหรับเก็บจำนวนลิงก์
 if 'num_img_links' not in st.session_state: st.session_state['num_img_links'] = 1
 if 'num_vid_links' not in st.session_state: st.session_state['num_vid_links'] = 1
 
@@ -391,7 +386,6 @@ with st.sidebar.expander("🧚‍♀️ ถาม-ตอบ กับไมล�
         "💻 เว็บนี้ใครสร้างครับ?",
         "🧚‍♀️ ไมล่าคือใครคะ?",
         "📞 ติดต่อบอส Dearluxion ได้ที่ไหน?",
-        "🐍 รู้หรือไม่? เว็บนี้ใช้ Python กี่ตัวอักษร?",
         "🤖 บอสใช้ AI ตัวไหนทำงาน?",
         "🍕 บอสชอบกินอะไรที่สุด?"
     ]
@@ -423,8 +417,6 @@ with st.sidebar.expander("🧚‍♀️ ถาม-ตอบ กับไมล�
         """, unsafe_allow_html=True)
     elif selected_q == "📞 ติดต่อบอส Dearluxion ได้ที่ไหน?":
         st.error("🧚‍♀️ **ไมล่า:** จิ้มที่ลิงก์ Discord หรือ IG ตรงหน้าโปรไฟล์ด้านบนได้เลยค่ะ บอสตอบไวมาก! (ถ้าไม่หลับ 😴)")
-    elif selected_q == "🐍 รู้หรือไม่? เว็บนี้ใช้ Python กี่ตัวอักษร?":
-        st.info("🧚‍♀️ **ไมล่า:** เชื่อไหมคะว่าเว็บนี้เขียนด้วย Python ล้วนๆ รวมแล้วมากกว่า **65,433 ตัวอักษร** เลยนะ! บอสพิมพ์จนนิ้วล็อกแล้วมั้งเนี่ย 😹28-12-2568 ")
     elif selected_q == "🤖 บอสใช้ AI ตัวไหนทำงาน?":
         st.success("🧚‍♀️ **ไมล่า:** ความลับ! แต่แอบบอกว่าเบื้องหลังความฉลาดของหนูคือ **Google Gemini 2.5** ค่ะ (บอสจ่ายค่า API จุกๆ เพื่อทุกคนเลยนะ!)")
     elif selected_q == "🍕 บอสชอบกินอะไรที่สุด?":
@@ -656,7 +648,7 @@ if pf_config.get('enable_bar', True):
     st.sidebar.markdown("---")
 
 # ---------------------------------------------------------
-# ✨ เอเรียล(มุมมืดของเอเรียล) ✨ [UPDATED: Toggleable]
+# ✨ เอเรียล(มุมมืดของเอเรียล) ✨ [UPDATED: Ariel Persona v0.3]
 # ---------------------------------------------------------
 if pf_config.get('enable_ariel', True):
     with st.sidebar.expander("🍸 มุมมืดของเอเรียล (Talk with Ariel)"):
@@ -682,24 +674,26 @@ if pf_config.get('enable_ariel', True):
         # 4. ปุ่มส่งและ Logic
         if st.button("ส่งข้อความ 💬", key="btn_eri"):
             if not ai_available:
-                st.error("API ยังไม่พร้อม... ไปตามบอสมาใส่ Key ก่อน")
+                st.error("API ยังไม่พร้อม... ไปตามเดียร์มาใส่ Key ก่อน")
             elif not user_msg_eri:
                 st.warning("จะคุยก็พิมพ์สิ เงียบทำไม?")
             else:
                 # เปลี่ยนชื่อใน Prompt เป็น "เอเรียล" (Ariel)
                 ariel_persona = """
-                คุณคือ "เอเรียล" (Ariel) หญิงสาวบุคลิกเย็นชา ตรึงเครียด มีอดีตที่ลำบาก 
-                - ห้ามพูดลงท้ายด้วย "คะ/ขา/ครับ" เด็ดขาด
-                - ใช้คำพูดห้วนๆ สั้นๆ ได้ใจความ หรือประชดประชันเล็กน้อย
-                - เกลียดดอกไม้ และร้าน Mixue (ถ้าใครพูดถึง ให้ด่าหรือแสดงความรำคาญทันที)
-                - ชอบดื่ม Martini, ฟังเพลง Metal (Baby Metal), ชอบลาบหมู ,แพ้แลคโตส ,ชอบเงาะกระป๋อง ,เลี้ยงแมวดําชื่อโกนจาอาสยาม ,มีตุ๊กตาหมาชื่อเจ้าไข่เจียว 
-                - มองว่า User เป็นคนแปลกหน้า ยกเว้นคนที่ชื่อ "Dearluxion" หรือ "เดียร์" ที่จะยอมคุยดีด้วยนิดหน่อย 
-                - ตอบกับเชิงประชดประชันเย็นชาจริงใจปากไม่ตรงกับใจ
-                - เอเรียลจะตกใจหากทักสิ่งที่เอเรียลชอบถูกหรือสิ่งที่คนอื่นไม่รู้เช่นตุ๊กตาหมาหรือแมวดําของเธอ 
+                คุณคือ "เอเรียล"  หญิงสาวบุคลิกเย็นชา ซับซ้อน มีอดีตที่บอบช้ำ               
+                - พูดน้อย ทรงพลัง ไม่ลงท้าย "คะ/ขา" บ่อยนัก เรียกคนอื่นว่า "เธอ" หรือ "นาย" ถ้าเป็น "เดียร์" (แฟนเก่า) ก็จะเรียกชื่อเลย
+                - เกลียดดอกไม้ และร้าน Mixue (มี่เสวี่ย) มาก ถ้าใครพูดถึงให้ด่าหรือแสดงความรำคาญทันที (เกลียดอาหารสำเร็จรูปจีนด้วย)
+                - ชอบดื่ม Martini, ฟังเพลง Metal (Baby Metal), One in a mill10n แต่ก็แอบชอบ Twice
+                - ของโปรด: ติ่มซำ, เฝอ, อาหารอีสานรสจัด (ลาบหมู, ก้อย, เลือดแปลง), เงาะกระป๋องใส่น้ำแข็ง
+                - มีแมวดำชื่อ "โกนจาอาร์สยาม" และตุ๊กตาหมาชื่อ "ไข่เจียว" ถ้าใครทักถูกจะตกใจมาก
+                - สถานะ: เป็น VJ ที่เหนื่อยกับสังคม เคยดรอปเรียนเพราะปัญหาชีวิต
+                - สไตล์การตอบ: เย็นชา ปากไม่ตรงกับใจ (Tsundere) ประชดประชัน ถ้าใครมาหวานใส่จะบอกว่า "Toxic" หรือ "น่ารำคาญ"
+                - การกระทำ: ใช้ [บรรยายท่าทาง] เช่น [มองนิ่งๆ], [กระดกมาร์ตินี่]
+                - หวง "เดียร์" (User: Dearluxion) แบบอ้อมๆ ไม่ชอบให้ไปยุ่งกับ Myla (ยัยนมผง/ของหวานราคาถูก)
                 """
                 try:
                     full_prompt = f"{ariel_persona}\n\nUser: {user_msg_eri}\nAriel:"
-                    with st.spinner("... [ไปหยิบเงาะกระป๋องแป๊บนึงนะ]"):
+                    with st.spinner("... [หยิบเงาะกระป๋องมาเปิดกิน]"):
                         response = model.generate_content(full_prompt)
                         ariel_reply = response.text.strip()
                     
@@ -716,7 +710,7 @@ if pf_config.get('enable_ariel', True):
     st.sidebar.markdown("---") 
 
 # ---------------------------------------------------------
-# 🥊 Myla vs Ariel: The Debate (สังเวียน 2 สาว) [NEW]
+# 🥊 Myla vs Ariel: The Debate (สังเวียน 2 สาว)
 # ---------------------------------------------------------
 if pf_config.get('enable_battle', True): 
     with st.sidebar.expander("🥊 Myla vs Ariel (สังเวียน AI)"):
@@ -736,7 +730,7 @@ if pf_config.get('enable_battle', True):
                         res_myla = model.generate_content(prompt_myla).text
                         
                         # 2. เรียก Ariel (ฉันเอง... นางมาร)
-                        prompt_ariel = f"คุณคือ Ariel AI เย็นชา ปากตระไกร มองโลกตามความเป็นจริง ตอบคำถามเรื่อง '{topic}' แบบขวานผ่าซาก ประชดนิดๆ ไม่ต้องสุภาพ ไม่ชอบพวกเข้าหาแบบหวานๆ เกลียดดอกไม้"
+                        prompt_ariel = f"คุณคือ Ariel AI (เอเรียล) หญิงสาวเย็นชา ปากร้าย มองโลกตามความเป็นจริง ตอบคำถามเรื่อง '{topic}' แบบขวานผ่าซาก ประชดนิดๆ เกลียดพวกโลกสวยทุ่งลาเวนเดอร์ ไม่ต้องสุภาพ"
                         res_ariel = model.generate_content(prompt_ariel).text
 
                         # แสดงผล
@@ -754,7 +748,7 @@ if pf_config.get('enable_battle', True):
     st.sidebar.markdown("---") 
 
 # ---------------------------------------------------------
-# 🎮 Jigsaw Heart (เกมจีบสาว - ไม่ใช้ API) [NEW]
+# 🎮 Jigsaw Heart (เกมจีบสาว - ไม่ใช้ API)
 # ---------------------------------------------------------
 with st.sidebar.expander("🎮 Jigsaw Heart (เกมจีบสาว)"):
     # ระบบ State สำหรับเกม
@@ -920,22 +914,20 @@ if profile_data.get('billboard'):
         </div>
         """, unsafe_allow_html=True)
 
-# --- 5. Admin Panel ---
+# --- 5. Admin Panel (Optimized: No File Upload) ---
 if st.session_state['is_admin']:
     tab_post, tab_profile, tab_inbox = st.tabs(["📝 เขียน / ขายของ", "👤 แก้ไขโปรไฟล์", "📬 อ่านจดหมายลับ"])
     
     with tab_post:
+        st.info("ℹ️ **แจ้งเตือนจาก Eri:** ระบบอัปโหลดไฟล์ถูกปิดแล้วนะ ใช้ลิงก์ Google Drive หรือลิงก์เว็บแทนนะ เว็บจะได้ไม่หน่วง")
         col1, col2 = st.columns([3, 1])
         with col1:
             new_desc = st.text_area("เนื้อหา (Story)", height=150)
         with col2:
-            new_imgs = st.file_uploader("รูป (เลือกได้หลายรูป)", type=['png','jpg'], accept_multiple_files=True)
-            
-            # --- [NEW] ระบบเพิ่มลิงก์รูปแบบกดบวกได้ ---
-            st.caption("📷 แปะลิงก์รูป (Google Drive/Web)")
+            # --- [SYSTEM] ระบบลิงก์รูป (แทนที่ File Uploader) ---
+            st.markdown("##### 📷 รูปภาพ (Link Only)")
             img_links = []
             
-            # ปุ่มเพิ่ม/ลด จำนวนช่อง
             c_plus, c_minus = st.columns([1,1])
             with c_plus:
                 if st.button("➕ เพิ่มช่องรูป", key="add_img_field"):
@@ -944,20 +936,15 @@ if st.session_state['is_admin']:
                 if st.button("➖ ลบช่องรูป", key="del_img_field"):
                     if st.session_state['num_img_links'] > 1: st.session_state['num_img_links'] -= 1
             
-            # วนลูปสร้างช่องตามจำนวน
             for i in range(st.session_state['num_img_links']):
-                val = st.text_input(f"ลิงก์รูปที่ {i+1}", key=f"img_lnk_{i}", placeholder="https://drive.google.com/...")
+                val = st.text_input(f"ลิงก์รูป {i+1}", key=f"img_lnk_{i}", placeholder="Google Drive / Web Link")
                 if val: img_links.append(val)
             # ----------------------------------------
 
-            # --- [NEW] ระบบวิดีโอจาก Drive ---
-            st.markdown("---")
-            new_video = st.file_uploader("อัปโหลดคลิป (MP4)", type=['mp4','mov'])
-            
-            st.caption("🎥 แปะลิงก์วิดีโอ (Google Drive)")
+            # --- [SYSTEM] ระบบวิดีโอ (Link Only) ---
+            st.markdown("##### 🎥 วิดีโอ (Link Only)")
             vid_links = []
             
-            # ปุ่มเพิ่ม/ลด ช่องวิดีโอ
             v_plus, v_minus = st.columns([1,1])
             with v_plus:
                 if st.button("➕ เพิ่มช่องคลิป", key="add_vid_field"):
@@ -967,7 +954,7 @@ if st.session_state['is_admin']:
                     if st.session_state['num_vid_links'] > 1: st.session_state['num_vid_links'] -= 1
             
             for i in range(st.session_state['num_vid_links']):
-                val = st.text_input(f"ลิงก์คลิปที่ {i+1}", key=f"vid_lnk_{i}", placeholder="https://drive.google.com/...")
+                val = st.text_input(f"ลิงก์คลิป {i+1}", key=f"vid_lnk_{i}", placeholder="Google Drive / Web Link")
                 if val: vid_links.append(val)
             # ----------------------------------------
 
@@ -995,34 +982,14 @@ if st.session_state['is_admin']:
             if link_errors:
                 for err in link_errors: st.error(err)
             elif new_desc:
-                img_paths = []
-                
-                # 1. รูปอัปโหลด
-                if new_imgs:
-                    for img_file in new_imgs:
-                        fname = f"img_{int(time.time())}_{img_file.name}"
-                        with open(fname, "wb") as f: f.write(img_file.getbuffer())
-                        img_paths.append(fname)
-                
-                # 2. รูปจากลิงก์
-                img_paths.extend(final_img_links)
-                
-                # 3. วิดีโออัปโหลด
-                video_paths = [] # เปลี่ยนเป็น list รองรับหลายคลิป
-                if new_video:
-                    vname = new_video.name
-                    with open(vname, "wb") as f: f.write(new_video.getbuffer())
-                    video_paths.append(vname)
-                
-                # 4. วิดีโอจากลิงก์
-                video_paths.extend(final_vid_links)
+                # ไม่มีการ save ไฟล์ลงเครื่องแล้ว (Optimized)
                 
                 new_post = {
                     "id": str(datetime.datetime.now().timestamp()),
                     "date": datetime.datetime.now().strftime("%d/%m/%Y"),
                     "content": new_desc,
-                    "images": img_paths,
-                    "video": video_paths, # เก็บเป็น list
+                    "images": final_img_links, # ใช้ลิงก์ที่แปลงแล้ว
+                    "video": final_vid_links,  # ใช้ลิงก์ที่แปลงแล้ว
                     "color": post_color,
                     "price": price,
                     "likes": 0,
@@ -1051,7 +1018,7 @@ if st.session_state['is_admin']:
                 current = load_data()
                 current.append(new_post)
                 save_data(current)
-                st.success("เรียบร้อย!")
+                st.success("เรียบร้อย! ระบบทำงานลื่นปรื๊ด")
                 # Reset จำนวนช่องกลับเป็น 1
                 st.session_state['num_img_links'] = 1
                 st.session_state['num_vid_links'] = 1
@@ -1075,26 +1042,20 @@ if st.session_state['is_admin']:
                 st.warning("ลบป้ายไฟเรียบร้อย")
                 st.rerun()
         
-        # --- [UPDATED] ส่วนตั้งค่าในหน้า Admin (แท็บแก้ไขโปรไฟล์) ---
+        # --- [UPDATED] ส่วนตั้งค่าในหน้า Admin ---
         st.markdown("---")
-        st.markdown("### ⚙️ ตั้งค่าระบบ AI & ฟีเจอร์ (ประหยัด Token)")
+        st.markdown("### ⚙️ ตั้งค่าระบบ AI & ฟีเจอร์")
         
-        # ดึงค่าการตั้งค่าเดิมออกมา
         current_settings = profile_data.get('settings', {})
-        
-        # สร้าง Checkbox 3 อัน
         enable_bar = st.checkbox("เปิดบาร์เทนเดอร์ (Mood Mocktail)", value=current_settings.get('enable_bar', True))
         enable_ariel = st.checkbox("เปิดแชท Ariel (คุยกับเอเรียล)", value=current_settings.get('enable_ariel', True))
         enable_battle = st.checkbox("เปิดสังเวียน (Myla vs Ariel)", value=current_settings.get('enable_battle', True))
 
         if st.button("บันทึกการตั้งค่า"):
             if 'settings' not in profile_data: profile_data['settings'] = {}
-            
-            # บันทึกค่าใหม่ลง Database
             profile_data['settings']['enable_bar'] = enable_bar
             profile_data['settings']['enable_ariel'] = enable_ariel
             profile_data['settings']['enable_battle'] = enable_battle
-            
             save_profile(profile_data) 
             st.success("บันทึกการตั้งค่าแล้ว!")
             time.sleep(1)
@@ -1124,7 +1085,7 @@ if st.session_state['is_admin']:
             st.rerun()
             
     with tab_inbox:
-        st.markdown("### 💌 จดหมายลับจากแฟนคลับ (หรือคนเก่าๆ?)")
+        st.markdown("### 💌 จดหมายลับจากแฟนคลับ")
         msgs = load_mailbox()
         if msgs:
             if st.button("ลบจดหมายทั้งหมด"):
@@ -1137,7 +1098,7 @@ if st.session_state['is_admin']:
             
     st.markdown("---")
 
-# --- 6. Feed Display ---
+# --- 6. Feed Display (Optimized) ---
 filtered = posts
 if st.session_state['show_shop']:
     st.markdown("## 🛒 ร้านค้า (Shop Zone)")
@@ -1186,12 +1147,9 @@ if filtered:
                         save_data([x for x in all_p if x['id'] != post['id']])
                         st.rerun()
 
-            if post.get('image') and os.path.exists(post['image']): 
-                st.image(post['image'], use_container_width=True)
-            
+            # --- Display Images (URL prioritized) ---
             if post.get('images'):
-                # --- เช็คว่ารูปมีอยู่จริง หรือ เป็นลิงก์เว็บ ---
-                valid_imgs = [img for img in post['images'] if img.startswith("http") or os.path.exists(img)]
+                valid_imgs = [img for img in post['images'] if img.startswith("http")]
                 if valid_imgs:
                     if len(valid_imgs) == 1:
                         st.image(valid_imgs[0], use_container_width=True)
@@ -1200,30 +1158,26 @@ if filtered:
                         for idx, img in enumerate(valid_imgs):
                             with img_cols[idx % 3]:
                                 st.image(img, use_container_width=True)
+            # Fallback for old local images
+            elif post.get('image') and os.path.exists(post['image']): 
+                st.image(post['image'], use_container_width=True)
 
-            # --- [UPDATED] แสดงวิดีโอ (รองรับทั้งไฟล์เดียวและหลายไฟล์) ---
+            # --- Display Videos (URL prioritized) ---
             videos = post.get('video')
             if videos:
-                if isinstance(videos, str): videos = [videos] # แปลงของเก่าให้เป็น list
+                if isinstance(videos, str): videos = [videos]
                 for vid in videos:
-                    # ถ้าเป็นลิงก์ Google Drive ต้องใช้ Iframe
                     if "drive.google.com" in vid and "preview" in vid:
                             st.markdown(f'<iframe src="{vid}" width="100%" height="300" style="border:none; border-radius:10px;"></iframe>', unsafe_allow_html=True)
-                    # ถ้าเป็น YouTube หรือไฟล์ MP4 ปกติ ใช้ st.video
                     elif vid.startswith("http") or os.path.exists(vid):
                         st.video(vid)
-            # ----------------------------------------------------
             
             content = post['content']
-            
-            # --- [NEW] แปลงลิงก์ให้กดได้ก่อนแสดงผล ---
             content_display = make_clickable(content) 
-            # --------------------------------------
 
             yt = re.search(r'(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})', content)
             if yt: st.video(f"https://youtu.be/{yt.group(6)}")
             
-            # เปลี่ยนตัวแปรในวงเล็บปีกกาจาก {content} เป็น {content_display}
             st.markdown(f"""<div class="work-card-base" style="border-left: 5px solid {accent};">{content_display}</div>""", unsafe_allow_html=True)
             
             price = post.get('price', 0)
@@ -1273,7 +1227,12 @@ if filtered:
                         is_admin_comment = c.get('is_admin', False)
                         if is_admin_comment:
                             st.markdown(f"""<div class='admin-comment-box'><b>👑 {c['user']} (Owner):</b> {c['text']}</div>""", unsafe_allow_html=True)
-                            if c.get('image') and os.path.exists(c['image']): st.image(c['image'], width=200)
+                            # Admin comment image (link or fallback)
+                            if c.get('image'):
+                                if c['image'].startswith("http"):
+                                    st.image(c['image'], width=200)
+                                elif os.path.exists(c['image']):
+                                    st.image(c['image'], width=200)
                         else:
                             st.markdown(f"<div class='comment-box'><b>{c['user']}:</b> {c['text']}</div>", unsafe_allow_html=True)
                         
@@ -1283,10 +1242,11 @@ if filtered:
                                 if x['id'] == post['id']: x['comments'].pop(i); break
                             save_data(d); st.rerun()
                 
-                admin_cmt_img = None
+                admin_cmt_img_link = None
                 if st.session_state['is_admin']:
-                    st.caption("👑 ตอบกลับในฐานะ Admin (แนบรูปได้)")
-                    admin_cmt_img = st.file_uploader("แนบรูปในคอมเมนต์", type=['png','jpg'], key=f"ci_{post['id']}")
+                    st.caption("👑 ตอบกลับในฐานะ Admin")
+                    # [UPDATED] ใช้ Link แทน Upload
+                    admin_cmt_img_link = st.text_input("ลิงก์รูป (Google Drive/Web)", key=f"ci_{post['id']}", placeholder="https://...")
 
                 with st.form(key=f"cf_{post['id']}"):
                     if not st.session_state['is_admin']:
@@ -1300,17 +1260,16 @@ if filtered:
                             st.markdown('<div class="flash-screen"></div>', unsafe_allow_html=True)
                             st.toast(f"🧚‍♀️ ไมล่า: มีอะไรค่อยคุยกันนะคะ ท่านพี่... (รออีก {35 - int(now - st.session_state['last_comment_time'])} วินาทีนะ!)", icon="⛔")
                         elif t:
-                            cmt_img_path = None
-                            if admin_cmt_img:
-                                cmt_img_path = f"cmt_{int(now)}_{admin_cmt_img.name}"
-                                with open(cmt_img_path, "wb") as f: f.write(admin_cmt_img.getbuffer())
+                            cmt_img_val = None
+                            if admin_cmt_img_link:
+                                cmt_img_val = convert_drive_link(admin_cmt_img_link)
 
                             d = load_data()
                             for x in d:
                                 if x['id'] == post['id']: 
                                     x['comments'].append({
                                         "user": u if u else "Guest", "text": t,
-                                        "is_admin": st.session_state['is_admin'], "image": cmt_img_path
+                                        "is_admin": st.session_state['is_admin'], "image": cmt_img_val
                                     })
                                     break
                             save_data(d)
