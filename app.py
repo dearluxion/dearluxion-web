@@ -182,6 +182,13 @@ def convert_drive_video_link(link):
             # แปลงเป็นลิงก์ Preview เพื่อใช้กับ Iframe
             return f'https://drive.google.com/file/d/{file_id}/preview'
     return link
+
+# --- [NEW] ฟังก์ชันแปลงข้อความ URL ให้เป็นลิงก์กดได้ (เพิ่มใหม่) ---
+def make_clickable(text):
+    # ค้นหาข้อความที่ขึ้นต้นด้วย http:// หรือ https://
+    url_pattern = r'(https?://[^\s]+)'
+    # แทนที่ด้วย HTML <a> tag และใส่ target="_blank" เพื่อให้เปิดหน้าใหม่
+    return re.sub(url_pattern, r'<a href="\1" target="_blank" style="color:#A370F7; text-decoration:underline; font-weight:bold;">\1</a>', text)
 # -------------------------------------------------------------
 
 # --- 2. ระบบจัดการไฟล์ (Google Sheets Integration) ---
@@ -572,7 +579,7 @@ with st.sidebar.expander("📈 Love Stock Market (หุ้นหัวใจ)",
                 if len(pf['stock']['history']) > 30: pf['stock']['history'].pop(0)
                 save_profile(pf)
                 st.session_state['last_stock_trade'] = time.time()
-                st.toast("🚀 หุ้นพุ่ง! ขอบคุณที่เติมความรักครับ", icon="📈")
+                st.toast("🚀 หุ้นพุ่ง! ขอบคุณที่เติมความรักครับ", icon="📉")
                 st.rerun()
             
     with b2:
@@ -1208,10 +1215,16 @@ if filtered:
             # ----------------------------------------------------
             
             content = post['content']
+            
+            # --- [NEW] แปลงลิงก์ให้กดได้ก่อนแสดงผล ---
+            content_display = make_clickable(content) 
+            # --------------------------------------
+
             yt = re.search(r'(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})', content)
             if yt: st.video(f"https://youtu.be/{yt.group(6)}")
             
-            st.markdown(f"""<div class="work-card-base" style="border-left: 5px solid {accent};">{content}</div>""", unsafe_allow_html=True)
+            # เปลี่ยนตัวแปรในวงเล็บปีกกาจาก {content} เป็น {content_display}
+            st.markdown(f"""<div class="work-card-base" style="border-left: 5px solid {accent};">{content_display}</div>""", unsafe_allow_html=True)
             
             price = post.get('price', 0)
             if price > 0:
