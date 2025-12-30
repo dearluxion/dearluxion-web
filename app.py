@@ -699,7 +699,7 @@ if pf_config.get('enable_ariel', True):
                     
                     st.session_state['eri_chat_history'].append({'role': 'user', 'message': user_msg_eri})
                     st.session_state['eri_chat_history'].append({'role': 'ariel', 'message': ariel_reply})
-                    st.rerun()'
+                    st.rerun()
                 except Exception as e:
                     st.error(f"เอเรียลไม่อยากคุยตอนนี้ (Error: {e})")
 
