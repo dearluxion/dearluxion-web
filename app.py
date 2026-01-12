@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import json
+import requests
 import datetime
 import re
 import time
@@ -47,24 +48,20 @@ st.markdown("""
 
     /* การ์ดโพสต์ (Minimal Glow) */
     .work-card-base {
-        background: #161B22;
-        padding: 20px;
+        background: #161B22; padding: 20px;
         border-radius: 15px;
         border: 1px solid rgba(163, 112, 247, 0.3);
         margin-bottom: 20px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-        transition: all 0.3s ease;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.4); transition: all 0.3s ease;
     }
     .work-card-base:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 30px rgba(163, 112, 247, 0.15);
+        transform: translateY(-2px); box-shadow: 0 8px 30px rgba(163, 112, 247, 0.15);
         border-color: #A370F7;
     }
     
     /* ปุ่มกด (RGB Hover) */
     .stButton>button {
-        border-radius: 25px;
-        border: 1px solid #30363D;
+        border-radius: 25px; border: 1px solid #30363D;
         background-color: #21262D;
         color: white;
         transition: 0.3s;
@@ -74,22 +71,19 @@ st.markdown("""
     .stButton>button:hover {
         border-color: #A370F7;
         color: #A370F7;
-        background-color: #2b313a;
-        box-shadow: 0 0 10px rgba(163, 112, 247, 0.2);
+        background-color: #2b313a; box-shadow: 0 0 10px rgba(163, 112, 247, 0.2);
     }
     
     /* กล่องคอมเมนต์ */
     .comment-box {
-        background-color: #0d1117;
-        padding: 12px;
+        background-color: #0d1117; padding: 12px;
         border-radius: 10px;
         margin-top: 10px;
         border-left: 3px solid #A370F7;
         font-size: 13px;
     }
     .admin-comment-box {
-        background: linear-gradient(90deg, #2b2100 0%, #1a1600 100%);
-        padding: 12px;
+        background: linear-gradient(90deg, #2b2100 0%, #1a1600 100%); padding: 12px;
         border-radius: 10px;
         margin-top: 10px;
         border: 1px solid #FFD700;
@@ -99,15 +93,13 @@ st.markdown("""
 
     /* ป้ายราคา */
     .price-tag {
-        background: linear-gradient(45deg, #A370F7, #8a4bfa);
-        color: white;
+        background: linear-gradient(45deg, #A370F7, #8a4bfa); color: white;
         padding: 5px 15px;
         border-radius: 20px;
         font-weight: bold;
         font-size: 16px;
         display: inline-block;
-        margin-bottom: 10px;
-        box-shadow: 0 4px 15px rgba(163, 112, 247, 0.4);
+        margin-bottom: 10px; box-shadow: 0 4px 15px rgba(163, 112, 247, 0.4);
     }
     
     /* Animation น้องไมล่า */
@@ -116,30 +108,26 @@ st.markdown("""
         50% { transform: translateY(-6px); }
     }
     .cute-guide {
-        animation: float 3s infinite ease-in-out;
-        background: linear-gradient(135deg, #FF9A9E, #FECFEF);
+        animation: float 3s infinite ease-in-out; background: linear-gradient(135deg, #FF9A9E, #FECFEF);
         padding: 10px 20px;
         border-radius: 30px;
         color: #555;
         font-weight: bold;
         text-align: center;
-        margin-bottom: 15px;
-        box-shadow: 0 5px 20px rgba(255, 154, 158, 0.4);
+        margin-bottom: 15px; box-shadow: 0 5px 20px rgba(255, 154, 158, 0.4);
         cursor: pointer;
         border: 2px solid white;
     }
 
     /* Boss Billboard (RGB Minimal) */
     .boss-billboard {
-        background: rgba(22, 27, 34, 0.8);
-        backdrop-filter: blur(10px);
+        background: rgba(22, 27, 34, 0.8); backdrop-filter: blur(10px);
         border: 1px solid rgba(163, 112, 247, 0.5);
         border-radius: 20px;
         padding: 25px;
         text-align: center;
         margin-bottom: 30px;
-        position: relative;
-        box-shadow: 0 0 20px rgba(163, 112, 247, 0.15);
+        position: relative; box-shadow: 0 0 20px rgba(163, 112, 247, 0.15);
         overflow: hidden;
     }
     .boss-billboard::before {
@@ -175,7 +163,7 @@ def convert_drive_link(link):
 def convert_drive_video_link(link):
     if "drive.google.com" in link:
         if "/folders/" in link:
-             return "ERROR: ลิงก์โฟลเดอร์ใช้ไม่ได้ครับ ต้องเป็นลิงก์ไฟล์วิดีโอ"
+            return "ERROR: ลิงก์โฟลเดอร์ใช้ไม่ได้ครับ ต้องเป็นลิงก์ไฟล์วิดีโอ"
         match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
         if match:
             file_id = match.group(1)
@@ -507,6 +495,24 @@ with st.sidebar.expander("🥤 Treat Me (เลี้ยงอาหารทิ
             sender = feeder_name.strip() if feeder_name.strip() else "FC นิรนาม"
             st.session_state['feed_msg'] = f"😎 บอส: {msg} (จาก: {sender})"
             
+            # ----------------------------------------------------------------------
+            # 🔔 [NEW] แจ้งเตือนเข้า Discord (Neural Link)
+            # ----------------------------------------------------------------------
+            try:
+                # 👇👇👇 ใส่ Webhook URL ของคุณตรงนี้ (ในเครื่องหมายคำพูด) 👇👇👇
+                webhook_url = "https://discord.com/api/webhooks/1460137073343467561/ovrefJdW9mVTJ-CLCIiCtL4vFI7zs12nQ9Nm2rji5EojrGUP4Sjs1s0S1-FeRqbbEgB3" 
+                
+                if "ใส่_WEBHOOK" not in webhook_url:
+                    discord_data = {
+                        "username": "Myla Web Alert 🍱",
+                        "avatar_url": "https://cdn-icons-png.flaticon.com/512/4712/4712109.png",
+                        "content": f"🍱 **Treat Me Alert!**\n👤 **จาก:** {sender}\n🎁 **เมนู:** {item_name}\n💬 **บอสตอบ:** {msg}"
+                    }
+                    requests.post(webhook_url, json=discord_data)
+            except Exception as e:
+                print(f"Discord Alert Error: {e}")
+            # ----------------------------------------------------------------------
+
             pf = load_profile()
             if 'treats' not in pf: pf['treats'] = {}
             if 'top_feeders' not in pf: pf['top_feeders'] = {}
@@ -1202,7 +1208,7 @@ if st.session_state['is_admin']:
             p_discord = st.text_input("Discord URL", value=profile_data.get('discord',''))
             p_ig = st.text_input("IG URL", value=profile_data.get('ig',''))
             p_ex = st.text_area("ลิงก์อื่นๆ", value=profile_data.get('extras',''))
-            
+        
             if st.form_submit_button("บันทึกข้อมูลส่วนตัว"):
                 profile_data.update({
                     "name": p_name, "emoji": p_emoji, "status": p_status, "bio": p_bio, 
@@ -1299,7 +1305,7 @@ if filtered:
                 if isinstance(videos, str): videos = [videos]
                 for vid in videos:
                     if "drive.google.com" in vid and "preview" in vid:
-                            st.markdown(f'<iframe src="{vid}" width="100%" height="300" style="border:none; border-radius:10px;"></iframe>', unsafe_allow_html=True)
+                        st.markdown(f'<iframe src="{vid}" width="100%" height="300" style="border:none; border-radius:10px;"></iframe>', unsafe_allow_html=True)
                     elif vid.startswith("http") or os.path.exists(vid):
                         st.video(vid)
             
