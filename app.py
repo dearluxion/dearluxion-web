@@ -176,6 +176,38 @@ def make_clickable(text):
     url_pattern = r'(https?://[^\s]+)'
     return re.sub(url_pattern, r'<a href="\1" target="_blank" style="color:#A370F7; text-decoration:underline; font-weight:bold;">\1</a>', text)
 
+# --- [NEW] ฟังก์ชันส่งโพสต์เข้า Discord (รองรับทั้งรูปและวิดีโอ) ---
+def send_post_to_discord(post):
+    # 👇 ใช้ Webhook ของคุณเองที่ใส่มาในไฟล์เดิม 👇
+    webhook_url = "https://discord.com/api/webhooks/1460137073343467561/ovrefJdW9mVTJ-CLCIiCtL4vFI7zs12nQ9Nm2rji5EojrGUP4Sjs1s0S1-FeRqbbEgB3" 
+    
+    # ดึงรูปภาพแรกมาโชว์ (ถ้ามี)
+    image_url = ""
+    if post.get('images'):
+        valid_imgs = [img for img in post['images'] if img.startswith("http")]
+        if valid_imgs: image_url = valid_imgs[0]
+    
+    # สร้างข้อความ Embed สวยๆ
+    embed_data = {
+        "username": "Myla Post Update 📢",
+        "avatar_url": "https://cdn-icons-png.flaticon.com/512/4712/4712109.png",
+        "embeds": [{
+            "title": f"✨ มีโพสต์ใหม่จากบอส! ({post['date']})",
+            "description": post['content'],
+            "color": int(post.get('color', '#A370F7').replace("#", ""), 16),
+            "footer": {"text": f"ID: {post['id']}"}
+        }]
+    }
+    
+    # ถ้ามีรูป ใส่รูปใน Embed
+    if image_url:
+        embed_data['embeds'][0]['image'] = {"url": image_url}
+
+    try:
+        requests.post(webhook_url, json=embed_data)
+    except Exception as e:
+        print(f"Error sending to Discord: {e}")
+
 # --- 2. ระบบจัดการไฟล์ (Google Sheets Integration) ---
 DB_FILE = "portfolio_db.json"
 PROFILE_FILE = "profile_db.json"
@@ -499,7 +531,7 @@ with st.sidebar.expander("🥤 Treat Me (เลี้ยงอาหารทิ
             # 🔔 [NEW] แจ้งเตือนเข้า Discord (Neural Link)
             # ----------------------------------------------------------------------
             try:
-                # 👇👇👇 ใส่ Webhook URL ของคุณตรงนี้ (ในเครื่องหมายคำพูด) 👇👇👇
+                # 👇👇👇 ใช้ Webhook ของคุณเองที่ใส่มาในไฟล์เดิม 👇👇👇
                 webhook_url = "https://discord.com/api/webhooks/1460137073343467561/ovrefJdW9mVTJ-CLCIiCtL4vFI7zs12nQ9Nm2rji5EojrGUP4Sjs1s0S1-FeRqbbEgB3" 
                 
                 if "ใส่_WEBHOOK" not in webhook_url:
@@ -1155,6 +1187,14 @@ if st.session_state['is_admin']:
                 current = load_data()
                 current.append(new_post)
                 save_data(current)
+                
+                # --- [NEW] ส่งเข้า Discord อัตโนมัติ ---
+                try:
+                    send_post_to_discord(new_post)
+                    st.toast("ส่งเข้า Discord เรียบร้อย!", icon="📢")
+                except: pass
+                # -------------------------------------
+
                 st.success("เรียบร้อย! ระบบทำงานลื่นปรื๊ด")
                 # Reset จำนวนช่องกลับเป็น 1
                 st.session_state['num_img_links'] = 1
@@ -1220,6 +1260,22 @@ if st.session_state['is_admin']:
         if st.button("ลบโปรไฟล์"):
             if os.path.exists(PROFILE_FILE): os.remove(PROFILE_FILE)
             st.rerun()
+
+        # --- [NEW] ปุ่ม Sync โพสต์เก่าทั้งหมด ---
+        st.markdown("---")
+        st.markdown("### 🔄 Sync โพสต์เก่าไป Discord")
+        if st.button("⚠️ กดเพื่อส่งทุกโพสต์ (ตั้งแต่แรก) ไป Discord"):
+            all_posts = load_data()
+            my_bar = st.progress(0)
+            status_text = st.empty()
+            total = len(all_posts)
+            for i, p in enumerate(all_posts):
+                status_text.text(f"กำลังส่งโพสต์วันที่ {p['date']} ({i+1}/{total})...")
+                send_post_to_discord(p)
+                time.sleep(2) # หน่วงเวลา 2 วิ
+                my_bar.progress((i + 1) / total)
+            status_text.success("✅ ส่งครบทุกโพสต์แล้วครับบอส!")
+        # ---------------------------------------
             
     with tab_inbox:
         st.markdown("### 💌 จดหมายลับจากแฟนคลับ")
