@@ -957,6 +957,12 @@ else:
 
 st.sidebar.markdown("---")
 
+# ----------------------------------------------------------------------
+# 🟢 [UPDATED] ย้ายคำสั่งโหลด Profile มาไว้ตรงนี้ (ก่อน Login Check)
+# ----------------------------------------------------------------------
+profile_data = load_profile()
+# ----------------------------------------------------------------------
+
 # --- LOGIN (SYSTEM: SECURE SECRETS) ---
 if not st.session_state['is_admin']:
     with st.sidebar.expander("🔐 เข้าสู่ระบบ"):
@@ -991,7 +997,6 @@ else:
         st.rerun()
 
 # --- 4. Header & Profile ---
-profile_data = load_profile()
 user_emoji = profile_data.get('emoji', '😎') 
 user_status = profile_data.get('status', 'ยินดีต้อนรับสู่โลกของdearluxion ✨')
 
