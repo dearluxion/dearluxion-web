@@ -957,24 +957,35 @@ else:
 
 st.sidebar.markdown("---")
 
-# --- LOGIN ---
+# --- LOGIN (SYSTEM: SECURE SECRETS) ---
 if not st.session_state['is_admin']:
     with st.sidebar.expander("🔐 เข้าสู่ระบบ"):
         with st.form("login_form"):
             username = st.text_input("ไอดี")
             password = st.text_input("รหัสผ่าน", type="password")
             submit = st.form_submit_button("ไขกุญแจ")
+            
             if submit:
-                try:
-                    real_user = base64.b64decode("ZGVhcmx1eGlvbg==").decode("utf-8")
-                    real_pass = base64.b64decode("MTIxMjMxMjEyMW1j").decode("utf-8")
-                    if username.strip() == real_user and password.strip() == real_pass:
-                        st.session_state['is_admin'] = True
-                        st.rerun()
-                    else: st.error("ผิดครับ! ลองเช็คตัวเล็กตัวใหญ่ดูนะ")
-                except: st.error("ระบบตรวจสอบผิดพลาด")
+                # ดึงค่าจาก Secrets (ปลอดภัย 100% คนนอกมองไม่เห็น)
+                admin_cfg = st.secrets.get("admin_login", {})
+                secure_user = admin_cfg.get("username")
+                secure_pass = admin_cfg.get("password")
+
+                # เช็คว่ามีการตั้งค่าหรือยัง
+                if not secure_user or not secure_pass:
+                    st.error("⚠️ Error: ยังไม่ได้ตั้งค่ารหัสใน Secrets!")
+                
+                # ตรวจสอบรหัส (ตัดช่องว่างหน้าหลังออกกันพลาด)
+                elif username.strip() == secure_user and password.strip() == secure_pass:
+                    st.session_state['is_admin'] = True
+                    st.balloons()
+                    st.success("ยินดีต้อนรับ Boss Dearluxion! 😎")
+                    time.sleep(1)
+                    st.rerun()
+                else: 
+                    st.error("❌ รหัสผิดครับ!")
 else:
-    st.sidebar.success("ยินดีต้อนรับท่านdearluxion! 🕶️")
+    st.sidebar.success(f"ยินดีต้อนรับท่าน {profile_data.get('name', 'Dearluxion')}! 🕶️")
     if st.sidebar.button("ออกจากระบบ"):
         st.session_state['is_admin'] = False
         st.rerun()
