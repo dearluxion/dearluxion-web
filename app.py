@@ -178,8 +178,12 @@ def make_clickable(text):
 
 # --- [NEW] ฟังก์ชันส่งโพสต์เข้า Discord (รองรับทั้งรูปและวิดีโอ) ---
 def send_post_to_discord(post):
-    # 👇 ใช้ Webhook ของคุณเองที่ใส่มาในไฟล์เดิม 👇
-    webhook_url = "https://discord.com/api/webhooks/1460137073343467561/ovrefJdW9mVTJ-CLCIiCtL4vFI7zs12nQ9Nm2rji5EojrGUP4Sjs1s0S1-FeRqbbEgB3" 
+    # 👇 [FIXED] ดึงจาก Secrets ปลอดภัยแล้ว 👇
+    try:
+        webhook_url = st.secrets["general"]["discord_webhook"]
+    except:
+        print("Webhook URL not found in secrets")
+        return
     
     # ดึงรูปภาพแรกมาโชว์ (ถ้ามี)
     image_url = ""
@@ -531,10 +535,10 @@ with st.sidebar.expander("🥤 Treat Me (เลี้ยงอาหารทิ
             # 🔔 [NEW] แจ้งเตือนเข้า Discord (Neural Link)
             # ----------------------------------------------------------------------
             try:
-                # 👇👇👇 ใช้ Webhook ของคุณเองที่ใส่มาในไฟล์เดิม 👇👇👇
-                webhook_url = "https://discord.com/api/webhooks/1460137073343467561/ovrefJdW9mVTJ-CLCIiCtL4vFI7zs12nQ9Nm2rji5EojrGUP4Sjs1s0S1-FeRqbbEgB3" 
+                # 👇 [FIXED] ดึงจาก Secrets แทน 👇
+                webhook_url = st.secrets["general"]["discord_webhook"]
                 
-                if "ใส่_WEBHOOK" not in webhook_url:
+                if "ใส่_LINK_WEBHOOK" not in webhook_url:
                     discord_data = {
                         "username": "Myla Web Alert 🍱",
                         "avatar_url": "https://cdn-icons-png.flaticon.com/512/4712/4712109.png",
