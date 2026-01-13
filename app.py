@@ -111,9 +111,10 @@ with top_col1:
         # [ใหม่] เช็คว่าถ้ามีรูปบอส ให้โชว์รูป ถ้าไม่มีให้โชว์ Emoji
         if boss_avatar_url:
             real_avatar = convert_drive_link(boss_avatar_url)
+            # ใช้ Single Quote ใน HTML เพื่อความชัวร์
             st.markdown(f"""
-                <div style="width:100px; height:100px; border-radius:50%; overflow:hidden; border: 3px solid #A370F7; box-shadow: 0 0 15px rgba(163, 112, 247, 0.5); margin: 0 auto;">
-                    <img src="{real_avatar}" style="width:100%; height:100%; object-fit: cover;">
+                <div style='width:100px; height:100px; border-radius:50%; overflow:hidden; border: 3px solid #A370F7; box-shadow: 0 0 15px rgba(163, 112, 247, 0.5); margin: 0 auto;'>
+                    <img src='{real_avatar}' style='width:100%; height:100%; object-fit: cover;'>
                 </div>
             """, unsafe_allow_html=True)
         else:
@@ -410,16 +411,12 @@ if filtered:
         with st.container():
             col_head, col_del = st.columns([0.85, 0.15])
             with col_head:
-                # [ใหม่] Logic สร้าง HTML รูปโปรไฟล์ (Image vs Emoji)
+                # [Fix: ใช้ Single Quote เพื่อไม่ให้ตีกับ Double Quote ของ f-string]
                 avatar_html = ""
                 if p_avatar:
-                    avatar_html = f"""
-                    <div style="width:50px; height:50px; border-radius:50%; overflow:hidden; border: 2px solid {accent}; flex-shrink: 0;">
-                        <img src="{p_avatar}" style="width:100%; height:100%; object-fit: cover;">
-                    </div>
-                    """
+                    avatar_html = f"<div style='width:50px; height:50px; border-radius:50%; overflow:hidden; border: 2px solid {accent}; flex-shrink: 0;'><img src='{p_avatar}' style='width:100%; height:100%; object-fit: cover;'></div>"
                 else:
-                    avatar_html = f"""<div style="font-size:40px; line-height:1; filter: drop-shadow(0 0 5px {accent});">{user_emoji}</div>"""
+                    avatar_html = f"<div style='font-size:40px; line-height:1; filter: drop-shadow(0 0 5px {accent});'>{user_emoji}</div>"
 
                 st.markdown(f"""
                 <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
