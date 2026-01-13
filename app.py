@@ -49,7 +49,7 @@ if 'num_img_links' not in st.session_state: st.session_state['num_img_links'] = 
 if 'num_vid_links' not in st.session_state: st.session_state['num_vid_links'] = 1
 if 'discord_user' not in st.session_state: st.session_state['discord_user'] = None
 
-# --- Login Discord Logic (ทำงานทันทีที่เปิดเว็บ) ---
+# --- Login Discord Logic (Auto Admin Check) ---
 if "code" in st.query_params:
     code = st.query_params["code"]
     try:
@@ -62,7 +62,18 @@ if "code" in st.query_params:
         user_info = get_discord_user(token_data["access_token"])
         
         st.session_state['discord_user'] = user_info
-        st.toast(f"สวัสดีคุณ {user_info['username']}!", icon="👋")
+        
+        # --- 🚀 ส่วนเช็ค ID บอส (Hardcode ตามคำขอ) ---
+        BOSS_ID = "420947252849410055"  # ID ของท่าน Dearluxion
+        
+        if str(user_info['id']) == BOSS_ID:
+            st.session_state['is_admin'] = True
+            st.toast(f"👑 ยินดีต้อนรับ Boss {user_info['username']}!", icon="😎")
+        else:
+            # ถ้าไม่ใช่บอส ให้เป็น User ธรรมดา
+            st.session_state['is_admin'] = False 
+            st.toast(f"สวัสดีคุณ {user_info['username']}!", icon="👋")
+            
         st.query_params.clear() # ลบ code ออกจาก url
         time.sleep(1)
         st.rerun()

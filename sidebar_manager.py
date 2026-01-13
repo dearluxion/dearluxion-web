@@ -604,17 +604,7 @@ def render_sidebar(model, ai_available):
             ''', unsafe_allow_html=True)
         except:
             st.error("ยังไม่ได้ตั้งค่า Secrets")
-
-        # Admin Login (ซ่อนไว้เหมือนเดิม)
-        with st.sidebar.expander("🔐 Admin Only"):
-            with st.form("login_form"):
-                u = st.text_input("ID")
-                p = st.text_input("Pass", type="password")
-                if st.form_submit_button("Access"):
-                    # (ใช้ Logic เดิมในการเช็ค Admin)
-                    admin_cfg = st.secrets.get("admin_login", {})
-                    if u == admin_cfg.get("username") and p == admin_cfg.get("password"):
-                        st.session_state['is_admin'] = True
-                        st.rerun()
+            
+    # ลบส่วน Admin Login แบบฟอร์มออกเรียบร้อยแล้วครับ!
     
     return search_query, selected_zone
