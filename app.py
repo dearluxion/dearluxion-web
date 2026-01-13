@@ -418,18 +418,20 @@ if filtered:
                 else:
                     avatar_html = f"<div style='font-size:40px; line-height:1; filter: drop-shadow(0 0 5px {accent});'>{user_emoji}</div>"
 
-                st.markdown(f"""
-                <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
-                    {avatar_html}
-                    <div style="line-height:1.2;">
-                        <div style="font-size:18px; font-weight:bold; color:#E6EDF3;">
-                            {p_name} 
-                            <span style="color:{accent}; font-size:14px;">🛡️ Verified</span>
-                        </div>
-                        <div style="font-size:12px; color:#8B949E;">{post['date']}</div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                # [แก้สำคัญ] จัด HTML ให้ชิดซ้ายสุด กัน Indentation Error
+                display_html = f"""
+<div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+    {avatar_html}
+    <div style="line-height:1.2;">
+        <div style="font-size:18px; font-weight:bold; color:#E6EDF3;">
+            {p_name} 
+            <span style="color:{accent}; font-size:14px;">🛡️ Verified</span>
+        </div>
+        <div style="font-size:12px; color:#8B949E;">{post['date']}</div>
+    </div>
+</div>
+"""
+                st.markdown(display_html, unsafe_allow_html=True)
             
             with col_del:
                 if st.session_state['is_admin']:
