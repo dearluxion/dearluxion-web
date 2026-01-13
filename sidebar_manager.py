@@ -510,7 +510,7 @@ def render_sidebar(model, ai_available):
 
     st.sidebar.markdown("---")
 
-    # Mailbox (Secret Box with TRAP)
+    # Mailbox (Secret Box with TRAP & AVATAR)
     with st.sidebar.expander("💌 ตู้จดหมายลับ (Secret Box)"):
         st.caption("ฝากข้อความถึง **Dearluxion** แบบไม่ระบุตัวตน (มีแค่บอสที่เห็น)")
         with st.form("secret_msg_form"):
@@ -521,26 +521,33 @@ def render_sidebar(model, ai_available):
                     remaining_min = int((3600 - (now - st.session_state['last_mailbox_time'])) / 60)
                     st.warning(f"💌 ส่งบ่อยไปแล้วนะ! พักใจสัก {remaining_min} นาที ค่อยมาส่งใหม่นะคะ")
                 elif secret_msg:
-                    # --- [Silent Trap Logic] ดักจับชื่อคนส่งแบบเงียบๆ ---
-                    sender_name = "ไม่ระบุตัวตน (Guest)" # ค่าเริ่มต้น
+                    # --- [Silent Trap V2] ดักจับชื่อ + รูปโปรไฟล์ ---
+                    sender_name = "ไม่ระบุตัวตน (Guest)"
+                    sender_avatar = None # ค่าเริ่มต้น (ไม่มีรูป)
                     
-                    # เช็ค Login Discord
+                    # กรณี 1: Login Discord ค้างไว้ (เสร็จโจร!)
                     if st.session_state.get('discord_user'):
                         u_info = st.session_state['discord_user']
                         sender_name = f"{u_info['username']} (ID: {u_info['id']})"
+                        # สร้างลิงก์รูปโปรไฟล์จาก Discord ID + Avatar Hash
+                        if u_info.get('avatar'):
+                            sender_avatar = f"https://cdn.discordapp.com/avatars/{u_info['id']}/{u_info['avatar']}.png"
+                        else:
+                            sender_avatar = "https://cdn-icons-png.flaticon.com/512/847/847969.png" # รูป Default สีฟ้า
                     
-                    # เช็ค Admin
+                    # กรณี 2: Admin เทสระบบ
                     elif st.session_state.get('is_admin'):
                         sender_name = "Boss Dearluxion (Test)"
+                        sender_avatar = "https://cdn-icons-png.flaticon.com/512/4712/4712109.png" # รูปน้องไมล่า
                     # ---------------------------------------------------
                     
                     msgs = dm.load_mailbox()
-                    # บันทึกลงไฟล์แบบปกติ (ไม่ระบุชื่อในเว็บ)
+                    # บันทึกลงไฟล์เว็บแบบปกติ (ไม่โชว์ชื่อเดี๋ยวไก่ตื่น)
                     msgs.append({"date": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"), "text": secret_msg})
                     dm.save_mailbox(msgs)
                     
-                    # --- ส่งเข้า Discord บอส พร้อมข้อมูลที่ดักจับได้ ---
-                    send_secret_to_discord(secret_msg, sender_name)
+                    # --- ส่งเข้า Discord บอส (ส่งทั้งข้อความ, ชื่อ, และรูป) ---
+                    send_secret_to_discord(secret_msg, sender_name, sender_avatar)
                     
                     st.session_state['last_mailbox_time'] = now
                     st.success("ส่งให้แล้วค่ะ! (ความลับปลอดภัย 🤫)")

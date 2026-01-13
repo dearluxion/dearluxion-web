@@ -3,6 +3,7 @@ import requests
 import streamlit as st
 import urllib.parse
 import datetime
+import json
 
 # --- ฟังก์ชันแปลงลิงก์ Google Drive (รูป) ---
 def convert_drive_link(link):
@@ -69,8 +70,8 @@ def send_post_to_discord(post):
     except Exception as e:
         print(f"Error sending to Discord: {e}")
 
-# --- [ใหม่] ฟังก์ชันส่งจดหมายลับเข้า DM บอสโดยตรง (พร้อมระบบสายสืบ) ---
-def send_secret_to_discord(text, sender_info="ไม่ระบุตัวตน (Guest)"):
+# --- [ใหม่] ฟังก์ชันส่งจดหมายลับเข้า DM บอสโดยตรง (พร้อมระบบสายสืบ + รูป) ---
+def send_secret_to_discord(text, sender_info="ไม่ระบุตัวตน (Guest)", avatar_url=None):
     # 1. พยายามดึง Token ของบอท
     try:
         bot_token = st.secrets["discord_bot"]["token"]
@@ -96,15 +97,19 @@ def send_secret_to_discord(text, sender_info="ไม่ระบุตัวต�
             channel_id = dm_req.json()["id"] # ได้เลขห้องมาแล้ว
 
             # ขั้นตอน B: เตรียมหน้าตาข้อความ (Embed)
-            embed_data = {
-                "embeds": [{
-                    "title": "💌 มีความลับถูกส่งมาถึงบอส! (Direct Message)",
-                    "description": f"```{text}```\n\n🕵️ **สายสืบรายงาน:**\nคนส่งคือ: `{sender_info}`", 
-                    "color": 16738740, # สีชมพู Hot Pink
-                    "footer": {"text": "ส่งมาจากหน้าเว็บ Small Group (Secret Box)"},
-                    "timestamp": datetime.datetime.now().isoformat()
-                }]
+            embed = {
+                "title": "💌 มีความลับถูกส่งมาถึงบอส! (Direct Message)",
+                "description": f"```{text}```\n\n🕵️ **สายสืบรายงาน:**\nคนส่งคือ: `{sender_info}`", 
+                "color": 16738740, # สีชมพู Hot Pink
+                "footer": {"text": "ส่งมาจากหน้าเว็บ Small Group (Secret Box)"},
+                "timestamp": datetime.datetime.now().isoformat()
             }
+            
+            # [อัปเกรด] ใส่รูปคนส่ง (ถ้ามี)
+            if avatar_url:
+                embed["thumbnail"] = {"url": avatar_url}
+
+            embed_data = {"embeds": [embed]}
             
             # ขั้นตอน C: ส่งเข้าห้อง DM
             send_req = requests.post(f"https://discord.com/api/v10/channels/{channel_id}/messages", json=embed_data, headers=headers)
