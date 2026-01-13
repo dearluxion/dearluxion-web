@@ -2,6 +2,7 @@ import re
 import requests
 import streamlit as st
 import urllib.parse
+import datetime
 
 # --- ฟังก์ชันแปลงลิงก์ Google Drive (รูป) ---
 def convert_drive_link(link):
@@ -67,6 +68,31 @@ def send_post_to_discord(post):
         requests.post(webhook_url, json=embed_data)
     except Exception as e:
         print(f"Error sending to Discord: {e}")
+
+# --- [ใหม่] ฟังก์ชันส่งจดหมายลับเข้า Discord (ใช้ Webhook เดิม) ---
+def send_secret_to_discord(text):
+    try:
+        # ใช้ webhook ตัวเดียวกับที่แจ้งเตือนโพสต์เลย
+        webhook_url = st.secrets["general"]["discord_webhook"]
+    except:
+        return # ถ้าไม่ได้ตั้งค่าไว้ก็ข้ามไป
+    
+    embed_data = {
+        "username": "Secret Box 💌",
+        "avatar_url": "https://cdn-icons-png.flaticon.com/512/3062/3062634.png", # ไอคอนซองจดหมาย
+        "embeds": [{
+            "title": "💌 มีความลับถูกส่งมาถึงบอส!",
+            "description": f"```{text}```", # ใส่กล่องข้อความให้อ่านง่าย
+            "color": 16738740, # สีชมพู Hot Pink (แยกกับสีม่วงของโพสต์)
+            "footer": {"text": "ส่งมาจากหน้าเว็บ Small Group (Secret Box)"},
+            "timestamp": datetime.datetime.now().isoformat()
+        }]
+    }
+
+    try:
+        requests.post(webhook_url, json=embed_data)
+    except Exception as e:
+        print(f"Error sending secret to Discord: {e}")
 
 # --- Discord Login Functions ---
 

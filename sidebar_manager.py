@@ -5,7 +5,7 @@ import datetime
 import requests
 import re
 import data_manager as dm
-from utils import get_discord_login_url
+from utils import get_discord_login_url, send_secret_to_discord
 
 def render_sidebar(model, ai_available):
     # --- 3. Sidebar (เมนู & Q&A) ---
@@ -524,6 +524,10 @@ def render_sidebar(model, ai_available):
                     msgs = dm.load_mailbox()
                     msgs.append({"date": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"), "text": secret_msg})
                     dm.save_mailbox(msgs)
+                    
+                    # --- ส่งเข้า Discord บอสทันที (เพิ่มบรรทัดนี้) ---
+                    send_secret_to_discord(secret_msg)
+                    
                     st.session_state['last_mailbox_time'] = now
                     st.success("ส่งให้แล้วค่ะ! (ความลับปลอดภัย 🤫)")
                 else:
