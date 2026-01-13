@@ -594,10 +594,11 @@ def render_sidebar(model, ai_available):
             d_uri = st.secrets["discord_oauth"]["redirect_uri"]
             login_link = get_discord_login_url(d_id, d_uri)
 
+            # แก้ไข: เปลี่ยน target="_self" เป็น target="_blank"
             st.sidebar.markdown(f'''
-            <a href="{login_link}" target="_self" style="text-decoration:none;">
+            <a href="{login_link}" target="_blank" style="text-decoration:none;">
                 <button style="background-color:#5865F2; color:white; border:none; padding:10px; border-radius:5px; width:100%; font-weight:bold; cursor:pointer;">
-                    👾 Login with Discord
+                    👾 Login with Discord (New Tab)
                 </button>
             </a>
             ''', unsafe_allow_html=True)
