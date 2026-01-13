@@ -421,40 +421,51 @@ if filtered:
                         dm.save_data(d)
                         time.sleep(1.5); st.rerun()
 
-            with st.expander(f"💬 ความคิดเห็น ({len(post['comments'])})"):
-                if post['comments']:
-                    for i, c in enumerate(post['comments']):
-                        is_admin_comment = c.get('is_admin', False)
-                        if is_admin_comment:
-                            st.markdown(f"""<div class='admin-comment-box'><b>👑 {c['user']} (Owner):</b> {c['text']}</div>""", unsafe_allow_html=True)
-                            if c.get('image'):
-                                if c['image'].startswith("http"): st.image(c['image'], width=200)
-                                elif os.path.exists(c['image']): st.image(c['image'], width=200)
-                        else:
-                            st.markdown(f"<div class='comment-box'><b>{c['user']}:</b> {c['text']}</div>", unsafe_allow_html=True)
-                        
-                        if st.session_state['is_admin'] and st.button("ลบ", key=f"dc_{post['id']}_{i}"):
-                            d = dm.load_data()
-                            for x in d:
-                                if x['id'] == post['id']: x['comments'].pop(i); break
-                            dm.save_data(d); st.rerun()
-                
-                admin_cmt_img_link = None
-                if st.session_state['is_admin']:
-                    st.caption("👑 ตอบกลับในฐานะ Admin")
-                    admin_cmt_img_link = st.text_input("ลิงก์รูป (Google Drive/Web)", key=f"ci_{post['id']}", placeholder="https://...")
+            # --- ส่วน Comment (ปรับใหม่ให้ซ่อนถ้าไม่ Login) ---
+            is_logged_in = st.session_state.get('discord_user') or st.session_state.get('is_admin')
 
-                # --- ส่วนเช็ค Login สำหรับ Comment ---
-                is_logged_in = st.session_state.get('discord_user') or st.session_state.get('is_admin')
-                
+            with st.expander(f"💬 ความคิดเห็น ({len(post['comments'])})"):
+                # กรณี: ยังไม่ Login (ซ่อนคอมเมนต์แบบยั่วๆ)
                 if not is_logged_in:
-                    st.info("🔒 กรุณา **Login with Discord** ที่เมนูซ้ายมือ เพื่อแสดงความคิดเห็นครับ")
+                    st.markdown("""
+                    <div style="background: repeating-linear-gradient(45deg, #161B22, #161B22 10px, #0d1117 10px, #0d1117 20px); 
+                                padding: 20px; text-align: center; border-radius: 10px; border: 1px dashed #A370F7; color: #8B949E;">
+                        <h3>🔒 ความลับของชาวแก๊ง!</h3>
+                        <p>มีบทสนทนาลับๆ ซ่อนอยู่ {num} ข้อความ...</p>
+                        <p style="font-size: 12px;">(Login Discord ที่เมนูซ้ายมือเพื่อปลดล็อคและร่วมวงสนทนา)</p>
+                    </div>
+                    """.format(num=len(post['comments'])), unsafe_allow_html=True)
+                
+                # กรณี: Login แล้ว (โชว์ตามปกติ)
                 else:
+                    if post['comments']:
+                        for i, c in enumerate(post['comments']):
+                            is_admin_comment = c.get('is_admin', False)
+                            if is_admin_comment:
+                                st.markdown(f"""<div class='admin-comment-box'><b>👑 {c['user']} (Owner):</b> {c['text']}</div>""", unsafe_allow_html=True)
+                                if c.get('image'):
+                                    if c['image'].startswith("http"): st.image(c['image'], width=200)
+                                    elif os.path.exists(c['image']): st.image(c['image'], width=200)
+                            else:
+                                st.markdown(f"<div class='comment-box'><b>{c['user']}:</b> {c['text']}</div>", unsafe_allow_html=True)
+                            
+                            # ปุ่มลบของ Admin
+                            if st.session_state['is_admin'] and st.button("ลบ", key=f"dc_{post['id']}_{i}"):
+                                d = dm.load_data()
+                                for x in d:
+                                    if x['id'] == post['id']: x['comments'].pop(i); break
+                                dm.save_data(d); st.rerun()
+
+                    # ฟอร์มคอมเมนต์ (เฉพาะคน Login แล้ว)
+                    admin_cmt_img_link = None
+                    if st.session_state['is_admin']:
+                        st.caption("👑 ตอบกลับในฐานะ Admin")
+                        admin_cmt_img_link = st.text_input("ลิงก์รูป (Google Drive/Web)", key=f"ci_{post['id']}", placeholder="https://...")
+
                     with st.form(key=f"cf_{post['id']}"):
                         if st.session_state['is_admin']:
                             u = st.text_input("ชื่อ (Admin)", value="Dearluxion")
                         else:
-                            # ล็อคชื่อตาม Discord
                             d_name = st.session_state['discord_user']['username']
                             st.text_input("ชื่อผู้ใช้", value=d_name, disabled=True)
                             u = d_name
@@ -463,7 +474,6 @@ if filtered:
                         
                         if st.form_submit_button("ส่ง"):
                             now = time.time()
-                            # ถ้าเป็น Admin ไม่ต้องติด Cooldown
                             if not st.session_state['is_admin'] and now - st.session_state['last_comment_time'] < 35:
                                 st.toast(f"🧚‍♀️ ไมล่า: รออีก {35 - int(now - st.session_state['last_comment_time'])} วินาทีก่อนนะ!", icon="⛔")
                             elif t:
