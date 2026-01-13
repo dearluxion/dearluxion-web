@@ -33,7 +33,7 @@ def make_clickable(text):
     url_pattern = r'(https?://[^\s]+)'
     return re.sub(url_pattern, r'<a href="\1" target="_blank" style="color:#A370F7; text-decoration:underline; font-weight:bold;">\1</a>', text)
 
-# --- ฟังก์ชันส่งโพสต์เข้า Discord ---
+# --- ฟังก์ชันส่งโพสต์เข้า Discord (Webhook ห้องรวม) ---
 def send_post_to_discord(post):
     try:
         # ดึง Webhook จาก Secrets
@@ -69,30 +69,53 @@ def send_post_to_discord(post):
     except Exception as e:
         print(f"Error sending to Discord: {e}")
 
-# --- [ใหม่] ฟังก์ชันส่งจดหมายลับเข้า Discord (ใช้ Webhook เดิม) ---
+# --- [ใหม่] ฟังก์ชันส่งจดหมายลับเข้า DM บอสโดยตรง ---
 def send_secret_to_discord(text):
+    # 1. พยายามดึง Token ของบอท
     try:
-        # ใช้ webhook ตัวเดียวกับที่แจ้งเตือนโพสต์เลย
-        webhook_url = st.secrets["general"]["discord_webhook"]
+        bot_token = st.secrets["discord_bot"]["token"]
     except:
-        return # ถ้าไม่ได้ตั้งค่าไว้ก็ข้ามไป
-    
-    embed_data = {
-        "username": "Secret Box 💌",
-        "avatar_url": "https://cdn-icons-png.flaticon.com/512/3062/3062634.png", # ไอคอนซองจดหมาย
-        "embeds": [{
-            "title": "💌 มีความลับถูกส่งมาถึงบอส!",
-            "description": f"```{text}```", # ใส่กล่องข้อความให้อ่านง่าย
-            "color": 16738740, # สีชมพู Hot Pink (แยกกับสีม่วงของโพสต์)
-            "footer": {"text": "ส่งมาจากหน้าเว็บ Small Group (Secret Box)"},
-            "timestamp": datetime.datetime.now().isoformat()
-        }]
+        print("Error: ไม่พบ [discord_bot] token ใน secrets")
+        return
+
+    # ID ของ Boss (Dearluxion)
+    boss_id = "420947252849410055"
+
+    # Header สำหรับคุยกับ API Discord
+    headers = {
+        "Authorization": f"Bot {bot_token}",
+        "Content-Type": "application/json"
     }
 
     try:
-        requests.post(webhook_url, json=embed_data)
+        # ขั้นตอน A: สร้าง/ขอเลขห้องแชทส่วนตัว (DM Channel) กับบอส
+        dm_payload = {"recipient_id": boss_id}
+        dm_req = requests.post("https://discord.com/api/v10/users/@me/channels", json=dm_payload, headers=headers)
+        
+        if dm_req.status_code == 200:
+            channel_id = dm_req.json()["id"] # ได้เลขห้องมาแล้ว
+
+            # ขั้นตอน B: เตรียมหน้าตาข้อความ (Embed)
+            embed_data = {
+                "embeds": [{
+                    "title": "💌 มีความลับถูกส่งมาถึงบอส! (Direct Message)",
+                    "description": f"```{text}```", 
+                    "color": 16738740, # สีชมพู Hot Pink
+                    "footer": {"text": "ส่งมาจากหน้าเว็บ Small Group (Secret Box)"},
+                    "timestamp": datetime.datetime.now().isoformat()
+                }]
+            }
+            
+            # ขั้นตอน C: ส่งเข้าห้อง DM
+            send_req = requests.post(f"https://discord.com/api/v10/channels/{channel_id}/messages", json=embed_data, headers=headers)
+            
+            if send_req.status_code != 200:
+                print(f"Failed to send DM: {send_req.text}")
+        else:
+            print(f"Failed to open DM Channel: {dm_req.text}")
+
     except Exception as e:
-        print(f"Error sending secret to Discord: {e}")
+        print(f"Error logic sending DM: {e}")
 
 # --- Discord Login Functions ---
 
