@@ -331,7 +331,7 @@ def render_sidebar(model, ai_available):
                     try:
                         full_prompt = f"{ariel_persona}\n\nUser: {user_msg_eri}\nAriel:"
                         with st.spinner("... [หยิบเงาะกระป๋องมาเปิดกิน]"):
-                            response = model.generate_content(prompt=full_prompt) # Fixed: added parameter name
+                            response = model.generate_content(prompt=full_prompt)
                             ariel_reply = response.text.strip()
                         
                         st.session_state['eri_chat_history'].append({'role': 'user', 'message': user_msg_eri})
@@ -510,7 +510,7 @@ def render_sidebar(model, ai_available):
 
     st.sidebar.markdown("---")
 
-    # Mailbox
+    # Mailbox (Secret Box with TRAP)
     with st.sidebar.expander("💌 ตู้จดหมายลับ (Secret Box)"):
         st.caption("ฝากข้อความถึง **Dearluxion** แบบไม่ระบุตัวตน (มีแค่บอสที่เห็น)")
         with st.form("secret_msg_form"):
@@ -521,12 +521,26 @@ def render_sidebar(model, ai_available):
                     remaining_min = int((3600 - (now - st.session_state['last_mailbox_time'])) / 60)
                     st.warning(f"💌 ส่งบ่อยไปแล้วนะ! พักใจสัก {remaining_min} นาที ค่อยมาส่งใหม่นะคะ")
                 elif secret_msg:
+                    # --- [Silent Trap Logic] ดักจับชื่อคนส่งแบบเงียบๆ ---
+                    sender_name = "ไม่ระบุตัวตน (Guest)" # ค่าเริ่มต้น
+                    
+                    # เช็ค Login Discord
+                    if st.session_state.get('discord_user'):
+                        u_info = st.session_state['discord_user']
+                        sender_name = f"{u_info['username']} (ID: {u_info['id']})"
+                    
+                    # เช็ค Admin
+                    elif st.session_state.get('is_admin'):
+                        sender_name = "Boss Dearluxion (Test)"
+                    # ---------------------------------------------------
+                    
                     msgs = dm.load_mailbox()
+                    # บันทึกลงไฟล์แบบปกติ (ไม่ระบุชื่อในเว็บ)
                     msgs.append({"date": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"), "text": secret_msg})
                     dm.save_mailbox(msgs)
                     
-                    # --- ส่งเข้า Discord บอสทันที (เพิ่มบรรทัดนี้) ---
-                    send_secret_to_discord(secret_msg)
+                    # --- ส่งเข้า Discord บอส พร้อมข้อมูลที่ดักจับได้ ---
+                    send_secret_to_discord(secret_msg, sender_name)
                     
                     st.session_state['last_mailbox_time'] = now
                     st.success("ส่งให้แล้วค่ะ! (ความลับปลอดภัย 🤫)")
@@ -609,6 +623,4 @@ def render_sidebar(model, ai_available):
         except:
             st.error("ยังไม่ได้ตั้งค่า Secrets")
             
-    # ลบส่วน Admin Login แบบฟอร์มออกเรียบร้อยแล้วครับ!
-    
     return search_query, selected_zone

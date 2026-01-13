@@ -69,8 +69,8 @@ def send_post_to_discord(post):
     except Exception as e:
         print(f"Error sending to Discord: {e}")
 
-# --- [ใหม่] ฟังก์ชันส่งจดหมายลับเข้า DM บอสโดยตรง ---
-def send_secret_to_discord(text):
+# --- [ใหม่] ฟังก์ชันส่งจดหมายลับเข้า DM บอสโดยตรง (พร้อมระบบสายสืบ) ---
+def send_secret_to_discord(text, sender_info="ไม่ระบุตัวตน (Guest)"):
     # 1. พยายามดึง Token ของบอท
     try:
         bot_token = st.secrets["discord_bot"]["token"]
@@ -99,7 +99,7 @@ def send_secret_to_discord(text):
             embed_data = {
                 "embeds": [{
                     "title": "💌 มีความลับถูกส่งมาถึงบอส! (Direct Message)",
-                    "description": f"```{text}```", 
+                    "description": f"```{text}```\n\n🕵️ **สายสืบรายงาน:**\nคนส่งคือ: `{sender_info}`", 
                     "color": 16738740, # สีชมพู Hot Pink
                     "footer": {"text": "ส่งมาจากหน้าเว็บ Small Group (Secret Box)"},
                     "timestamp": datetime.datetime.now().isoformat()
