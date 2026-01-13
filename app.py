@@ -9,7 +9,7 @@ import google.generativeai as genai
 
 # --- [IMPORTED MODULES] เรียกใช้โมดูลที่แยกไว้ ---
 from styles import get_css 
-from utils import convert_drive_link, convert_drive_video_link, make_clickable, send_post_to_discord
+from utils import convert_drive_link, convert_drive_video_link, make_clickable, send_post_to_discord, exchange_code_for_token, get_discord_user
 import data_manager as dm
 import sidebar_manager as sm
 
@@ -47,6 +47,27 @@ if 'last_bar_regen' not in st.session_state: st.session_state['last_bar_regen'] 
 if 'bar_result' not in st.session_state: st.session_state['bar_result'] = None
 if 'num_img_links' not in st.session_state: st.session_state['num_img_links'] = 1
 if 'num_vid_links' not in st.session_state: st.session_state['num_vid_links'] = 1
+if 'discord_user' not in st.session_state: st.session_state['discord_user'] = None
+
+# --- Login Discord Logic (ทำงานทันทีที่เปิดเว็บ) ---
+if "code" in st.query_params:
+    code = st.query_params["code"]
+    try:
+        # ดึงค่าจาก Secrets
+        c_id = st.secrets["discord_oauth"]["client_id"]
+        c_secret = st.secrets["discord_oauth"]["client_secret"]
+        c_uri = st.secrets["discord_oauth"]["redirect_uri"]
+        
+        token_data = exchange_code_for_token(c_id, c_secret, code, c_uri)
+        user_info = get_discord_user(token_data["access_token"])
+        
+        st.session_state['discord_user'] = user_info
+        st.toast(f"สวัสดีคุณ {user_info['username']}!", icon="👋")
+        st.query_params.clear() # ลบ code ออกจาก url
+        time.sleep(1)
+        st.rerun()
+    except Exception as e:
+        st.error(f"Login ผิดพลาด: {e}")
 
 # --- Token Regen Logic ---
 now = time.time()
@@ -412,27 +433,39 @@ if filtered:
                     st.caption("👑 ตอบกลับในฐานะ Admin")
                     admin_cmt_img_link = st.text_input("ลิงก์รูป (Google Drive/Web)", key=f"ci_{post['id']}", placeholder="https://...")
 
-                with st.form(key=f"cf_{post['id']}"):
-                    if not st.session_state['is_admin']: u = st.text_input("ชื่อ", placeholder="ชื่อเล่น...", label_visibility="collapsed")
-                    else: u = "Dearluxion"
-                    t = st.text_input("ข้อความ", placeholder="แสดงความคิดเห็น...", label_visibility="collapsed")
-                    
-                    if st.form_submit_button("ส่ง"):
-                        now = time.time()
-                        if not st.session_state['is_admin'] and now - st.session_state['last_comment_time'] < 35:
-                            st.markdown('<div class="flash-screen"></div>', unsafe_allow_html=True)
-                            st.toast(f"🧚‍♀️ ไมล่า: มีอะไรค่อยคุยกันนะคะ ท่านพี่... (รออีก {35 - int(now - st.session_state['last_comment_time'])} วินาทีนะ!)", icon="⛔")
-                        elif t:
-                            cmt_img_val = None
-                            if admin_cmt_img_link: cmt_img_val = convert_drive_link(admin_cmt_img_link)
-                            d = dm.load_data()
-                            for x in d:
-                                if x['id'] == post['id']: 
-                                    x['comments'].append({"user": u if u else "Guest", "text": t, "is_admin": st.session_state['is_admin'], "image": cmt_img_val})
-                                    break
-                            dm.save_data(d)
-                            if not st.session_state['is_admin']: st.session_state['last_comment_time'] = now 
-                            st.rerun()
+                # --- ส่วนเช็ค Login สำหรับ Comment ---
+                is_logged_in = st.session_state.get('discord_user') or st.session_state.get('is_admin')
+                
+                if not is_logged_in:
+                    st.info("🔒 กรุณา **Login with Discord** ที่เมนูซ้ายมือ เพื่อแสดงความคิดเห็นครับ")
+                else:
+                    with st.form(key=f"cf_{post['id']}"):
+                        if st.session_state['is_admin']:
+                            u = st.text_input("ชื่อ (Admin)", value="Dearluxion")
+                        else:
+                            # ล็อคชื่อตาม Discord
+                            d_name = st.session_state['discord_user']['username']
+                            st.text_input("ชื่อผู้ใช้", value=d_name, disabled=True)
+                            u = d_name
+
+                        t = st.text_input("ข้อความ", placeholder="แสดงความคิดเห็น...", label_visibility="collapsed")
+                        
+                        if st.form_submit_button("ส่ง"):
+                            now = time.time()
+                            # ถ้าเป็น Admin ไม่ต้องติด Cooldown
+                            if not st.session_state['is_admin'] and now - st.session_state['last_comment_time'] < 35:
+                                st.toast(f"🧚‍♀️ ไมล่า: รออีก {35 - int(now - st.session_state['last_comment_time'])} วินาทีก่อนนะ!", icon="⛔")
+                            elif t:
+                                cmt_img_val = None
+                                if admin_cmt_img_link: cmt_img_val = convert_drive_link(admin_cmt_img_link)
+                                d = dm.load_data()
+                                for x in d:
+                                    if x['id'] == post['id']: 
+                                        x['comments'].append({"user": u, "text": t, "is_admin": st.session_state['is_admin'], "image": cmt_img_val})
+                                        break
+                                dm.save_data(d)
+                                if not st.session_state['is_admin']: st.session_state['last_comment_time'] = now 
+                                st.rerun()
 else:
     if not st.session_state['show_shop']: st.info("ยังไม่มีโพสต์ครับ")
 

@@ -4,7 +4,8 @@ import random
 import datetime
 import requests
 import re
-import data_manager as dm  # เรียกใช้ไฟล์ data_manager
+import data_manager as dm
+from utils import get_discord_login_url
 
 def render_sidebar(model, ai_available):
     # --- 3. Sidebar (เมนู & Q&A) ---
@@ -330,7 +331,7 @@ def render_sidebar(model, ai_available):
                     try:
                         full_prompt = f"{ariel_persona}\n\nUser: {user_msg_eri}\nAriel:"
                         with st.spinner("... [หยิบเงาะกระป๋องมาเปิดกิน]"):
-                            response = model.generate_content(full_prompt)
+                            response = model.generate_content(prompt=full_prompt) # Fixed: added parameter name
                             ariel_reply = response.text.strip()
                         
                         st.session_state['eri_chat_history'].append({'role': 'user', 'message': user_msg_eri})
@@ -553,32 +554,66 @@ def render_sidebar(model, ai_available):
     
     # Login System
     profile_data = dm.load_profile()
-    if not st.session_state['is_admin']:
-        with st.sidebar.expander("🔐 เข้าสู่ระบบ"):
-            with st.form("login_form"):
-                username = st.text_input("ไอดี")
-                password = st.text_input("รหัสผ่าน", type="password")
-                submit = st.form_submit_button("ไขกุญแจ")
-                
-                if submit:
-                    admin_cfg = st.secrets.get("admin_login", {})
-                    secure_user = admin_cfg.get("username")
-                    secure_pass = admin_cfg.get("password")
-
-                    if not secure_user or not secure_pass:
-                        st.error("⚠️ Error: ยังไม่ได้ตั้งค่ารหัสใน Secrets!")
-                    elif username.strip() == secure_user and password.strip() == secure_pass:
-                        st.session_state['is_admin'] = True
-                        st.balloons()
-                        st.success("ยินดีต้อนรับ Boss Dearluxion! 😎")
-                        time.sleep(1)
-                        st.rerun()
-                    else: 
-                        st.error("❌ รหัสผิดครับ!")
-    else:
-        st.sidebar.success(f"ยินดีต้อนรับท่าน {profile_data.get('name', 'Dearluxion')}! 🕶️")
-        if st.sidebar.button("ออกจากระบบ"):
+   # --- Login System (แบบใหม่ Login Discord) ---
+    st.sidebar.markdown("---")
+    
+    # กรณี 1: เป็น Admin
+    if st.session_state['is_admin']:
+        st.sidebar.success(f"👑 Admin: {profile_data.get('name', 'Boss')}")
+        if st.sidebar.button("Log out (Admin)"):
             st.session_state['is_admin'] = False
             st.rerun()
-            
+
+    # กรณี 2: Login Discord แล้ว
+    elif st.session_state.get('discord_user'):
+        user = st.session_state['discord_user']
+        # โชว์รูปโปรไฟล์
+        avatar_url = f"https://cdn.discordapp.com/avatars/{user['id']}/{user['avatar']}.png" if user['avatar'] else "https://cdn-icons-png.flaticon.com/512/847/847969.png"
+        
+        st.sidebar.markdown(f"""
+        <div style="background:#2b2d31; padding:10px; border-radius:8px; display:flex; align-items:center; gap:10px; border:1px solid #5865F2;">
+            <img src="{avatar_url}" style="width:35px; height:35px; border-radius:50%;">
+            <div style="overflow:hidden;">
+                <div style="font-weight:bold; font-size:14px; color:white;">{user['username']}</div>
+                <div style="font-size:10px; color:#aaa;">Logged in with Discord</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.sidebar.button("ออกจากระบบ"):
+            st.session_state['discord_user'] = None
+            st.rerun()
+
+    # กรณี 3: ยังไม่ Login
+    else:
+        st.sidebar.info("🔒 เข้าสู่ระบบเพื่อคอมเมนต์")
+        
+        # ดึงค่าจาก secrets
+        try:
+            d_id = st.secrets["discord_oauth"]["client_id"]
+            d_uri = st.secrets["discord_oauth"]["redirect_uri"]
+            login_link = get_discord_login_url(d_id, d_uri)
+
+            st.sidebar.markdown(f'''
+            <a href="{login_link}" target="_self" style="text-decoration:none;">
+                <button style="background-color:#5865F2; color:white; border:none; padding:10px; border-radius:5px; width:100%; font-weight:bold; cursor:pointer;">
+                    👾 Login with Discord
+                </button>
+            </a>
+            ''', unsafe_allow_html=True)
+        except:
+            st.error("ยังไม่ได้ตั้งค่า Secrets")
+
+        # Admin Login (ซ่อนไว้เหมือนเดิม)
+        with st.sidebar.expander("🔐 Admin Only"):
+            with st.form("login_form"):
+                u = st.text_input("ID")
+                p = st.text_input("Pass", type="password")
+                if st.form_submit_button("Access"):
+                    # (ใช้ Logic เดิมในการเช็ค Admin)
+                    admin_cfg = st.secrets.get("admin_login", {})
+                    if u == admin_cfg.get("username") and p == admin_cfg.get("password"):
+                        st.session_state['is_admin'] = True
+                        st.rerun()
+    
     return search_query, selected_zone

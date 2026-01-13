@@ -1,6 +1,7 @@
 import re
 import requests
 import streamlit as st
+import urllib.parse
 
 # --- ฟังก์ชันแปลงลิงก์ Google Drive (รูป) ---
 def convert_drive_link(link):
@@ -66,3 +67,37 @@ def send_post_to_discord(post):
         requests.post(webhook_url, json=embed_data)
     except Exception as e:
         print(f"Error sending to Discord: {e}")
+
+# --- Discord Login Functions ---
+
+# 1. ฟังก์ชันสร้างลิงก์ปุ่มกด Login
+def get_discord_login_url(client_id, redirect_uri):
+    base_url = "https://discord.com/api/oauth2/authorize"
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "identify"
+    }
+    return f"{base_url}?{urllib.parse.urlencode(params)}"
+
+# 2. ฟังก์ชันเอารหัส Code ไปแลกเป็นกุญแจเข้าบ้าน (Token)
+def exchange_code_for_token(client_id, client_secret, code, redirect_uri):
+    data = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri
+    }
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    r = requests.post("https://discord.com/api/oauth2/token", data=data, headers=headers)
+    r.raise_for_status()
+    return r.json()
+
+# 3. ฟังก์ชันดึงข้อมูลชื่อและรูปโปรไฟล์
+def get_discord_user(access_token):
+    headers = {"Authorization": f"Bearer {access_token}"}
+    r = requests.get("https://discord.com/api/users/@me", headers=headers)
+    r.raise_for_status()
+    return r.json()
