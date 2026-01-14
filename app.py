@@ -97,7 +97,6 @@ search_query, selected_zone = sm.render_sidebar(model, ai_available)
 profile_data = dm.load_profile()
 user_emoji = profile_data.get('emoji', '😎') 
 user_status = profile_data.get('status', 'ยินดีต้อนรับสู่โลกของdearluxion ✨')
-boss_avatar_url = profile_data.get('boss_avatar', '') # ดึงรูปลิงก์บอส
 
 if not st.session_state['is_admin']:
     hour = datetime.datetime.now().hour
@@ -108,17 +107,11 @@ top_col1, top_col2 = st.columns([8, 1])
 with top_col1:
     col_p1, col_p2 = st.columns([1.5, 6])
     with col_p1:
-        # [ใหม่] เช็คว่าถ้ามีรูปบอส ให้โชว์รูป ถ้าไม่มีให้โชว์ Emoji
-        if boss_avatar_url:
-            real_avatar = convert_drive_link(boss_avatar_url)
-            # ใช้ Single Line HTML เพื่อป้องกัน Indentation Error
-            st.markdown(f"<div style='width:100px; height:100px; border-radius:50%; overflow:hidden; border: 3px solid #A370F7; box-shadow: 0 0 15px rgba(163, 112, 247, 0.5); margin: 0 auto;'><img src='{real_avatar}' style='width:100%; height:100%; object-fit: cover;'></div>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-                <div style="font-size: 60px; line-height: 1; filter: drop-shadow(0 0 10px #A370F7); text-align: center; cursor:default;">
-                    {user_emoji}
-                </div>
-            """, unsafe_allow_html=True)
+        st.markdown(f"""
+            <div style="font-size: 60px; line-height: 1; filter: drop-shadow(0 0 10px #A370F7); text-align: center; cursor:default;">
+                {user_emoji}
+            </div>
+        """, unsafe_allow_html=True)
     with col_p2:
         st.markdown(f"### 🍸 {profile_data.get('name', 'Dearluxion')}")
         st.markdown(f"_{profile_data.get('bio', '...')}_")
@@ -187,19 +180,6 @@ if st.session_state['is_admin']:
             post_color = st.color_picker("สีธีม", "#A370F7")
             price = st.number_input("💰 ราคา (ใส่ 0 = ไม่ขาย)", min_value=0, value=0)
 
-            st.markdown("---")
-            st.markdown("#### 🎭 เลือกผู้โพสต์ (Identity)")
-            # [ใหม่] ระบบสลับร่าง
-            post_as = st.radio("โพสต์ในนาม:", ["👤 บอส (Dearluxion)", "🧚‍♀️ ไมล่า (Myla)"], horizontal=True)
-            
-            myla_mood_select = "ปกติ"
-            if "ไมล่า" in post_as:
-                myla_mood_select = st.radio("อารมณ์ไมล่า:", ["ปกติ (ร่าเริง)", "เศร้า (ดราม่า)"], horizontal=True)
-                if myla_mood_select == "ปกติ (ร่าเริง)":
-                    st.info(f"Using Image: {profile_data.get('myla_normal', 'ยังไม่ใส่รูปในโปรไฟล์')}")
-                else:
-                    st.warning(f"Using Image: {profile_data.get('myla_sad', 'ยังไม่ใส่รูปในโปรไฟล์')}")
-
         if st.button("🚀 โพสต์เลย", use_container_width=True):
             link_errors = []
             final_img_links = []
@@ -218,25 +198,9 @@ if st.session_state['is_admin']:
             if link_errors:
                 for err in link_errors: st.error(err)
             elif new_desc:
-                # [ใหม่] Logic กำหนดชื่อและรูปคนโพสต์
-                final_author_name = profile_data.get('name', 'Dearluxion')
-                final_author_avatar = convert_drive_link(profile_data.get('boss_avatar', ''))
-                is_bot_post = False
-
-                if "ไมล่า" in post_as:
-                    final_author_name = "🧚‍♀️ Myla (AI)"
-                    is_bot_post = True
-                    raw_myla_img = profile_data.get('myla_normal', '')
-                    if "เศร้า" in myla_mood_select:
-                        raw_myla_img = profile_data.get('myla_sad', '')
-                    final_author_avatar = convert_drive_link(raw_myla_img)
-
                 new_post = {
                     "id": str(datetime.datetime.now().timestamp()),
                     "date": datetime.datetime.now().strftime("%d/%m/%Y"),
-                    "author_name": final_author_name,     # เพิ่ม key นี้
-                    "author_avatar": final_author_avatar, # เพิ่ม key นี้
-                    "is_bot": is_bot_post,                # เพิ่ม key นี้
                     "content": new_desc,
                     "images": final_img_links,
                     "video": final_vid_links,
@@ -247,15 +211,16 @@ if st.session_state['is_admin']:
                     "comments": []
                 }
                 
-                # Logic AI Comment (ถ้าไมล่าโพสต์เอง ไม่ต้องเม้นตัวเอง)
-                if not is_bot_post and ai_available:
+                myla_reply = ""
+                if ai_available:
                     try:
                         prompt = f"คุณคือ 'ไมล่า' (Myla) AI ผู้ช่วยสาวน้อยน่ารักประจำเว็บไซต์ Small Group ของบอส 'Dearluxion' บอสเพิ่งโพสต์ข้อความว่า: \"{new_desc}\" หน้าที่ของคุณ: คอมเมนต์ตอบกลับโพสต์นี้ของบอส (สั้นๆ น่ารัก กวนนิดๆ)"
                         response = model.generate_content(prompt)
                         myla_reply = response.text.strip()
-                        new_post['comments'].append({"user": "🧚‍♀️ Myla (AI)", "text": myla_reply, "is_admin": False, "image": None})
-                    except: pass
-                
+                    except: myla_reply = "ระบบ AI ง่วงนอน... แต่ไมล่าก็ยังรักบอสนะ! 💖"
+                else: myla_reply = random.choice(["โพสต์เท่มากค่ะบอส! 😎", "FC บอสเบอร์ 1 มารายงานตัวค่ะ! 🙋‍♀️"])
+
+                new_post['comments'].append({"user": "🧚‍♀️ Myla (AI)", "text": myla_reply, "is_admin": False, "image": None})
                 current = dm.load_data()
                 current.append(new_post)
                 dm.save_data(current)
@@ -265,7 +230,7 @@ if st.session_state['is_admin']:
                     st.toast("ส่งเข้า Discord เรียบร้อย!", icon="📢")
                 except: pass
 
-                st.success("เรียบร้อย! โพสต์เสร็จสิ้น")
+                st.success("เรียบร้อย! ระบบทำงานลื่นปรื๊ด")
                 st.session_state['num_img_links'] = 1
                 st.session_state['num_vid_links'] = 1
                 time.sleep(1); st.rerun()
@@ -288,48 +253,6 @@ if st.session_state['is_admin']:
                 st.rerun()
         
         st.markdown("---")
-        st.markdown("### 🧚‍♀️ จัดการร่างอวตาร (Identity)")
-        st.info("💡 **Tips:** ใส่ลิงก์ Google Drive ของรูปภาพได้เลย (ตั้งค่า Share เป็น 'Everyone with the link' ด้วยนะ)")
-
-        with st.form("pf_form"):
-            st.markdown("#### 👤 ข้อมูลบอส (Dearluxion)")
-            p_name = st.text_input("ชื่อที่แสดง", value=profile_data.get('name', 'Dearluxion'))
-            # [ใหม่] ช่องใส่รูปบอส
-            p_avatar = st.text_input("รูปโปรไฟล์บอส (Link)", value=profile_data.get('boss_avatar', ''), placeholder="ลิงก์ Google Drive / เว็บ")
-            p_emoji = st.text_input("อิโมจิ (ใช้กรณีไม่มีรูป)", value=profile_data.get('emoji', '😎'))
-            p_status = st.text_input("Status", value=profile_data.get('status', 'ว่างงาน...'))
-            p_bio = st.text_input("Bio", value=profile_data.get('bio', ''))
-            
-            st.markdown("---")
-            st.markdown("#### 🧚‍♀️ ข้อมูลไมล่า (Myla AI)")
-            # [ใหม่] ช่องใส่รูปไมล่า
-            myla_norm = st.text_input("รูปไมล่า (ปกติ)", value=profile_data.get('myla_normal', ''), placeholder="ลิงก์รูปตอนร่าเริง")
-            myla_sad = st.text_input("รูปไมล่า (เศร้า)", value=profile_data.get('myla_sad', ''), placeholder="ลิงก์รูปตอนเศร้า")
-            
-            st.markdown("---")
-            st.markdown("#### 🔗 โซเชียล")
-            p_discord = st.text_input("Discord URL", value=profile_data.get('discord',''))
-            p_ig = st.text_input("IG URL", value=profile_data.get('ig',''))
-            p_ex = st.text_area("ลิงก์อื่นๆ", value=profile_data.get('extras',''))
-
-            if st.form_submit_button("บันทึกข้อมูลทั้งหมด"):
-                profile_data.update({
-                    "name": p_name, 
-                    "boss_avatar": p_avatar,
-                    "emoji": p_emoji, 
-                    "status": p_status, 
-                    "bio": p_bio, 
-                    "myla_normal": myla_norm,
-                    "myla_sad": myla_sad,
-                    "discord": p_discord, 
-                    "ig": p_ig, 
-                    "extras": p_ex
-                })
-                dm.save_profile(profile_data)
-                st.success("อัปเดตข้อมูลและรูปภาพเรียบร้อย!")
-                st.rerun()
-
-        st.markdown("---")
         st.markdown("### ⚙️ ตั้งค่าระบบ AI & ฟีเจอร์")
         current_settings = profile_data.get('settings', {})
         enable_bar = st.checkbox("เปิดบาร์เทนเดอร์ (Mood Mocktail)", value=current_settings.get('enable_bar', True))
@@ -344,6 +267,21 @@ if st.session_state['is_admin']:
             dm.save_profile(profile_data) 
             st.success("บันทึกการตั้งค่าแล้ว!")
             time.sleep(1); st.rerun()
+
+        st.markdown("---")
+        with st.form("pf_form"):
+            p_name = st.text_input("ชื่อ", value=profile_data.get('name', 'Dearluxion'))
+            p_emoji = st.text_input("อิโมจิประจำตัว", value=profile_data.get('emoji', '😎'))
+            p_status = st.text_input("Status", value=profile_data.get('status', 'ว่างงาน...'))
+            p_bio = st.text_input("Bio", value=profile_data.get('bio', ''))
+            p_discord = st.text_input("Discord URL", value=profile_data.get('discord',''))
+            p_ig = st.text_input("IG URL", value=profile_data.get('ig',''))
+            p_ex = st.text_area("ลิงก์อื่นๆ", value=profile_data.get('extras',''))
+            if st.form_submit_button("บันทึกข้อมูลส่วนตัว"):
+                profile_data.update({"name": p_name, "emoji": p_emoji, "status": p_status, "bio": p_bio, "discord": p_discord, "ig": p_ig, "extras": p_ex})
+                dm.save_profile(profile_data)
+                st.success("อัปเดตแล้ว!")
+                st.rerun()
 
         st.markdown("---")
         if st.button("⚠️ กดเพื่อส่งทุกโพสต์ (ตั้งแต่แรก) ไป Discord"):
@@ -396,29 +334,21 @@ if filtered:
         for e in ['😻', '🙀', '😿', '😾', '🧠']: 
             if e not in post['reactions']: post['reactions'][e] = 0
 
-        # [ใหม่] ดึงข้อมูลผู้โพสต์จากโพสต์นั้นๆ (ถ้าเป็นโพสต์เก่าไม่มีข้อมูล ให้ใช้ข้อมูลบอสปัจจุบัน)
-        p_name = post.get('author_name', profile_data.get('name', 'Dearluxion'))
-        p_avatar = post.get('author_avatar', '')
-        
-        # ถ้าไม่มี avatar ในโพสต์ (โพสต์เก่า) ให้ลองไปดึงจาก profile บอส
-        if not p_avatar and p_name == profile_data.get('name', 'Dearluxion'):
-             p_avatar = convert_drive_link(profile_data.get('boss_avatar', ''))
-
         with st.container():
             col_head, col_del = st.columns([0.85, 0.15])
             with col_head:
-                # [Fix: ใช้ Single Quote เพื่อไม่ให้ตีกับ Double Quote ของ f-string]
-                avatar_html = ""
-                if p_avatar:
-                    avatar_html = f"<div style='width:50px; height:50px; border-radius:50%; overflow:hidden; border: 2px solid {accent}; flex-shrink: 0;'><img src='{p_avatar}' style='width:100%; height:100%; object-fit: cover;'></div>"
-                else:
-                    avatar_html = f"<div style='font-size:40px; line-height:1; filter: drop-shadow(0 0 5px {accent});'>{user_emoji}</div>"
-
-                # [แก้สำคัญที่สุด] รวม HTML ทั้งหมดให้เป็นบรรทัดเดียว (Single Line String)
-                # วิธีนี้จะป้องกันไม่ให้ Editor เผลอเติมช่องว่างหน้าบรรทัด ซึ่งเป็นสาเหตุของปัญหาทั้งหมด
-                display_html = f"<div style='display:flex; align-items:center; gap:12px; margin-bottom:12px;'>{avatar_html}<div style='line-height:1.2;'><div style='font-size:18px; font-weight:bold; color:#E6EDF3;'>{p_name} <span style='color:{accent}; font-size:14px;'>🛡️ Verified</span></div><div style='font-size:12px; color:#8B949E;'>{post['date']}</div></div></div>"
-                
-                st.markdown(display_html, unsafe_allow_html=True)
+                st.markdown(f"""
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+                    <div style="font-size:40px; line-height:1; filter: drop-shadow(0 0 5px {accent});">{user_emoji}</div>
+                    <div style="line-height:1.2;">
+                        <div style="font-size:18px; font-weight:bold; color:#E6EDF3;">
+                            {profile_data.get('name', 'Dearluxion')} 
+                            <span style="color:{accent}; font-size:14px;">🛡️ Verified</span>
+                        </div>
+                        <div style="font-size:12px; color:#8B949E;">{post['date']}</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
             
             with col_del:
                 if st.session_state['is_admin']:

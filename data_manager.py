@@ -31,7 +31,7 @@ def get_gsheet_client():
     except Exception as e:
         return None
 
-# --- LOAD DATA (อ่านข้อมูล) ---
+# --- LOAD DATA ---
 @st.cache_data(ttl=60)
 def load_data_cached():
     sh = get_gsheet_client()
@@ -43,28 +43,15 @@ def load_data_cached():
             for r in records:
                 if not str(r['id']): continue
                 try:
-                    # แปลง JSON String กลับเป็น List/Dict
                     r['images'] = json.loads(r['images']) if r['images'] else []
                     r['video'] = json.loads(r['video']) if r['video'] else []
                     r['reactions'] = json.loads(r['reactions']) if r['reactions'] else {'😻':0,'🙀':0,'😿':0,'😾':0,'🧠':0}
                     r['comments'] = json.loads(r['comments']) if r['comments'] else []
-                    
-                    # [จุดสำคัญ] อ่านค่าตัวตนผู้โพสต์ (ถ้าเป็นโพสต์เก่าไม่มีช่องนี้ ให้ใส่ค่าว่างไว้ก่อน)
-                    # App จะไปจัดการต่อเองว่าถ้าว่าง = เป็นบอส
-                    if 'author_name' not in r: r['author_name'] = ''
-                    if 'author_avatar' not in r: r['author_avatar'] = ''
-                    if 'is_bot' not in r: r['is_bot'] = False
-                    
-                    # แปลง String 'TRUE'/'FALSE' จาก Sheets ให้เป็น Boolean จริงๆ
-                    if isinstance(r['is_bot'], str):
-                         r['is_bot'] = r['is_bot'].upper() == 'TRUE'
-
                     clean_data.append(r)
                 except: continue
             return clean_data
         except: pass
     
-    # กรณีใช้ไฟล์ JSON สำรอง
     if not os.path.exists(DB_FILE): return []
     try:
         with open(DB_FILE, "r", encoding="utf-8") as f: return json.load(f)
@@ -73,44 +60,28 @@ def load_data_cached():
 def load_data():
     return load_data_cached()
 
-# --- SAVE DATA (บันทึกข้อมูล) ---
+# --- SAVE DATA ---
 def save_data(data):
     sh = get_gsheet_client()
     if sh:
         try:
             ws = sh.worksheet("posts")
-            
-            # [จุดสำคัญ] เพิ่ม Header ให้ครบทุกช่อง รวมถึงช่องตัวตนใหม่ด้วย
-            header = ["id", "date", "content", "images", "video", "color", "price", "likes", "reactions", "comments", "author_name", "author_avatar", "is_bot"]
-            rows = [header]
-            
+            rows = [["id", "date", "content", "images", "video", "color", "price", "likes", "reactions", "comments"]]
             for p in data:
-                # เตรียมข้อมูลแต่ละแถว (ใช้ .get ป้องกัน Error กับข้อมูลเก่า)
                 rows.append([
-                    str(p.get('id','')), 
-                    p.get('date',''), 
-                    p.get('content',''),
+                    str(p.get('id','')), p.get('date',''), p.get('content',''),
                     json.dumps(p.get('images', [])),
                     json.dumps(p.get('video', [])),
-                    p.get('color', '#A370F7'), 
-                    p.get('price', 0), 
-                    0, # likes เลิกใช้แล้ว (รวมใน reactions)
+                    p.get('color', '#A370F7'), p.get('price', 0), 0,
                     json.dumps(p.get('reactions', {})),
-                    json.dumps(p.get('comments', [])),
-                    # บันทึกข้อมูลตัวตน (ถ้าไม่มีให้ว่างไว้)
-                    p.get('author_name', ''),
-                    p.get('author_avatar', ''),
-                    str(p.get('is_bot', False)).upper() # แปลงเป็น String เพื่อลง Sheets
+                    json.dumps(p.get('comments', []))
                 ])
-                
-            # ล้างข้อมูลเก่าแล้วเขียนทับใหม่ (ข้อมูลเก่าจะถูกเพิ่มคอลัมน์ให้อัตโนมัติ)
             ws.clear()
             ws.update(rows)
-            load_data_cached.clear() # เคลียร์ Cache ให้เว็บโหลดข้อมูลใหม่ทันที
+            load_data_cached.clear()
         except Exception as e:
             st.error(f"บันทึกลง Sheets ไม่สำเร็จ: {e}")
 
-    # บันทึกลง JSON สำรอง
     try:
         with open(DB_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
         load_data_cached.clear()
