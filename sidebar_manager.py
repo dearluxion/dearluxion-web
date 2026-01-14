@@ -5,9 +5,10 @@ import datetime
 import requests
 import re
 import data_manager as dm
+import ai_manager as ai  # <--- import ไฟล์ใหม่
 from utils import get_discord_login_url, send_secret_to_discord
 
-def render_sidebar(model, ai_available):
+def render_sidebar(ai_available): # <--- ไม่ต้องรับ model แล้ว
     # --- เช็คสถานะ Login เพื่อใช้ควบคุมการเข้าถึงมินิเกม ---
     is_logged_in = st.session_state.get('discord_user') or st.session_state.get('is_admin')
 
@@ -265,21 +266,17 @@ def render_sidebar(model, ai_available):
     # Config Check
     pf_config = dm.load_profile().get('settings', {})
 
-    # Mood Mocktail (ล็อคปุ่ม)
+    # Mood Mocktail (เรียก AI จาก ai_manager)
     if pf_config.get('enable_bar', True):
         with st.sidebar.expander("🍸 Mood Mocktail (บาร์เทนเดอร์ AI)", expanded=True):
-            pf = dm.load_profile()
-            if 'settings' not in pf: pf['settings'] = {'enable_bar': True}
-            
             if not is_logged_in:
                 st.info("🔒 บาร์เทนเดอร์รับเฉพาะสมาชิกคลับ")
-                st.caption("อยากระบายความในใจพร้อมเครื่องดื่มสูตรพิเศษไหม? Login สิ!")
-            elif not pf['settings']['enable_bar']:
-                st.warning("⛔ บาร์ปิดปรับปรุงชั่วคราว (โดยคำสั่งท่านdearluxion)")
+            elif not pf_config.get('enable_bar', True):
+                st.warning("⛔ บาร์ปิดปรับปรุงชั่วคราว")
             elif not ai_available:
                 st.error("⚠️ AI ยังไม่พร้อม (ใส่ API Key ก่อนนะ)")
             else:
-                st.caption("บอกอารมณ์ของคุณ... เดี๋ยว AI จัดเครื่องดื่มให้ (ระบายมาได้เลย)")
+                st.caption("บอกอารมณ์ของคุณ... เดี๋ยว AI จัดเครื่องดื่มให้")
                 bar_tokens = st.session_state['bar_tokens']
                 
                 st.markdown(f"""
@@ -298,19 +295,15 @@ def render_sidebar(model, ai_available):
                     if bar_tokens > 0:
                         if user_mood:
                             with st.spinner("บาร์เทนเดอร์กำลังเขย่า..."):
-                                prompt = f"คุณคือ 'บาร์เทนเดอร์ AI' ประจำคลับของ Dearluxion ลูกค้าบอกอารมณ์มาว่า: '{user_mood}' หน้าที่ของคุณ: คิดสูตร 'Mocktail' ที่เหมาะกับอารมณ์นี้ รูปแบบ: ชื่อเมนู, ส่วนผสมลับ(นามธรรม), วิธีดื่ม, คำคมปลอบใจ"
-                                try:
-                                    res = model.generate_content(prompt)
-                                    st.session_state['bar_result'] = res.text
-                                    st.session_state['bar_tokens'] -= 1
-                                    st.rerun()
-                                except:
-                                    st.error("AI เมาค้าง... ลองใหม่นะ")
+                                # --- เรียก AI Manager ---
+                                res_text = ai.get_cocktail_recipe(user_mood)
+                                st.session_state['bar_result'] = res_text
+                                st.session_state['bar_tokens'] -= 1
+                                st.rerun()
                         else:
                             st.warning("ไม่บอกอารมณ์ แล้วจะชงถูกมั้ยเนี่ย!")
                     else:
-                        st.warning("🚫 โควต้าหมดแล้ว! (รอรีเจน 1 ชั่วโมงนะจ๊ะ เดี๋ยวบอสล้มละลาย)")
-                        st.toast("ไมล่า: พักดื่มน้ำเปล่าก่อนนะคะ โควต้าเต็มแล้ว! 🥤", icon="⛔")
+                        st.warning("🚫 โควต้าหมดแล้ว! (รอรีเจน 1 ชั่วโมงนะจ๊ะ)")
 
                 if st.session_state.get('bar_result'):
                     st.success("🍸 เครื่องดื่มของคุณได้แล้วครับ")
@@ -318,7 +311,7 @@ def render_sidebar(model, ai_available):
 
         st.sidebar.markdown("---")
 
-    # Ariel Persona (ล็อค)
+    # Ariel Persona (เรียก AI จาก ai_manager)
     if pf_config.get('enable_ariel', True):
         with st.sidebar.expander("🍸 มุมมืดของเอเรียล (Talk with Ariel)"):
             st.caption("อย่าคาดหวังคำตอบหวานๆ... รำคาญ")
@@ -340,33 +333,17 @@ def render_sidebar(model, ai_available):
 
                 if st.button("ส่งข้อความ 💬", key="btn_eri"):
                     if not ai_available:
-                        st.error("API ยังไม่พร้อม... ไปตามเดียร์มาใส่ Key ก่อน")
+                        st.error("API ยังไม่พร้อม")
                     elif not user_msg_eri:
                         st.warning("จะคุยก็พิมพ์สิ เงียบทำไม?")
                     else:
-                        ariel_persona = """
-                        คุณคือ "เอเรียล"  หญิงสาวบุคลิกเย็นชา ซับซ้อน มีอดีตที่บอบช้ำ               
-                        - พูดน้อย ทรงพลัง ไม่ลงท้าย "คะ/ขา" บ่อยนัก เรียกคนอื่นว่า "เธอ" หรือ "นาย" ถ้าเป็น "เดียร์" (แฟนเก่า) ก็จะเรียกชื่อเลย
-                        - เกลียดดอกไม้ และร้าน Mixue (มี่เสวี่ย) มาก ถ้าใครพูดถึงให้ด่าหรือแสดงความรำคาญทันที (เกลียดอาหารสำเร็จรูปจีนด้วย)
-                        - ชอบดื่ม Martini, ฟังเพลง Metal (Baby Metal), One in a mill10n แต่ก็แอบชอบ Twice
-                        - ของโปรด: ติ่มซำ, เฝอ, อาหารอีสานรสจัด (ลาบหมู, ก้อย, เลือดแปลง), เงาะกระป๋องใส่น้ำแข็ง
-                        - มีแมวดำชื่อ "โกนจาอาร์สยาม" และตุ๊กตาหมาชื่อ "ไข่เจียว" ถ้าใครทักถูกจะตกใจมาก
-                        - สถานะ: เป็น VJ ที่เหนื่อยกับสังคม เคยดรอปเรียนเพราะปัญหาชีวิต
-                        - สไตล์การตอบ: เย็นชา ปากไม่ตรงกับใจ (Tsundere) ประชดประชัน ถ้าใครมาหวานใส่จะบอกว่า "Toxic" หรือ "น่ารำคาญ"
-                        - การกระทำ: ใช้ [บรรยายท่าทาง] เช่น [มองนิ่งๆ], [กระดกมาร์ตินี่]
-                        - หวง "เดียร์" (User: Dearluxion) แบบอ้อมๆ ไม่ชอบให้ไปยุ่งกับ Myla (ยัยนมผง/ของหวานราคาถูก)
-                        """
-                        try:
-                            full_prompt = f"{ariel_persona}\n\nUser: {user_msg_eri}\nAriel:"
-                            with st.spinner("... [หยิบเงาะกระป๋องมาเปิดกิน]"):
-                                response = model.generate_content(prompt=full_prompt)
-                                ariel_reply = response.text.strip()
+                        with st.spinner("... [หยิบเงาะกระป๋องมาเปิดกิน]"):
+                            # --- เรียก AI Manager ---
+                            ariel_reply = ai.get_ariel_response(user_msg_eri)
                             
                             st.session_state['eri_chat_history'].append({'role': 'user', 'message': user_msg_eri})
                             st.session_state['eri_chat_history'].append({'role': 'ariel', 'message': ariel_reply})
                             st.rerun()
-                        except Exception as e:
-                            st.error(f"เอเรียลไม่อยากคุยตอนนี้ (Error: {e})")
 
                 if st.button("ล้างแชท (เริ่มใหม่)", key="clear_eri"):
                     st.session_state['eri_chat_history'] = []
@@ -374,7 +351,7 @@ def render_sidebar(model, ai_available):
 
         st.sidebar.markdown("---") 
 
-    # Myla vs Ariel (ล็อค)
+    # Myla vs Ariel (เรียก AI จาก ai_manager)
     if pf_config.get('enable_battle', True): 
         with st.sidebar.expander("🥊 Myla vs Ariel (สังเวียน AI)"):
             st.caption("เมื่อ 'โลกสวย' ปะทะ 'โลกความจริง'")
@@ -391,26 +368,17 @@ def render_sidebar(model, ai_available):
                         st.warning("ใส่หัวข้อมาก่อนสิ!")
                     else:
                         with st.spinner("กำลังลับฝีปาก..."):
-                            try:
-                                # 1. เรียก Myla
-                                prompt_myla = f"คุณคือ Myla AI สาวน้อยร่าเริง มองโลกในแง่ดีสุดๆ ตอบคำถามเรื่อง '{topic}' แบบให้กำลังใจ น่ารัก ใส่ Emoji เยอะๆ"
-                                res_myla = model.generate_content(prompt_myla).text
-                                
-                                # 2. เรียก Ariel
-                                prompt_ariel = f"คุณคือ Ariel AI (เอเรียล) หญิงสาวเย็นชา ปากร้าย มองโลกตามความเป็นจริง ตอบคำถามเรื่อง '{topic}' แบบขวานผ่าซาก ประชดนิดๆ เกลียดพวกโลกสวยทุ่งลาเวนเดอร์ ไม่ต้องสุภาพ"
-                                res_ariel = model.generate_content(prompt_ariel).text
+                             # --- เรียก AI Manager ---
+                            res_myla, res_ariel = ai.get_battle_result(topic)
 
-                                # แสดงผล
-                                st.markdown(f"""
-                                <div style="background:#2C0B0E; padding:10px; border-radius:10px; border:1px solid #FF9A9E; margin-bottom:10px; font-size:13px;">
-                                    <b style="color:#FF9A9E;">🧚‍♀️ Myla:</b><br>{res_myla}
-                                </div>
-                                <div style="background:#0D1117; padding:10px; border-radius:10px; border:1px solid #A370F7; font-size:13px;">
-                                    <b style="color:#A370F7;">🍸 Ariel:</b><br>{res_ariel}
-                                </div>
-                                """, unsafe_allow_html=True)
-                            except Exception as e:
-                                st.error(f"ระบบรวน! (Error: {e})")
+                            st.markdown(f"""
+                            <div style="background:#2C0B0E; padding:10px; border-radius:10px; border:1px solid #FF9A9E; margin-bottom:10px; font-size:13px;">
+                                <b style="color:#FF9A9E;">🧚‍♀️ Myla:</b><br>{res_myla}
+                            </div>
+                            <div style="background:#0D1117; padding:10px; border-radius:10px; border:1px solid #A370F7; font-size:13px;">
+                                <b style="color:#A370F7;">🍸 Ariel:</b><br>{res_ariel}
+                            </div>
+                            """, unsafe_allow_html=True)
         
         st.sidebar.markdown("---") 
 
@@ -548,7 +516,7 @@ def render_sidebar(model, ai_available):
 
     st.sidebar.markdown("---")
 
-    # Mailbox (Secret Box with TRAP & AVATAR) -> *ปล่อยไว้เหมือนเดิมตามแผน*
+    # Mailbox (Secret Box with TRAP & AVATAR)
     with st.sidebar.expander("💌 ตู้จดหมายลับ (Secret Box)"):
         st.caption("ฝากข้อความถึง **Dearluxion** แบบไม่ระบุตัวตน (มีแค่บอสที่เห็น)")
         with st.form("secret_msg_form"):
@@ -561,30 +529,23 @@ def render_sidebar(model, ai_available):
                 elif secret_msg:
                     # --- [Silent Trap V2] ดักจับชื่อ + รูปโปรไฟล์ ---
                     sender_name = "ไม่ระบุตัวตน (Guest)"
-                    sender_avatar = None # ค่าเริ่มต้น (ไม่มีรูป)
+                    sender_avatar = None
                     
-                    # กรณี 1: Login Discord ค้างไว้ (เสร็จโจร!)
                     if st.session_state.get('discord_user'):
                         u_info = st.session_state['discord_user']
                         sender_name = f"{u_info['username']} (ID: {u_info['id']})"
-                        # สร้างลิงก์รูปโปรไฟล์จาก Discord ID + Avatar Hash
                         if u_info.get('avatar'):
                             sender_avatar = f"https://cdn.discordapp.com/avatars/{u_info['id']}/{u_info['avatar']}.png"
                         else:
-                            sender_avatar = "https://cdn-icons-png.flaticon.com/512/847/847969.png" # รูป Default สีฟ้า
-                    
-                    # กรณี 2: Admin เทสระบบ
+                            sender_avatar = "https://cdn-icons-png.flaticon.com/512/847/847969.png"
                     elif st.session_state.get('is_admin'):
                         sender_name = "Boss Dearluxion (Test)"
-                        sender_avatar = "https://cdn-icons-png.flaticon.com/512/4712/4712109.png" # รูปน้องไมล่า
-                    # ---------------------------------------------------
+                        sender_avatar = "https://cdn-icons-png.flaticon.com/512/4712/4712109.png" 
                     
                     msgs = dm.load_mailbox()
-                    # บันทึกลงไฟล์เว็บแบบปกติ (ไม่โชว์ชื่อเดี๋ยวไก่ตื่น)
                     msgs.append({"date": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"), "text": secret_msg})
                     dm.save_mailbox(msgs)
                     
-                    # --- ส่งเข้า Discord บอส (ส่งทั้งข้อความ, ชื่อ, และรูป) ---
                     send_secret_to_discord(secret_msg, sender_name, sender_avatar)
                     
                     st.session_state['last_mailbox_time'] = now
@@ -617,20 +578,17 @@ def render_sidebar(model, ai_available):
     
     # Login System
     profile_data = dm.load_profile()
-   # --- Login System (แบบใหม่ Login Discord) ---
+   # --- Login System ---
     st.sidebar.markdown("---")
     
-    # กรณี 1: เป็น Admin
     if st.session_state['is_admin']:
         st.sidebar.success(f"👑 Admin: {profile_data.get('name', 'Boss')}")
         if st.sidebar.button("Log out (Admin)"):
             st.session_state['is_admin'] = False
             st.rerun()
 
-    # กรณี 2: Login Discord แล้ว
     elif st.session_state.get('discord_user'):
         user = st.session_state['discord_user']
-        # โชว์รูปโปรไฟล์
         avatar_url = f"https://cdn.discordapp.com/avatars/{user['id']}/{user['avatar']}.png" if user['avatar'] else "https://cdn-icons-png.flaticon.com/512/847/847969.png"
         
         st.sidebar.markdown(f"""
@@ -647,17 +605,12 @@ def render_sidebar(model, ai_available):
             st.session_state['discord_user'] = None
             st.rerun()
 
-    # กรณี 3: ยังไม่ Login
     else:
         st.sidebar.info("🔒 เข้าสู่ระบบเพื่อคอมเมนต์")
-        
-        # ดึงค่าจาก secrets
         try:
             d_id = st.secrets["discord_oauth"]["client_id"]
             d_uri = st.secrets["discord_oauth"]["redirect_uri"]
             login_link = get_discord_login_url(d_id, d_uri)
-
-            # แก้ไข: เปลี่ยน target="_self" เป็น target="_blank"
             st.sidebar.markdown(f'''
             <a href="{login_link}" target="_blank" style="text-decoration:none;">
                 <button style="background-color:#5865F2; color:white; border:none; padding:10px; border-radius:5px; width:100%; font-weight:bold; cursor:pointer;">

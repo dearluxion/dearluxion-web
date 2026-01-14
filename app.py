@@ -5,24 +5,19 @@ import re
 import time
 import random
 import base64
-import google.generativeai as genai
 
-# --- [IMPORTED MODULES] เรียกใช้โมดูลที่แยกไว้ ---
+# --- [IMPORTED MODULES] ---
 from styles import get_css 
 from utils import convert_drive_link, convert_drive_video_link, make_clickable, send_post_to_discord, exchange_code_for_token, get_discord_user
 import data_manager as dm
 import sidebar_manager as sm
+import ai_manager as ai  # <--- import ไฟล์ใหม่
 
 # --- 0. ตั้งค่า API KEY ---
 GEMINI_API_KEY = "" # เอา Key ของเดียร์มาใส่ตรงนี้เหมือนเดิม
 
-# Config Gemini
-try:
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-2.5-flash') 
-    ai_available = True
-except:
-    ai_available = False
+# Config Gemini ผ่าน AI Manager
+ai_available = ai.init_ai(GEMINI_API_KEY)
 
 # --- 1. ตั้งค่าหน้าเว็บ ---
 st.set_page_config(page_title="Small Group by Dearluxion", page_icon="🍸", layout="centered")
@@ -91,7 +86,8 @@ if now - st.session_state['last_bar_regen'] >= 3600:
     st.session_state['last_bar_regen'] = now
 
 # --- 2. Render Sidebar ---
-search_query, selected_zone = sm.render_sidebar(model, ai_available)
+# ไม่ต้องส่ง model แล้ว ส่งแค่สถานะว่าพร้อมไหม
+search_query, selected_zone = sm.render_sidebar(ai_available) 
 
 # --- 3. Header & Profile ---
 profile_data = dm.load_profile()
@@ -211,14 +207,9 @@ if st.session_state['is_admin']:
                     "comments": []
                 }
                 
-                myla_reply = ""
-                if ai_available:
-                    try:
-                        prompt = f"คุณคือ 'ไมล่า' (Myla) AI ผู้ช่วยสาวน้อยน่ารักประจำเว็บไซต์ Small Group ของบอส 'Dearluxion' บอสเพิ่งโพสต์ข้อความว่า: \"{new_desc}\" หน้าที่ของคุณ: คอมเมนต์ตอบกลับโพสต์นี้ของบอส (สั้นๆ น่ารัก กวนนิดๆ)"
-                        response = model.generate_content(prompt)
-                        myla_reply = response.text.strip()
-                    except: myla_reply = "ระบบ AI ง่วงนอน... แต่ไมล่าก็ยังรักบอสนะ! 💖"
-                else: myla_reply = random.choice(["โพสต์เท่มากค่ะบอส! 😎", "FC บอสเบอร์ 1 มารายงานตัวค่ะ! 🙋‍♀️"])
+                # --- เรียกใช้ AI จากไฟล์แยก (สะอาดขึ้นเยอะ!) ---
+                myla_reply = ai.get_myla_comment(new_desc)
+                # ---------------------------------------------
 
                 new_post['comments'].append({"user": "🧚‍♀️ Myla (AI)", "text": myla_reply, "is_admin": False, "image": None})
                 current = dm.load_data()
