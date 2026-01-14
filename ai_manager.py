@@ -50,7 +50,7 @@ def _setup_model():
     current_key = api_keys[current_key_index]
     genai.configure(api_key=current_key)
     # ใช้ Model ตัวใหม่ล่าสุด
-    model = genai.GenerativeModel('gemini-2.0-flash-exp') 
+    model = genai.GenerativeModel('gemini-2.5-flash') 
     print(f"🤖 AI switched to Key Index: {current_key_index+1}")
 
 def _rotate_key_and_notify(error_msg):
