@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import json
 import datetime
-import time
+import threading
 
 # --- ส่วนเสริมสำหรับ Google Sheets ---
 try:
@@ -16,7 +16,8 @@ DB_FILE = "portfolio_db.json"
 PROFILE_FILE = "profile_db.json"
 MAILBOX_FILE = "mailbox_db.json"
 
-# ฟังก์ชันเชื่อมต่อ Google Sheets
+# Cache Resource connection to GSheets (เชื่อมต่อครั้งเดียวพอ)
+@st.cache_resource
 def get_gsheet_client():
     if not has_gspread: return None
     if "gcp_service_account" not in st.secrets: return None
@@ -31,7 +32,7 @@ def get_gsheet_client():
     except Exception as e:
         return None
 
-# --- LOAD DATA ---
+# --- LOAD DATA (ปรับ TTL ให้เหมาะสม) ---
 @st.cache_data(ttl=60)
 def load_data_cached():
     sh = get_gsheet_client()
@@ -62,32 +63,39 @@ def load_data():
 
 # --- SAVE DATA ---
 def save_data(data):
-    sh = get_gsheet_client()
-    if sh:
-        try:
-            ws = sh.worksheet("posts")
-            rows = [["id", "date", "content", "images", "video", "color", "price", "likes", "reactions", "comments"]]
-            for p in data:
-                rows.append([
-                    str(p.get('id','')), p.get('date',''), p.get('content',''),
-                    json.dumps(p.get('images', [])),
-                    json.dumps(p.get('video', [])),
-                    p.get('color', '#A370F7'), p.get('price', 0), 0,
-                    json.dumps(p.get('reactions', {})),
-                    json.dumps(p.get('comments', []))
-                ])
-            ws.clear()
-            ws.update(rows)
-            load_data_cached.clear()
-        except Exception as e:
-            st.error(f"บันทึกลง Sheets ไม่สำเร็จ: {e}")
-
+    # 1. Save local JSON first (Fastest)
     try:
         with open(DB_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
-        load_data_cached.clear()
-    except: st.error("บันทึกไฟล์สำรองไม่สำเร็จ")
+    except: pass
+
+    # 2. Clear Cache immediately so UI updates
+    load_data_cached.clear()
+
+    # 3. Save to Sheets in Background Thread (Don't make user wait)
+    def _save_sheet_worker(data_to_save):
+        sh = get_gsheet_client()
+        if sh:
+            try:
+                ws = sh.worksheet("posts")
+                rows = [["id", "date", "content", "images", "video", "color", "price", "likes", "reactions", "comments"]]
+                for p in data_to_save:
+                    rows.append([
+                        str(p.get('id','')), p.get('date',''), p.get('content',''),
+                        json.dumps(p.get('images', [])),
+                        json.dumps(p.get('video', [])),
+                        p.get('color', '#A370F7'), p.get('price', 0), 0,
+                        json.dumps(p.get('reactions', {})),
+                        json.dumps(p.get('comments', []))
+                    ])
+                ws.clear()
+                ws.update(rows)
+            except Exception as e:
+                print(f"Sheet Save Error: {e}")
+
+    threading.Thread(target=_save_sheet_worker, args=(data,)).start()
 
 # --- PROFILE MANAGER ---
+@st.cache_data(ttl=300) # Profile ไม่เปลี่ยนบ่อย Cache นานหน่อยได้
 def load_profile():
     sh = get_gsheet_client()
     if sh:
@@ -108,51 +116,59 @@ def load_profile():
     except: return {}
 
 def save_profile(data):
-    sh = get_gsheet_client()
-    if sh:
-        try:
-            ws = sh.worksheet("profile")
-            rows = [["key", "value"]]
-            for k,v in data.items():
-                val = json.dumps(v) if isinstance(v, (dict, list)) else str(v)
-                rows.append([k, val])
-            ws.clear()
-            ws.update(rows)
-        except: pass
-        
+    # Save Local
     try:
         with open(PROFILE_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
-    except: st.error("บันทึกโปรไฟล์ไม่สำเร็จ")
+    except: pass
+    
+    # Clear Cache
+    load_profile.clear()
+    
+    # Background Save
+    def _save_pf_worker(data_to_save):
+        sh = get_gsheet_client()
+        if sh:
+            try:
+                ws = sh.worksheet("profile")
+                rows = [["key", "value"]]
+                for k,v in data_to_save.items():
+                    val = json.dumps(v) if isinstance(v, (dict, list)) else str(v)
+                    rows.append([k, val])
+                ws.clear()
+                ws.update(rows)
+            except: pass
+    threading.Thread(target=_save_pf_worker, args=(data,)).start()
 
 # --- MAILBOX MANAGER ---
 def load_mailbox():
-    sh = get_gsheet_client()
-    if sh:
-        try: return sh.worksheet("mailbox").get_all_records()
-        except: pass
-        
+    # Mailbox doesn't need heavy caching, user checks occasionally
     if not os.path.exists(MAILBOX_FILE): return []
     try:
         with open(MAILBOX_FILE, "r", encoding="utf-8") as f: return json.load(f)
     except: return []
 
 def save_mailbox(data):
-    sh = get_gsheet_client()
-    if sh:
-        try:
-            ws = sh.worksheet("mailbox")
-            rows = [["date", "text"]]
-            for m in data: rows.append([m['date'], m['text']])
-            ws.clear()
-            ws.update(rows)
-        except: pass
-        
+    # Save Local
     try:
         with open(MAILBOX_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
-    except: st.error("ส่งจดหมายไม่สำเร็จ")
+    except: pass
+    
+    # Background Save
+    def _save_mail_worker(data_to_save):
+        sh = get_gsheet_client()
+        if sh:
+            try:
+                ws = sh.worksheet("mailbox")
+                rows = [["date", "text"]]
+                for m in data_to_save: rows.append([m['date'], m['text']])
+                ws.clear()
+                ws.update(rows)
+            except: pass
+    threading.Thread(target=_save_mail_worker, args=(data,)).start()
 
-# --- SPECIAL NOTES MANAGER (Admin Notes) ---
+# --- SPECIAL NOTES MANAGER ---
 def save_special_note_to_sheet(note_text):
+    # อันนี้ Admin ใช้ นานๆ ที รอได้
     sh = get_gsheet_client()
     if sh:
         try:
@@ -175,7 +191,6 @@ def delete_special_note(row_index):
 def load_special_notes():
     sh = get_gsheet_client()
     if sh:
-        try:
-            return sh.worksheet("admin_notes").get_all_records()
+        try: return sh.worksheet("admin_notes").get_all_records()
         except: return []
     return []
