@@ -13,11 +13,19 @@ import data_manager as dm
 import sidebar_manager as sm
 import ai_manager as ai  # <--- import ไฟล์ใหม่
 
-# --- 0. ตั้งค่า API KEY ---
-GEMINI_API_KEY = "" # เอา Key ของเดียร์มาใส่ตรงนี้เหมือนเดิม
+# --- 0. ตั้งค่า API KEY (Multi-Key Support) ---
+# ดึง Key ทั้งหมดจาก Secrets (ถ้าไม่มี ให้ใส่สตริงว่างไว้กัน Error)
+keys_bundle = [
+    st.secrets.get("gemini", {}).get("api_key_1", ""),
+    st.secrets.get("gemini", {}).get("api_key_2", ""),
+    st.secrets.get("gemini", {}).get("api_key_3", ""),
+    st.secrets.get("gemini", {}).get("api_key_4", ""),
+    st.secrets.get("gemini", {}).get("api_key_5", "")
+]
+discord_webhook_url = st.secrets.get("general", {}).get("discord_webhook", "")
 
-# Config Gemini ผ่าน AI Manager
-ai_available = ai.init_ai(GEMINI_API_KEY)
+# ส่งรายการ Key + Webhook ไปให้ AI Manager
+ai_available = ai.init_ai(keys_bundle, discord_webhook_url)
 
 # --- 1. ตั้งค่าหน้าเว็บ ---
 st.set_page_config(page_title="Small Group by Dearluxion", page_icon="🍸", layout="centered")
