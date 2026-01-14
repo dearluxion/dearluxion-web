@@ -111,12 +111,8 @@ with top_col1:
         # [ใหม่] เช็คว่าถ้ามีรูปบอส ให้โชว์รูป ถ้าไม่มีให้โชว์ Emoji
         if boss_avatar_url:
             real_avatar = convert_drive_link(boss_avatar_url)
-            # ใช้ Single Quote ใน HTML เพื่อความชัวร์
-            st.markdown(f"""
-                <div style='width:100px; height:100px; border-radius:50%; overflow:hidden; border: 3px solid #A370F7; box-shadow: 0 0 15px rgba(163, 112, 247, 0.5); margin: 0 auto;'>
-                    <img src='{real_avatar}' style='width:100%; height:100%; object-fit: cover;'>
-                </div>
-            """, unsafe_allow_html=True)
+            # ใช้ Single Line HTML เพื่อป้องกัน Indentation Error
+            st.markdown(f"<div style='width:100px; height:100px; border-radius:50%; overflow:hidden; border: 3px solid #A370F7; box-shadow: 0 0 15px rgba(163, 112, 247, 0.5); margin: 0 auto;'><img src='{real_avatar}' style='width:100%; height:100%; object-fit: cover;'></div>", unsafe_allow_html=True)
         else:
             st.markdown(f"""
                 <div style="font-size: 60px; line-height: 1; filter: drop-shadow(0 0 10px #A370F7); text-align: center; cursor:default;">
@@ -418,19 +414,10 @@ if filtered:
                 else:
                     avatar_html = f"<div style='font-size:40px; line-height:1; filter: drop-shadow(0 0 5px {accent});'>{user_emoji}</div>"
 
-                # [แก้สำคัญ] จัด HTML ให้ชิดซ้ายสุด กัน Indentation Error
-                display_html = f"""
-<div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
-    {avatar_html}
-    <div style="line-height:1.2;">
-        <div style="font-size:18px; font-weight:bold; color:#E6EDF3;">
-            {p_name} 
-            <span style="color:{accent}; font-size:14px;">🛡️ Verified</span>
-        </div>
-        <div style="font-size:12px; color:#8B949E;">{post['date']}</div>
-    </div>
-</div>
-"""
+                # [แก้สำคัญที่สุด] รวม HTML ทั้งหมดให้เป็นบรรทัดเดียว (Single Line String)
+                # วิธีนี้จะป้องกันไม่ให้ Editor เผลอเติมช่องว่างหน้าบรรทัด ซึ่งเป็นสาเหตุของปัญหาทั้งหมด
+                display_html = f"<div style='display:flex; align-items:center; gap:12px; margin-bottom:12px;'>{avatar_html}<div style='line-height:1.2;'><div style='font-size:18px; font-weight:bold; color:#E6EDF3;'>{p_name} <span style='color:{accent}; font-size:14px;'>🛡️ Verified</span></div><div style='font-size:12px; color:#8B949E;'>{post['date']}</div></div></div>"
+                
                 st.markdown(display_html, unsafe_allow_html=True)
             
             with col_del:
