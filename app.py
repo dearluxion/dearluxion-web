@@ -177,6 +177,7 @@ if st.session_state['is_admin']:
             price = st.number_input("💰 ราคา (ใส่ 0 = ไม่ขาย)", min_value=0, value=0)
 
         if st.button("🚀 โพสต์เลย", use_container_width=True):
+            # --- 1. แปลงลิงก์รูปและวิดีโอ ---
             link_errors = []
             final_img_links = []
             final_vid_links = []
@@ -194,6 +195,7 @@ if st.session_state['is_admin']:
             if link_errors:
                 for err in link_errors: st.error(err)
             elif new_desc:
+                # --- 2. เตรียมโครงสร้างโพสต์ ---
                 new_post = {
                     "id": str(datetime.datetime.now().timestamp()),
                     "date": datetime.datetime.now().strftime("%d/%m/%Y"),
@@ -202,16 +204,38 @@ if st.session_state['is_admin']:
                     "video": final_vid_links,
                     "color": post_color,
                     "price": price,
-                    "likes": 0,
+                    "likes": 0, # เดี๋ยวให้ AI มาบวกเพิ่ม
                     "reactions": {'😻': 0, '🙀': 0, '😿': 0, '😾': 0, '🧠': 0},
                     "comments": []
                 }
                 
-                # --- เรียกใช้ AI จากไฟล์แยก (สะอาดขึ้นเยอะ!) ---
-                myla_reply = ai.get_myla_comment(new_desc)
-                # ---------------------------------------------
+                # --- 3. เรียกกองทัพ AI (Myla, Ariel และหน้าม้า) ---
+                with st.spinner("📦 กำลังเรียกหน้าม้า AI มารุมคอมเมนต์..."):
+                    ai_engagements = ai.generate_post_engagement(new_desc)
+                
+                # --- 4. วนลูปใส่ข้อมูลที่ AI ตอบกลับมา ---
+                for engagement in ai_engagements:
+                    # ใส่คอมเมนต์
+                    new_post['comments'].append({
+                        "user": engagement.get('user', 'Anonymous'),
+                        "text": engagement.get('text', '...'),
+                        "is_admin": False,
+                        "image": None
+                    })
+                    
+                    # กด Reaction (ถ้า AI เลือกกด)
+                    react_emoji = engagement.get('reaction')
+                    valid_emojis = ['😻', '🙀', '😿', '😾', '🧠']
+                    
+                    if react_emoji and react_emoji in valid_emojis:
+                        # บวกยอด Reaction
+                        new_post['reactions'][react_emoji] += 1
+                        
+                        # ถือว่ากด Heart คือกด Like ด้วย (Optional)
+                        if react_emoji == '😻': 
+                            new_post['likes'] += 1
 
-                new_post['comments'].append({"user": "🧚‍♀️ Myla (AI)", "text": myla_reply, "is_admin": False, "image": None})
+                # --- 5. บันทึกลง Database ---
                 current = dm.load_data()
                 current.append(new_post)
                 dm.save_data(current)
@@ -221,10 +245,11 @@ if st.session_state['is_admin']:
                     st.toast("ส่งเข้า Discord เรียบร้อย!", icon="📢")
                 except: pass
 
-                st.success("เรียบร้อย! ระบบทำงานลื่นปรื๊ด")
+                # สรุปผล
+                st.success(f"เรียบร้อย! มีคนมาเม้นตั้ง {len(ai_engagements)} คนแน่ะ (Myla & Ariel มาครบ!)")
                 st.session_state['num_img_links'] = 1
                 st.session_state['num_vid_links'] = 1
-                time.sleep(1); st.rerun()
+                time.sleep(2); st.rerun()
             else: st.warning("พิมพ์อะไรหน่อยสิครับ")
 
     with tab_profile:
