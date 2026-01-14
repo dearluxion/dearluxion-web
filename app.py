@@ -218,8 +218,14 @@ if st.session_state['is_admin']:
                 }
                 
                 # --- 3. เรียกกองทัพ AI (Myla, Ariel และหน้าม้า) ---
-                with st.spinner("📦 กำลังเรียกหน้าม้า AI มารุมคอมเมนต์..."):
-                    ai_engagements = ai.generate_post_engagement(new_desc)
+                # NEW LOGIC: ดึงรูปภาพแรกไปให้ AI ดูด้วย!
+                main_img_url = None
+                if final_img_links:
+                    main_img_url = final_img_links[0]
+                
+                with st.spinner("📦 กำลังเรียกหน้าม้า AI (และให้ AI ส่องรูปภาพ)..."):
+                    # ส่งทั้ง Text และ รูป ไปให้ AI
+                    ai_engagements = ai.generate_post_engagement(new_desc, main_img_url)
                 
                 # --- 4. วนลูปใส่ข้อมูลที่ AI ตอบกลับมา ---
                 for engagement in ai_engagements:
