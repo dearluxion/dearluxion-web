@@ -13,20 +13,14 @@ api_keys = []        # รายการ Key ทั้งหมด
 current_key_index = 0 # ตัวชี้ว่าตอนนี้ใช้ Key ไหนอยู่
 model = None
 is_ready = False
+webhook_url = None   # ลิงก์ Webhook สำหรับแจ้งเตือน
 
-# [UPDATE] ตัวแปรสำหรับ Bot API
-bot_token = None
-target_user_id = None 
-
-# [UPDATE] รับ bot_token และ boss_id แทน webhook
-def init_ai(keys_list, discord_bot_token, boss_id):
+def init_ai(keys_list, discord_webhook_url):
     """
-    เริ่มระบบ AI รองรับ Multi-Key และแจ้งเตือนผ่าน DM
-    keys_list: list ของ API Key
-    discord_bot_token: Token ของบอท (จาก Developer Portal)
-    boss_id: Discord ID ของ Admin ที่จะให้ส่ง DM ไปหา
+    เริ่มระบบ AI รองรับ Multi-Key
+    keys_list: list ของ API Key (เช่น [key1, key2, key3, ...])
     """
-    global api_keys, current_key_index, model, is_ready, bot_token, target_user_id
+    global api_keys, current_key_index, model, is_ready, webhook_url
     
     try:
         # กรองเอาเฉพาะ Key ที่ไม่ว่าง
@@ -36,11 +30,8 @@ def init_ai(keys_list, discord_bot_token, boss_id):
             print("❌ No API Keys provided")
             return False
 
-        # เก็บค่า Token และ ID บอส
-        bot_token = discord_bot_token
-        target_user_id = boss_id
-
-        current_key_index = 0 
+        webhook_url = discord_webhook_url
+        current_key_index = 0 # เริ่มที่ Key แรกเสมอ
         
         # Setup Model ด้วย Key แรก
         _setup_model()
@@ -60,13 +51,12 @@ def _setup_model():
     global model, current_key_index
     current_key = api_keys[current_key_index]
     genai.configure(api_key=current_key)
-    # ใช้ Model ที่รองรับรูปภาพ (Vision)
+    # ใช้ Model ที่รองรับรูปภาพ (Vision) แนะนำ gemini-3.0-flash หรือ gemini-2.5-flash
     model = genai.GenerativeModel('gemini-2.5-flash') 
     print(f"🤖 AI switched to Key Index: {current_key_index+1}")
 
-# [UPDATE] ฟังก์ชันแจ้งเตือนแบบ DM (Bot API)
 def _rotate_key_and_notify(error_msg):
-    """ฟังก์ชันภายใน: สลับ Key อัตโนมัติ + แจ้ง Discord DM"""
+    """ฟังก์ชันภายใน: สลับ Key อัตโนมัติ + แจ้ง Discord"""
     global current_key_index, is_ready
     
     dead_key_index = current_key_index
@@ -77,46 +67,33 @@ def _rotate_key_and_notify(error_msg):
     current_key_index = next_index
     _setup_model() # Re-configure ทันที
 
-    # --- ส่ง DM หาบอสผ่าน Bot API ---
-    if bot_token and target_user_id:
+    # --- แจ้งเตือนเข้า Discord ---
+    if webhook_url and "ใส่_LINK" not in webhook_url:
         try:
-            print("🚨 Sending DM Alert to Boss...")
-            headers = {
-                "Authorization": f"Bot {bot_token}",
-                "Content-Type": "application/json"
+            payload = {
+                "username": "Myla System Alert 🚨",
+                "avatar_url": "https://cdn-icons-png.flaticon.com/512/564/564619.png",
+                "embeds": [{
+                    "title": "⚠️ API Key Exhausted (Rate Limit)",
+                    "description": f"**Key ที่ตาย:** #{dead_key_index + 1}\n**สาเหตุ:** `{str(error_msg)}`\n**การแก้ไข:** 🔄 ระบบสลับไปใช้ **Key #{current_key_index + 1}** ให้แล้วค่ะ!",
+                    "color": 16711680, # สีแดง
+                    "timestamp": datetime.datetime.now().isoformat()
+                }]
             }
-            
-            # 1. เปิดห้องแชทส่วนตัว (DM Channel)
-            dm_payload = {"recipient_id": target_user_id}
-            dm_req = requests.post("https://discord.com/api/v10/users/@me/channels", json=dm_payload, headers=headers)
-            
-            if dm_req.status_code == 200:
-                channel_id = dm_req.json()["id"]
-                
-                # 2. ส่งข้อความแจ้งเตือน
-                embed_payload = {
-                    "embeds": [{
-                        "title": "⚠️ AI System Alert: Key Dead!",
-                        "description": f"**Key ที่ตาย:** #{dead_key_index + 1}\n**สาเหตุ:** `{str(error_msg)}`\n**การแก้ไข:** 🔄 ระบบสลับไปใช้ **Key #{current_key_index + 1}** ให้แล้วค่ะ!",
-                        "color": 16711680, # สีแดง
-                        "timestamp": datetime.datetime.now().isoformat()
-                    }]
-                }
-                requests.post(f"https://discord.com/api/v10/channels/{channel_id}/messages", json=embed_payload, headers=headers)
-            else:
-                print(f"Failed to open DM: {dm_req.text}")
-                
+            requests.post(webhook_url, json=payload)
         except Exception as e:
-            print(f"Failed to send Bot DM alert: {e}")
+            print(f"Failed to send alert: {e}")
 
 def _safe_generate_content(inputs):
     """
     ฟังก์ชันวิเศษ: พยายาม Generate (รองรับทั้ง Text และ Image List)
     ถ้า Error จะสลับ Key แล้วลองใหม่
+    inputs: List ของ [prompt, image_data] หรือ [prompt]
     """
     global is_ready
     if not is_ready: raise Exception("AI System not ready")
 
+    # ลองวนลูปตามจำนวน Key ที่มี (ให้โอกาสทุก Key 1 ครั้ง)
     max_retries = len(api_keys)
     
     for attempt in range(max_retries):
@@ -125,12 +102,14 @@ def _safe_generate_content(inputs):
             return response
         except Exception as e:
             error_str = str(e)
-            # เช็คว่าเป็น Error เกี่ยวกับ Quota หรือไม่
+            # เช็คว่าเป็น Error เกี่ยวกับ Quota หรือไม่ (429, 503, ResourceExhausted)
             if "429" in error_str or "quota" in error_str.lower() or "exhausted" in error_str.lower():
                 print(f"⚠️ Key #{current_key_index+1} Failed. Switching...")
                 _rotate_key_and_notify(error_str)
-                time.sleep(1) 
+                time.sleep(1) # พักหายใจนิดนึงก่อนยิงใหม่
+                # วนลูปต่อไปเพื่อลอง Key ใหม่
             else:
+                # ถ้าเป็น Error อื่น (เช่น Prompt ผิด) ให้โยน Error ออกไปเลย ไม่ต้องสลับ Key
                 raise e
     
     raise Exception("💀 All API Keys are dead/exhausted.")
@@ -145,13 +124,15 @@ def clean_json_text(text):
 #  ฟังก์ชันเรียกใช้งาน (Multimodal: Text + Image)
 # ==========================================
 
-# 1. Crowd Simulation
+# 1. Crowd Simulation (อัปเกรด: รับรูปภาพ + ชื่อ Discord สมจริง)
 def generate_post_engagement(post_content, image_url=None):
     if not is_ready:
         return [{"user": "🧚‍♀️ Myla (Offline)", "text": "ระบบพักผ่อน... แต่รักบอสนะ!", "reaction": "😻"}]
     
+    # สุ่มจำนวน 5 - 20 คน
     num_bots = random.randint(5, 20)
     
+    # เตรียม Prompt หลัก
     prompt_text = f"""
     Context: จำลองสังคมออนไลน์ในกลุ่ม Discord Community ของไทย
     Task: สร้างรายการ Interaction ของสมาชิกจำนวน {num_bots} คน ที่มาเห็นโพสต์นี้
@@ -185,17 +166,22 @@ def generate_post_engagement(post_content, image_url=None):
     ]
     """
     
+    # เตรียม Input List
     inputs = [prompt_text]
 
+    # ถ้ามีรูปภาพ ให้โหลดและยัดเข้าไปใน Input
     if image_url:
         try:
             print(f"🖼️ Downloading image for AI: {image_url}")
+            # โหลดรูปจากเว็บ (Timeout 10 วิ)
             img_response = requests.get(image_url, timeout=10)
+            # แปลงเป็น PIL Image
             img_data = Image.open(io.BytesIO(img_response.content))
-            inputs.append(img_data)
+            inputs.append(img_data) # เพิ่มรูปเข้าไปให้ AI ดู
             print("✅ Image loaded successfully!")
         except Exception as e:
             print(f"⚠️ Failed to load image: {e}")
+            # ถ้ารูปพัง ก็ส่งไปแต่ Text (ไม่ Error)
 
     try:
         response = _safe_generate_content(inputs) 
@@ -203,6 +189,7 @@ def generate_post_engagement(post_content, image_url=None):
         return json.loads(cleaned_text)
     except Exception as e:
         print(f"AI Engagement Error: {e}")
+        # ถ้า Error ให้ส่ง Myla มาปลอบใจ
         return [{"user": "🧚‍♀️ Myla (System)", "text": "ภาพสวยจน AI ตะลึง... ประมวลผลไม่ทันเลยค่ะ! (ลองกดใหม่นะ)", "reaction": "😻"}]
 
 # 2. Mood Mocktail
@@ -214,7 +201,7 @@ def get_cocktail_recipe(user_mood):
         return res.text
     except Exception as e: return f"ชงไม่ได้ครับ แก้วแตก! ({e})"
 
-# 3. Ariel Chat
+# 3. Ariel Chat (ปรับปรุง Persona)
 def get_ariel_response(user_msg):
     if not is_ready: return "API ยังไม่พร้อม..."
     ariel_persona = """
@@ -233,6 +220,7 @@ def get_ariel_response(user_msg):
 def get_battle_result(topic):
     if not is_ready: return "AI ไม่พร้อม", "AI ไม่พร้อม"
     try:
+        # แยก Call เพื่อความชัวร์
         res_myla = _safe_generate_content([f"คุณคือ Myla AI สาวน้อยร่าเริง เรียกคู่สนทนาว่า 'บอส' หรือ 'ท่านเดียร์' ตอบเรื่อง '{topic}' แบบให้กำลังใจ น่ารัก"]).text
         res_ariel = _safe_generate_content([f"คุณคือ Ariel AI (เอเรียล) หญิงสาวเย็นชา เรียกคู่สนทนาว่า 'เดียร์' ตอบเรื่อง '{topic}' แบบขวานผ่าซาก ประชดนิดๆ"]).text
         return res_myla, res_ariel
