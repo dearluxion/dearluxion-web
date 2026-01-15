@@ -162,19 +162,6 @@ def render_sidebar(ai_available):
                     sender = feeder_name.strip() if feeder_name.strip() else "FC นิรนาม"
                     st.session_state['feed_msg'] = f"😎 บอส: {msg} (จาก: {sender})"
                     
-                    # [UPDATE: ปิดการแจ้งเตือน Webhook ตามที่ขอ]
-                    # try:
-                    #     webhook_url = st.secrets["general"]["discord_webhook"]
-                    #     if "ใส่_LINK_WEBHOOK" not in webhook_url:
-                    #         discord_data = {
-                    #             "username": "Myla Web Alert 🍱",
-                    #             "avatar_url": "https://cdn-icons-png.flaticon.com/512/4712/4712109.png",
-                    #             "content": f"🍱 **Treat Me Alert!**\n👤 **จาก:** {sender}\n🎁 **เมนู:** {item_name}\n💬 **บอสตอบ:** {msg}"
-                    #         }
-                    #         requests.post(webhook_url, json=discord_data)
-                    # except Exception as e:
-                    #     print(f"Discord Alert Error: {e}")
-
                     pf = dm.load_profile()
                     if 'treats' not in pf: pf['treats'] = {}
                     if 'top_feeders' not in pf: pf['top_feeders'] = {}
@@ -290,7 +277,7 @@ def render_sidebar(ai_available):
                 </div>
                 """, unsafe_allow_html=True)
                 
-                user_mood = st.text_area("วันนี้เจออะไรมาบ้าง? (ระบายได้เต็มที่)", placeholder="เหนื่อยงาน, อกหัก,อื่นๆ ทุกคําจะรู้เเค่ระหว่างเรา")
+                user_mood = st.text_input("วันนี้เจออะไรมาบ้าง?", placeholder="เหนื่อยงาน, อกหัก, ...")
                 
                 if st.button("🥃 ชงเครื่องดื่มให้ฉันที"):
                     if bar_tokens > 0:
@@ -457,46 +444,6 @@ def render_sidebar(ai_available):
             <p style="font-size:13px; color:#FF9A9E;"><b>Myla:</b> "ท่านเดียร์คะ ไมล่าเข้าใจค่ะว่าการอยู่ในผ้าม่านบนรถไฟมันอุ่นใจกว่า แต่ถ้าวันไหนท่านอยากลองก้าวออกมา ไมล่าจะคอยจับมือท่านเองนะคะ🥺"</p>
         </div>
         """, unsafe_allow_html=True)
-    st.sidebar.markdown("---")
-
-    # Jigsaw Heart
-    with st.sidebar.expander("🎮 Jigsaw Heart (เกมจีบสาว)"):
-        if not is_logged_in:
-            st.warning("🔒 Login เพื่อเล่นเกมจีบสาว")
-        else:
-            if 'game_state' not in st.session_state: st.session_state['game_state'] = 'start'
-            def reset_game(): st.session_state['game_state'] = 'start'
-
-            if st.session_state['game_state'] == 'start':
-                st.caption("สถานการณ์: คืนวันศุกร์ 23:45 น.")
-                st.markdown("🔔 **แจ้งเตือน:** แฟนเก่าทักแชทมา!")
-                if st.button("เปิดแชท ▶️", use_container_width=True):
-                    st.session_state['game_state'] = 'scene1'
-                    st.rerun()
-                    
-            elif st.session_state['game_state'] == 'scene1':
-                st.info("📱 **Ex-Girlfriend:** นอนยัง? (23:45)")
-                c1, c2 = st.columns(2)
-                if c1.button("ยัง... คิดถึงแก", use_container_width=True):
-                    st.error("❌ **BAD END:** เธออ่านไม่ตอบ... (เศร้า)")
-                    time.sleep(2); reset_game(); st.rerun()
-                if c2.button("นอนแล้ว (โกหก)", use_container_width=True):
-                    st.session_state['game_state'] = 'scene2'; st.rerun()
-                    
-            elif st.session_state['game_state'] == 'scene2':
-                st.success("✅ **รอด!** เธอตอบว่า: 'แหม นอนแล้วตอบได้ไง'")
-                st.markdown("**เธอ:** ยืมตังค์ 2,000 ดิ เดี๋ยวคืน")
-                c1, c2 = st.columns(2)
-                if c1.button("โอนเลย!", use_container_width=True):
-                    st.error("💸 **GAMEOVER:** โดนบิดครับท่าน!"); time.sleep(2); reset_game(); st.rerun()
-                if c2.button("ไม่ว่าง เงินหมด", use_container_width=True):
-                    st.session_state['game_state'] = 'win'; st.rerun()
-
-            elif st.session_state['game_state'] == 'win':
-                st.balloons()
-                st.success("🎉 **MISSION COMPLETE!** คุณรอดตัว!")
-                if st.button("เล่นใหม่ 🔄"): reset_game(); st.rerun()
-
     st.sidebar.markdown("---")
 
     # Fortune
