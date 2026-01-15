@@ -186,6 +186,10 @@ if st.session_state['is_admin']:
             post_color = st.color_picker("สีธีม", "#A370F7")
             price = st.number_input("💰 ราคา (ใส่ 0 = ไม่ขาย)", min_value=0, value=0)
 
+            # [NEW] Checkbox ควบคุมการส่ง Webhook
+            st.markdown("---")
+            send_webhook = st.checkbox("📢 ส่งแจ้งเตือนเข้า Discord", value=True, help="ติ๊กออกถ้าจะโพสต์เงียบๆ เพื่อทดสอบเว็บ")
+
         if st.button("🚀 โพสต์เลย", use_container_width=True):
             # --- 1. แปลงลิงก์รูปและวิดีโอ ---
             link_errors = []
@@ -263,10 +267,14 @@ if st.session_state['is_admin']:
                 current.append(new_post)
                 dm.save_data(current)
                 
-                try:
-                    send_post_to_discord(new_post)
-                    st.toast("ส่งเข้า Discord เรียบร้อย!", icon="📢")
-                except: pass
+                # [NEW] Logic การส่ง Webhook ตาม Checkbox
+                if send_webhook:
+                    try:
+                        send_post_to_discord(new_post)
+                        st.toast("ส่งเข้า Discord เรียบร้อย!", icon="📢")
+                    except: pass
+                else:
+                    st.toast("บันทึกโพสต์แล้ว (ไม่ได้ส่งเข้า Discord)", icon="🤫")
 
                 # สรุปผล
                 st.success(f"เรียบร้อย! มีคนมาเม้นตั้ง {len(ai_engagements)} คนแน่ะ (Myla & Ariel มาครบ!)")
