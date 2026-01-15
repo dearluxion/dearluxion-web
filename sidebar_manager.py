@@ -5,17 +5,17 @@ import datetime
 import requests
 import re
 import data_manager as dm
-import ai_manager as ai  # <--- import ไฟล์ใหม่
+import ai_manager as ai  
 from utils import get_discord_login_url, send_secret_to_discord
 
-def render_sidebar(ai_available): # <--- ไม่ต้องรับ model แล้ว
+def render_sidebar(ai_available): 
     # --- เช็คสถานะ Login เพื่อใช้ควบคุมการเข้าถึงมินิเกม ---
     is_logged_in = st.session_state.get('discord_user') or st.session_state.get('is_admin')
 
     # --- 3. Sidebar (เมนู & Q&A) ---
     st.sidebar.title("🍸 เมนูหลัก")
 
-    # Q&A ไมล่า (อันนี้ข้อมูลทั่วไป ปล่อยให้ดูได้)
+    # Q&A ไมล่า 
     with st.sidebar.expander("🧚‍♀️ ถาม-ตอบ กับไมล่า (Q&A)", expanded=True):
         st.markdown("### 💬 อยากรู้อะไรถามไมล่าได้เลย!")
         q_options = [
@@ -162,17 +162,18 @@ def render_sidebar(ai_available): # <--- ไม่ต้องรับ model �
                     sender = feeder_name.strip() if feeder_name.strip() else "FC นิรนาม"
                     st.session_state['feed_msg'] = f"😎 บอส: {msg} (จาก: {sender})"
                     
-                    try:
-                        webhook_url = st.secrets["general"]["discord_webhook"]
-                        if "ใส่_LINK_WEBHOOK" not in webhook_url:
-                            discord_data = {
-                                "username": "Myla Web Alert 🍱",
-                                "avatar_url": "https://cdn-icons-png.flaticon.com/512/4712/4712109.png",
-                                "content": f"🍱 **Treat Me Alert!**\n👤 **จาก:** {sender}\n🎁 **เมนู:** {item_name}\n💬 **บอสตอบ:** {msg}"
-                            }
-                            requests.post(webhook_url, json=discord_data)
-                    except Exception as e:
-                        print(f"Discord Alert Error: {e}")
+                    # [UPDATE: ปิดการแจ้งเตือน Webhook ตามที่ขอ]
+                    # try:
+                    #     webhook_url = st.secrets["general"]["discord_webhook"]
+                    #     if "ใส่_LINK_WEBHOOK" not in webhook_url:
+                    #         discord_data = {
+                    #             "username": "Myla Web Alert 🍱",
+                    #             "avatar_url": "https://cdn-icons-png.flaticon.com/512/4712/4712109.png",
+                    #             "content": f"🍱 **Treat Me Alert!**\n👤 **จาก:** {sender}\n🎁 **เมนู:** {item_name}\n💬 **บอสตอบ:** {msg}"
+                    #         }
+                    #         requests.post(webhook_url, json=discord_data)
+                    # except Exception as e:
+                    #     print(f"Discord Alert Error: {e}")
 
                     pf = dm.load_profile()
                     if 'treats' not in pf: pf['treats'] = {}
@@ -198,7 +199,7 @@ def render_sidebar(ai_available): # <--- ไม่ต้องรับ model �
                 if st.button(f"🍔 {get_count('เบอร์เกอร์ 🍔')}"): feed_boss("เบอร์เกอร์ 🍔", "🍔")
                 if st.button(f"🍕 {get_count('พิซซ่า 🍕')}"): feed_boss("พิซซ่า 🍕", "🍕")
 
-    # Hall of Fame (โชว์ทุกคน ยิ่งโชว์ยิ่งอยาก Login มาแซง)
+    # Hall of Fame
     if 'top_feeders' in pf_stats and pf_stats['top_feeders']:
         with st.sidebar.expander("🏆 ทำเนียบสายเปย์ (Hall of Fame)"):
             sorted_feeders = sorted(pf_stats['top_feeders'].items(), key=lambda x: x[1], reverse=True)[:5]
@@ -208,7 +209,7 @@ def render_sidebar(ai_available): # <--- ไม่ต้องรับ model �
 
     st.sidebar.markdown("---")
 
-    # Love Stock Market (โชว์กราฟ แต่ล็อคปุ่ม)
+    # Love Stock Market
     with st.sidebar.expander("📈 Love Stock Market (หุ้นหัวใจ)", expanded=True):
         pf = dm.load_profile()
         if 'stock' not in pf: pf['stock'] = {'price': 100.0, 'history': [100.0] * 10}
@@ -266,7 +267,7 @@ def render_sidebar(ai_available): # <--- ไม่ต้องรับ model �
     # Config Check
     pf_config = dm.load_profile().get('settings', {})
 
-    # Mood Mocktail (เรียก AI จาก ai_manager)
+    # Mood Mocktail
     if pf_config.get('enable_bar', True):
         with st.sidebar.expander("🍸 Mood Mocktail (บาร์เทนเดอร์ AI)", expanded=True):
             if not is_logged_in:
@@ -311,7 +312,7 @@ def render_sidebar(ai_available): # <--- ไม่ต้องรับ model �
 
         st.sidebar.markdown("---")
 
-    # Ariel Persona (เรียก AI จาก ai_manager)
+    # Ariel Persona
     if pf_config.get('enable_ariel', True):
         with st.sidebar.expander("🍸 มุมมืดของเอเรียล (Talk with Ariel)"):
             st.caption("อย่าคาดหวังคำตอบหวานๆ... รำคาญ")
@@ -351,7 +352,7 @@ def render_sidebar(ai_available): # <--- ไม่ต้องรับ model �
 
         st.sidebar.markdown("---") 
 
-    # Myla vs Ariel (เรียก AI จาก ai_manager)
+    # Myla vs Ariel
     if pf_config.get('enable_battle', True): 
         with st.sidebar.expander("🥊 Myla vs Ariel (สังเวียน AI)"):
             st.caption("เมื่อ 'โลกสวย' ปะทะ 'โลกความจริง'")
@@ -382,7 +383,7 @@ def render_sidebar(ai_available): # <--- ไม่ต้องรับ model �
         
         st.sidebar.markdown("---") 
 
-    # Secret Archive (เข้าได้ถ้ามีรหัส - ไม่ต้อง Login)
+    # Secret Archive
     ERI_PASS = st.secrets.get("passwords", {}).get("eri_birthday", "NOT_SET")
     DEAR_PASS = st.secrets.get("passwords", {}).get("dear_birthday", "NOT_SET")
 
@@ -458,7 +459,7 @@ def render_sidebar(ai_available): # <--- ไม่ต้องรับ model �
         """, unsafe_allow_html=True)
     st.sidebar.markdown("---")
 
-    # Jigsaw Heart (ล็อค)
+    # Jigsaw Heart
     with st.sidebar.expander("🎮 Jigsaw Heart (เกมจีบสาว)"):
         if not is_logged_in:
             st.warning("🔒 Login เพื่อเล่นเกมจีบสาว")
@@ -498,7 +499,7 @@ def render_sidebar(ai_available): # <--- ไม่ต้องรับ model �
 
     st.sidebar.markdown("---")
 
-    # Fortune (ล็อค)
+    # Fortune
     with st.sidebar.expander("🔮 เซียมซีไมล่า (จิ้มเสี่ยงทาย)"):
         if not is_logged_in:
             st.warning("🔒 Login เพื่อเสี่ยงเซียมซี")
@@ -517,6 +518,7 @@ def render_sidebar(ai_available): # <--- ไม่ต้องรับ model �
     st.sidebar.markdown("---")
 
     # Mailbox (Secret Box with TRAP & AVATAR)
+    # [จุดสำคัญ: โค้ดส่งจดหมายลับยังอยู่ครบครับ!]
     with st.sidebar.expander("💌 ตู้จดหมายลับ (Secret Box)"):
         st.caption("ฝากข้อความถึง **Dearluxion** แบบไม่ระบุตัวตน (มีแค่บอสที่เห็น)")
         with st.form("secret_msg_form"):
@@ -546,6 +548,7 @@ def render_sidebar(ai_available): # <--- ไม่ต้องรับ model �
                     msgs.append({"date": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"), "text": secret_msg})
                     dm.save_mailbox(msgs)
                     
+                    # [ตรงนี้ครับ ที่เรียกฟังก์ชันส่งจดหมายจาก utils.py]
                     send_secret_to_discord(secret_msg, sender_name, sender_avatar)
                     
                     st.session_state['last_mailbox_time'] = now
@@ -578,7 +581,6 @@ def render_sidebar(ai_available): # <--- ไม่ต้องรับ model �
     
     # Login System
     profile_data = dm.load_profile()
-   # --- Login System ---
     st.sidebar.markdown("---")
     
     if st.session_state['is_admin']:
