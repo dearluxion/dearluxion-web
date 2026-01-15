@@ -6,7 +6,7 @@ import datetime
 import json
 
 # --- ฟังก์ชันแปลงลิงก์ Google Drive (รูป) ---
-# [UPDATE] แก้ไขให้รองรับ GIF ขยับได้ และรูปชัดเป๊ะ
+# [UPDATE] แก้ไขล่าสุด: ใช้สูตร Thumbnail เพื่อแก้ปัญหาภาพไม่ขึ้น/GIF ไม่ขยับ
 def convert_drive_link(link):
     if "drive.google.com" in link:
         if "/folders/" in link:
@@ -15,8 +15,9 @@ def convert_drive_link(link):
         match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
         if match:
             file_id = match.group(1)
-            # สูตรใหม่: ใช้ uc?export=view เพื่อบังคับไฟล์ต้นฉบับ (GIF จะขยับได้)
-            return f'https://drive.google.com/uc?export=view&id={file_id}'
+            # สูตรใหม่: ใช้ thumbnail endpoint + sz=s4000 
+            # ผลลัพธ์: ทะลุหน้า Virus Scan, ได้รูปชัดสุด, GIF ขยับได้
+            return f'https://drive.google.com/thumbnail?id={file_id}&sz=s4000'
             
     return link 
 
