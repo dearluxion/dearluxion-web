@@ -3,3 +3,4 @@ google-generativeai
 gspread
 google-auth
 oauth2client
+youtube-transcript-api

@@ -225,9 +225,16 @@ if st.session_state['is_admin']:
                 if final_img_links:
                     main_img_url = final_img_links[0]
                 
-                with st.spinner("📦 กำลังเรียกหน้าม้า AI (และให้ AI ส่องรูปภาพ)..."):
-                    # ส่งทั้ง Text และ รูป ไปให้ AI
-                    ai_engagements = ai.generate_post_engagement(new_desc, main_img_url)
+                # [UPDATE] หาลิงก์ YouTube อันแรกจากโพสต์ (ถ้ามี)
+                main_yt_url = None
+                for v in vid_links: # เช็คจากลิงก์ดิบที่ user ใส่เข้ามา
+                    if "youtu" in v:
+                        main_yt_url = v
+                        break
+
+                with st.spinner("📦 กำลังเรียกหน้าม้า AI (กำลังดูคลิปและส่องรูป)..."):
+                    # ส่งทั้ง Text, รูป และ YouTube URL ไปให้ AI
+                    ai_engagements = ai.generate_post_engagement(new_desc, main_img_url, main_yt_url)
                 
                 # --- 4. วนลูปใส่ข้อมูลที่ AI ตอบกลับมา ---
                 for engagement in ai_engagements:
