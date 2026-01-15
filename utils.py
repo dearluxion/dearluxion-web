@@ -6,15 +6,18 @@ import datetime
 import json
 
 # --- ฟังก์ชันแปลงลิงก์ Google Drive (รูป) ---
+# [UPDATE] แก้ไขให้รองรับ GIF ขยับได้ และรูปชัดเป๊ะ
 def convert_drive_link(link):
     if "drive.google.com" in link:
         if "/folders/" in link:
             return "ERROR: นี่คือลิงก์โฟลเดอร์ครับ! ใช้ได้แค่ลิงก์ไฟล์ (คลิกขวาที่รูป > Share > Copy Link)"
+        
         match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
         if match:
             file_id = match.group(1)
-            # สูตรเจาะระบบดึงรูป (lh3)
-            return f'https://lh3.googleusercontent.com/d/{file_id}'
+            # สูตรใหม่: ใช้ uc?export=view เพื่อบังคับไฟล์ต้นฉบับ (GIF จะขยับได้)
+            return f'https://drive.google.com/uc?export=view&id={file_id}'
+            
     return link 
 
 # --- ฟังก์ชันแปลงลิงก์ Google Drive (วิดีโอ) ---
