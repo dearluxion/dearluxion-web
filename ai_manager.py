@@ -63,7 +63,7 @@ def _setup_model():
     current_key = api_keys[current_key_index]
     genai.configure(api_key=current_key)
     # ใช้ Model ที่รองรับรูปภาพ (Vision)
-    model = genai.GenerativeModel('gemini-2.0-flash') # แนะนำรุ่น Flash เพราะไวและรองรับ Vision ดีมาก
+    model = genai.GenerativeModel('gemini-2.5-flash') # แนะนำรุ่น Flash เพราะไวและรองรับ Vision ดีมาก
     print(f"🤖 AI switched to Key Index: {current_key_index+1}")
 
 # [UPDATE] ฟังก์ชันแจ้งเตือนแบบ DM (Bot API)
