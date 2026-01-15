@@ -11,10 +11,10 @@ from styles import get_css
 from utils import convert_drive_link, convert_drive_video_link, make_clickable, send_post_to_discord, exchange_code_for_token, get_discord_user
 import data_manager as dm
 import sidebar_manager as sm
-import ai_manager as ai  # <--- import ไฟล์ใหม่
+import ai_manager as ai 
 
 # --- 0. ตั้งค่า API KEY (Multi-Key Support) ---
-# ดึง Key ทั้งหมดจาก Secrets (ถ้าไม่มี ให้ใส่สตริงว่างไว้กัน Error)
+# ดึง Key ทั้งหมดจาก Secrets
 keys_bundle = [
     st.secrets.get("gemini", {}).get("api_key_1", ""),
     st.secrets.get("gemini", {}).get("api_key_2", ""),
@@ -22,10 +22,13 @@ keys_bundle = [
     st.secrets.get("gemini", {}).get("api_key_4", ""),
     st.secrets.get("gemini", {}).get("api_key_5", "")
 ]
-discord_webhook_url = st.secrets.get("general", {}).get("discord_webhook", "")
 
-# ส่งรายการ Key + Webhook ไปให้ AI Manager
-ai_available = ai.init_ai(keys_bundle, discord_webhook_url)
+# [UPDATE] ดึง Bot Token และ Boss ID เพื่อส่งให้ AI Manager
+bot_token = st.secrets.get("discord_bot", {}).get("token", "")
+BOSS_ID = "420947252849410055" # ID ของท่าน Dearluxion
+
+# ส่ง keys, token, boss_id ไปให้ AI Manager
+ai_available = ai.init_ai(keys_bundle, bot_token, BOSS_ID)
 
 # --- 1. ตั้งค่าหน้าเว็บ ---
 st.set_page_config(page_title="Small Group by Dearluxion", page_icon="🍸", layout="centered")
@@ -67,7 +70,6 @@ if "code" in st.query_params:
         st.session_state['discord_user'] = user_info
         
         # --- 🚀 ส่วนเช็ค ID บอส (Hardcode ตามคำขอ) ---
-        BOSS_ID = "420947252849410055"  # ID ของท่าน Dearluxion
         
         if str(user_info['id']) == BOSS_ID:
             st.session_state['is_admin'] = True
