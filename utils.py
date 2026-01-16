@@ -6,7 +6,7 @@ import datetime
 import json
 
 # --- ฟังก์ชันแปลงลิงก์ Google Drive (รูป) ---
-# [UPDATE] แก้ไขล่าสุด: ใช้สูตร Thumbnail เพื่อแก้ปัญหาภาพไม่ขึ้น/GIF ไม่ขยับ
+# [UPDATE] ใช้สำหรับแสดงผลบนเว็บ (ชัดสุด)
 def convert_drive_link(link):
     if "drive.google.com" in link:
         if "/folders/" in link:
@@ -16,7 +16,6 @@ def convert_drive_link(link):
         if match:
             file_id = match.group(1)
             # สูตรใหม่: ใช้ thumbnail endpoint + sz=s4000 
-            # ผลลัพธ์: ทะลุหน้า Virus Scan, ได้รูปชัดสุด, GIF ขยับได้
             return f'https://drive.google.com/thumbnail?id={file_id}&sz=s4000'
             
     return link 
@@ -29,7 +28,7 @@ def convert_drive_video_link(link):
         match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
         if match:
             file_id = match.group(1)
-            # แปลงเป็นลิงก์ Preview เพื่อใช้กับ Iframe
+            # แปลงเป็นลิงก์ Preview เพื่อใช้กับ Iframe บนหน้าเว็บ
             return f'https://drive.google.com/file/d/{file_id}/preview'
     return link
 
@@ -37,6 +36,16 @@ def convert_drive_video_link(link):
 def make_clickable(text):
     url_pattern = r'(https?://[^\s]+)'
     return re.sub(url_pattern, r'<a href="\1" target="_blank" style="color:#A370F7; text-decoration:underline; font-weight:bold;">\1</a>', text)
+
+# --- [NEW] Helper: แปลงลิงก์ Drive เป็นแบบที่ Discord ชอบ (เพื่อให้ GIF ขยับ) ---
+def get_discord_friendly_image(url):
+    # ถ้าเป็นลิงก์ thumbnail ที่เราแปลงมาแล้ว ให้ดึง ID ออกมาทำเป็น lh3 link
+    match = re.search(r'id=([a-zA-Z0-9_-]+)', url)
+    if match:
+        file_id = match.group(1)
+        # lh3 link รองรับ GIF บน Discord ได้ดีกว่า thumbnail?id=...
+        return f"https://lh3.googleusercontent.com/d/{file_id}"
+    return url
 
 # --- ฟังก์ชันส่งโพสต์เข้า Discord (Webhook ห้องรวม) ---
 def send_post_to_discord(post):
@@ -47,11 +56,35 @@ def send_post_to_discord(post):
         print("Webhook URL not found in secrets")
         return
     
-    # ดึงรูปภาพแรกมาโชว์ (ถ้ามี)
+    # 1. จัดการรูปภาพ (แปลงเป็นลิงก์ที่ Discord อ่านง่าย + GIF ขยับ)
     image_url = ""
     if post.get('images'):
         valid_imgs = [img for img in post['images'] if img.startswith("http")]
-        if valid_imgs: image_url = valid_imgs[0]
+        if valid_imgs: 
+            # แปลงลิงก์แรกให้เป็น lh3 เพื่อให้ GIF ขยับ
+            image_url = get_discord_friendly_image(valid_imgs[0])
+    
+    # 2. จัดการวิดีโอ (สำคัญ: Drive Video เล่นใน Embed ไม่ได้ ต้องแปะลิงก์ให้กด)
+    video_content = ""
+    if post.get('video'):
+        video_links = []
+        for v in post['video']:
+            # ถ้าเป็น YouTube
+            if "youtu" in v:
+                video_links.append(f"🎥 [คลิกเพื่อดู YouTube]({v})")
+            # ถ้าเป็น Drive
+            elif "drive.google.com" in v:
+                # แปลงจาก preview เป็น view เพื่อให้กดแล้วเด้งไปดูง่ายๆ
+                view_link = v.replace("/preview", "/view")
+                video_links.append(f"🎬 [คลิกเพื่อดูคลิปวิดีโอ (Drive)]({view_link})")
+            else:
+                 video_links.append(f"📹 [คลิกเพื่อดูวิดีโอ]({v})")
+        
+        if video_links:
+            video_content = "\n\n" + "\n".join(video_links)
+
+    # รวมเนื้อหาโพสต์ + ลิงก์วิดีโอ
+    final_description = post['content'] + video_content
     
     # สร้างข้อความ Embed สวยๆ
     embed_data = {
@@ -59,7 +92,7 @@ def send_post_to_discord(post):
         "avatar_url": "https://cdn-icons-png.flaticon.com/512/4712/4712109.png",
         "embeds": [{
             "title": f"✨ มีโพสต์ใหม่จากบอส! ({post['date']})",
-            "description": post['content'],
+            "description": final_description, # ใส่ลิงก์วิดีโอไปในนี้ด้วย
             "color": int(post.get('color', '#A370F7').replace("#", ""), 16),
             "footer": {"text": f"ID: {post['id']}"}
         }]
@@ -70,7 +103,15 @@ def send_post_to_discord(post):
         embed_data['embeds'][0]['image'] = {"url": image_url}
 
     try:
+        # ส่ง Webhook หลัก (Embed)
         requests.post(webhook_url, json=embed_data)
+        
+        # [EXTRA] กรณีเป็น YouTube ให้ส่งลิงก์เพียวๆ ไปอีกข้อความ เพื่อให้มันเด้งจอ Player ขึ้นมา
+        if post.get('video'):
+            for v in post['video']:
+                if "youtu" in v:
+                    requests.post(webhook_url, json={"content": f"📺 **YouTube Player:** {v}"})
+
     except Exception as e:
         print(f"Error sending to Discord: {e}")
 
