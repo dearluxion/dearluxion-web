@@ -51,7 +51,7 @@ def render_sidebar(ai_available):
                 ✨ <b>ฉลาดขั้นสุด:</b> ตอบโต้ได้อิสระ ไม่ใช่บอททื่อๆ<br>
                 🎵 <b>เปิดเพลงได้:</b> ไม่ต้องพิมพ์คำสั่งยุ่งยาก แค่บอก <i>"ไมล่าเปิดเพลง ฉันจะตามเธอไปของยังโอม หน่อย"</i> ก็จัดให้ทันที!<br>
                 🥺 <b>มาคุยกันเยอะๆ นะคะ:</b> ประจำการอยู่ที่ห้องเสียง <b>ˢᵐᵃˡˡʳᵒᵒᵐ ᵍʳᵒᵘᵖ®</b> ค่ะ</p>
-                👉 <a href="https://discord.gg/SpNNxrnaZp" target="_blank"><b>คลิกเข้า Discord ˢᵐᵃˡˡʳᵒᵒᵐ ᵍʳᵒᵘᵖ® เลย!</b></a>
+                👉 <a href="https://discord.gg/PpyRduqMWn" target="_blank"><b>คลิกเข้า Discord ˢᵐᵃˡˡʳᵒᵒᵐ ᵍʳᵒᵘᵖ® เลย!</b></a>
             </div>
             """, unsafe_allow_html=True)
         elif selected_q == "📞 ติดต่อบอส Dearluxion ได้ที่ไหน?":
@@ -377,45 +377,16 @@ def render_sidebar(ai_available):
     with st.expander("🔐 บันทึกลับของเด็กชายเดียร์ (Secret Archive)", expanded=False):
         st.caption("ต้องระบุ 'คีย์ลับของเดียร์ และ 'วันเกิดของคุณ' ให้ถูกต้องทั้งคู่เพื่อเข้าถึง")
         
-        # [UPDATED] Admin Note Input (Dynamic Fields)
+        # Admin Note Input
         if st.session_state['is_admin']:
             st.markdown("#### 📝 [Admin Only] เพิ่มบันทึกใหม่")
-            
-            # 1. ระบบเพิ่ม/ลดช่องเขียน
-            if 'num_note_fields' not in st.session_state: 
-                st.session_state['num_note_fields'] = 1
-
-            # 2. ปุ่มควบคุม
-            col_plus, col_minus = st.columns([1, 1])
-            with col_plus:
-                if st.button("➕ เพิ่มย่อหน้า", key="add_note_field"):
-                    st.session_state['num_note_fields'] += 1
-            with col_minus:
-                if st.button("➖ ลบย่อหน้า", key="del_note_field"):
-                    if st.session_state['num_note_fields'] > 1:
-                        st.session_state['num_note_fields'] -= 1
-
-            # 3. วนลูปสร้างช่องกรอกข้อมูล
-            note_parts = []
-            for i in range(st.session_state['num_note_fields']):
-                val = st.text_area(f"ย่อหน้า/ส่วนที่ {i+1}", key=f"note_input_{i}", height=150, placeholder="เขียนเรื่องราวที่นี่...")
-                if val: 
-                    note_parts.append(val)
-
-            # 4. ปุ่มบันทึก
+            admin_note_input = st.text_area("เขียนข้อความอัปเดต:", key="admin_note_area")
             if st.button("📌 บันทึกลงระบบ", use_container_width=True):
-                if note_parts:
-                    # รวมข้อความ
-                    full_note = "\n\n".join(note_parts)
-                    
-                    if dm.save_special_note_to_sheet(full_note):
-                        st.success(f"บันทึก {len(note_parts)} ส่วน เรียบร้อยแล้ว!")
-                        # รีเซ็ต
-                        st.session_state['num_note_fields'] = 1
+                if admin_note_input:
+                    if dm.save_special_note_to_sheet(admin_note_input):
+                        st.success("บันทึกสำเร็จ!")
                         time.sleep(1)
                         st.rerun()
-                else:
-                    st.warning("เขียนอะไรหน่อยสิครับบอส!")
             st.markdown("---")
 
         auth_col1, auth_col2 = st.columns(2)
@@ -494,6 +465,7 @@ def render_sidebar(ai_available):
     st.sidebar.markdown("---")
 
     # Mailbox (Secret Box with TRAP & AVATAR)
+    # [จุดสำคัญ: โค้ดส่งจดหมายลับยังอยู่ครบครับ!]
     with st.sidebar.expander("💌 ตู้จดหมายลับ (Secret Box)"):
         st.caption("ฝากข้อความถึง **Dearluxion** แบบไม่ระบุตัวตน (มีแค่บอสที่เห็น)")
         with st.form("secret_msg_form"):
