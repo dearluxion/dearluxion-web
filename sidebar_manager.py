@@ -533,7 +533,7 @@ def render_sidebar(ai_available):
     else:
         selected_zone = st.sidebar.radio("หมวดหมู่:", ["🏠 รวมทุกโซน"] + sorted(list(all_hashtags)))
         # เพิ่มปุ่มเข้าห้อง Crypto ตรงนี้
-        if st.sidebar.button("📈 วิเคราะตลาดcryptoเจาะลึก", type="primary"):
+        if st.sidebar.button("📈 วิเคราะตลาดcryptoเจาะลึก(Beta)", type="primary"):
             st.session_state['show_crypto'] = True
             st.rerun()
 
