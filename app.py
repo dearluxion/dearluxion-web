@@ -551,9 +551,9 @@ if st.session_state.get('show_crypto', False):
                                 "macd": f"{macd_v:.6f}",
                                 "macd_signal": f"{macd_signal_v:.6f}",
                                 "adx": f"{adx_v:.2f}",
-                                "atr": f"{atr_v:,.2f}",
-                                "support": f"{support_v:,.2f}",
-                                "resistance": f"{resistance_v:,.2f}"
+                                "atr": f"{atr_v:.2f}",
+                                "support": f"{support_v:.2f}",
+                                "resistance": f"{resistance_v:.2f}"
                             }
                             res_batch = ai.analyze_crypto_god_mode(c_symbol, last_p, indicators_b, "วิเคราะห์ตามกราฟเทคนิคอลล่าสุด", {"value":"50", "value_classification":"Neutral"})
                             st.markdown(res_batch)
