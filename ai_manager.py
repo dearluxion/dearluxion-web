@@ -276,86 +276,87 @@ def analyze_crypto_god_mode(coin_name, current_price, indicators, news_text, fea
     support = float(indicators.get('support', current_price * 0.95))
     resistance = float(indicators.get('resistance', current_price * 1.05))
     
-    # --- [FIX] ส่วนที่ต้องเพิ่มเพื่อแก้ NameError ---
+    # --- [FIX] ส่วนคำนวณเหตุผลเบื้องต้น ---
     if rsi > 70:
-        reason_based_on_rsi_resistance = "RSI Overbought (>70) เสี่ยงราคาร่วงแรง"
+        reason_based_on_rsi_resistance = "RSI Overbought (>70) เสี่ยงราคาร่วงแรง หรือเกิดการปรับฐาน"
     elif current_price >= resistance * 0.98:
-        reason_based_on_rsi_resistance = "ราคาชนแนวต้านสำคัญ (Resistance Test)"
+        reason_based_on_rsi_resistance = "ราคาชนแนวต้านสำคัญ (Resistance Test) ระวังไม่ผ่าน"
     else:
-        reason_based_on_rsi_resistance = "ความผันผวนของตลาด (Market Volatility)"
+        reason_based_on_rsi_resistance = "ความผันผวนของตลาด (Market Volatility) และแรงขายทำกำไรระยะสั้น"
     # ---------------------------------------------
     
+    # [THAI PROMPT UPDATE] เปลี่ยนคำสั่งเป็นภาษาไทยเพื่อให้ AI ตอบไทย
     prompt = f"""
-    Role: You are a "Senior Quantitative Analyst" (Quant) for a high-frequency trading fund.
-    Task: Analyze {coin_name} strictly based on the provided technical data. Calculate probabilities for the next 1-3 days.
+    Role: คุณคือ "นักวิเคราะห์เชิงปริมาณระดับสูง" (Senior Quant Analyst) ประจำกองทุน High-Frequency Trading
+    Task: วิเคราะห์เหรียญ {coin_name} โดยใช้ข้อมูล Technical Data ที่ให้เท่านั้น ให้คำนวณความน่าจะเป็นสำหรับ 1-3 วันข้างหน้า
+    Constraint: **ตอบเป็นภาษาไทยเท่านั้น** ใช้ศัพท์เทคนิคทับศัพท์ได้แต่ต้องอธิบายให้เข้าใจง่าย
     
     [LIVE MARKET DATA - THB ONLY]
     Current Price: {current_price:,.2f} THB
     RSI (14): {rsi:.2f} (Overbought > 70, Oversold < 30, Neutral 40-60)
     MACD: {macd:.6f} | Signal: {macd_signal:.6f}
-    ADX (Trend Strength): {adx:.2f} (Strong Trend if > 25, Weak/Ranging if < 20)
-    ATR (Daily Volatility): {atr:,.2f} THB (Daily swing range)
+    ADX (Trend Strength): {adx:.2f} (เทรนด์แข็งแกร่งถ้า > 25, ไซด์เวย์ถ้า < 20)
+    ATR (Daily Volatility): {atr:,.2f} THB (ระยะเหวี่ยงต่อวัน)
     Support Level (30-day low): {support:,.2f} THB
     Resistance Level (30-day high): {resistance:,.2f} THB
     Market Sentiment: {fear_greed['value']} ({fear_greed['value_classification']})
     
-    [NEWS CONTEXT]
+    [ข่าวประกอบการตัดสินใจ]
     {news_text}
     
-    [REQUIRED ANALYSIS PROTOCOL]
-    1. **Probability Assessment (Must sum to 100%):** Based on RSI + MACD + ADX, calculate probability:
-       - Bullish (Up to Resistance): X%
-       - Sideways/Range: Y%
-       - Bearish (Down to Support): Z%
+    [สิ่งที่ต้องวิเคราะห์]
+    1. **ประเมินความน่าจะเป็น (รวมกันต้องได้ 100%):** ดูจาก RSI, MACD, ADX:
+       - 📈 ขาขึ้น (ทะลุแนวต้าน): X%
+       - 🦀 ออกข้าง (Sideways): Y%
+       - 📉 ขาลง (หลุดแนวรับ): Z%
     
-    2. **"Doi" Risk Calculation:** What's the % chance of getting trapped at a local top if buying NOW?
-       - Use: How far from current price to Resistance? Is RSI already overbought?
+    2. **ความเสี่ยง "ติดดอย":** ถ้าซื้อตอนนี้ (Now) มีโอกาสติดดอยกี่ %?
+       - พิจารณา: ราคาใกล้แนวต้านไหม? RSI สูงเกินไปไหม?
     
-    3. **Option Comparison (Critical):**
-       - Option A: Buy IMMEDIATELY at {current_price:,.2f} THB
-       - Option B: Wait 1-3 days for better entry
-       Compare win rate %, "Doi" risk, and expected return for each.
+    3. **เปรียบเทียบกลยุทธ์ (สำคัญมาก):**
+       - ทางเลือก A: หวดเลยตอนนี้ (Buy Immediately) ที่ราคา {current_price:,.2f} บาท
+       - ทางเลือก B: รอช้อน (Wait) อีก 1-3 วัน
+       เปรียบเทียบ Win Rate, ความเสี่ยงดอย, และความคุ้มค่า
     
-    4. **Price Targets (3-day horizon):** Give specific THB targets with confidence %.
+    4. **เป้าหมายราคา (3 วัน):** ฟันธงราคาเป็นเงินบาท (THB)
     
-    [OUTPUT FORMAT - STRICT MARKDOWN]
-    ## 📊 QUANT ANALYSIS: {coin_name}
-    **Analysis Time:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} (THB)
+    [รูปแบบการตอบ - MARKDOWN ภาษาไทย]
+    ## 📊 QUANT ANALYSIS: {coin_name} (THB)
+    **เวลาวิเคราะห์:** {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}
     
-    ### 1️⃣ 🎲 Probability Assessment (Next 72 Hours)
-    * **📈 Bullish Case:** ...% (Price targets: ฿..., Reasoning: ...)
-    * **🦀 Sideways Range:** ...% (Price range: ฿... to ฿..., Reasoning: ...)
-    * **📉 Bearish Case:** ...% (Support level: ฿..., Reasoning: ...)
+    ### 1️⃣ 🎲 ประเมินสถานการณ์ (72 ชม.)
+    * **📈 โอกาสขึ้น (Bullish):** ...% (เป้าหมาย: ฿... | เหตุผล: ...)
+    * **🦀 โอกาสออกข้าง (Sideways):** ...% (กรอบราคา: ฿... ถึง ฿... | เหตุผล: ...)
+    * **📉 โอกาสร่วง (Bearish):** ...% (แนวรับถัดไป: ฿... | เหตุผล: ...)
     
-    ### 2️⃣ ⚠️ "Doi" (Trap) Risk Assessment
-    - **If buy NOW:** ...% risk of being trapped (too high/too risky)
-    - **Key concern:** {reason_based_on_rsi_resistance}
+    ### 2️⃣ ⚠️ ประเมินความเสี่ยง "ติดดอย" (Doi Risk)
+    - **ถ้าเข้าซื้อตอนนี้:** มีความเสี่ยงติดดอย ...% 
+    - **จุดที่น่ากังวล:** {reason_based_on_rsi_resistance}
     
-    ### 3️⃣ ⚖️ Strategy Comparison
+    ### 3️⃣ ⚖️ วัดใจกลยุทธ์ (Trade Setup)
     
-    | Factor | Option A: Buy NOW | Option B: Wait 1-3D |
+    | ปัจจัย | ทางเลือก A: หวดเลย (ไม้แรก) | ทางเลือก B: รอตั้งรับ (Safe Zone) |
     | :--- | :---: | :---: |
-    | **Win Probability** | ...% | ...% |
-    | **Trap Risk ("Doi")** | ...% | ...% |
-    | **Avg Entry Price** | ฿{current_price:,.2f} | ฿...  |
-    | **Expected Return (per THB)** | ...% | ...% |
-    | **Volatility (ATR)** | ±฿{atr:,.2f} | Higher/Same/Lower |
+    | **โอกาสชนะ (Win Rate)** | ...% | ...% |
+    | **ความเสี่ยงดอย** | ...% | ...% |
+    | **ราคาเข้าเฉลี่ย** | ฿{current_price:,.2f} | ฿... (แนะนำรอแถวนี้) |
+    | **ความคุ้มค่า (R:R)** | ... | ... |
     
-    **🏆 Verdict:** CHOOSE OPTION **[A or B]** because...
+    **🏆 คำแนะนำจาก AI:** เลือก **[ทางเลือก A หรือ B]** เพราะ...
     
-    ### 4️⃣ 🎯 3-Day Price Targets
-    * **Best Case (High Confidence):** ฿... (70% probability)
-    * **Mid Case (Medium Confidence):** ฿... (50% probability)
-    * **Worst Case (Support Breakdown):** ฿... (20% probability)
-    * **Daily Range (ATR):** Expect ±฿{atr:,.2f} per day
+    ### 4️⃣ 🎯 เป้าหมายราคา 3 วัน (Price Targets)
+    * **กรณีดีสุด (Best Case):** ฿... (โอกาสเกิด ...%)
+    * **กรณีทรงตัว (Base Case):** ฿... (โอกาสเกิด ...%)
+    * **กรณีแย่สุด (Worst Case):** ฿... (โอกาสเกิด ...%)
+    * **ระยะเหวี่ยงรายวัน (ATR):** ±฿{atr:,.2f} บาท
     
-    ### 5️⃣ 📈 Technical Summary
-    - **Trend:** ADX={adx:.1f} → {'STRONG' if adx > 25 else 'WEAK/RANGING'}
-    - **Momentum:** RSI={rsi:.1f} → {'OVERBOUGHT (⚠️)' if rsi > 70 else 'OVERSOLD (↑)' if rsi < 30 else 'NEUTRAL'}
-    - **Signal Cross:** MACD {'BULLISH (✓)' if macd > macd_signal else 'BEARISH (✗)'} (Macd > Signal)
+    ### 5️⃣ 📈 สรุปอินดิเคเตอร์
+    - **Trend Strength:** ADX={adx:.1f} → {'เทรนด์ชัดเจน' if adx > 25 else 'ไร้เทรนด์/ออกข้าง'}
+    - **Momentum:** RSI={rsi:.1f} → {'Overbought (ระวังแรงขาย)' if rsi > 70 else 'Oversold (รอเด้ง)' if rsi < 30 else 'Neutral (กลางๆ)'}
+    - **Signal:** MACD {'ตัดขึ้น (Bullish)' if macd > macd_signal else 'ตัดลง (Bearish)'}
     
     ---
-    *⚖️ Disclaimer: This is AI-generated technical analysis for educational purposes only, NOT financial advice.*
+    *⚖️ หมายเหตุ: บทวิเคราะห์นี้ใช้ AI ประมวลผลจากสถิติเพื่อการศึกษา ไม่ใช่คำแนะนำทางการเงิน (DYOR)*
     """
     
     try:
