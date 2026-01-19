@@ -462,27 +462,52 @@ if st.session_state.get('show_crypto', False):
                 
                 k4.metric("แนวโน้ม EMA", ema_trend)
 
-                # 3. AI Analysis Section
+                # 3. AI Analysis Section (MODIFIED - WITH CACHE CHECK)
                 st.markdown("---")
                 if st.session_state.get('trigger_analysis'):
-                    st.markdown("### 🧠 ข้อมูลจากนักวิเคราะห์ (AI)")
+                    st.markdown(f"### 🧠 ข้อมูลจากนักวิเคราะห์ (AI) - {coin_select}")
+                    
                     with st.chat_message("ai", avatar="👁️"):
-                        msg_loading = f"รอแป๊บนึงนะคะ! ไมล่ากำลังสแกนกราฟ {coin_select} ด้วย Gemini 2.5..."
-                        with st.spinner(msg_loading):
-                            indicators = {
-                                "rsi": f"{rsi_val:.2f}",
-                                "macd_signal": "Bullish" if macd_val > macd_signal else "Bearish"
-                            }
-                            if ai_available and crypto_available:
-                                # แจ้ง AI ว่าเป็น THB
-                                analysis_result = ai.analyze_crypto_god_mode(coin_select + " (THB)", latest_price, indicators, news, fg_index)
-                            else:
-                                analysis_result = "ไม่สามารถทำการวิเคราะห์ได้ เนื่องจาก API ยังไม่พร้อม"
+                        # 1. เช็ค Cache ก่อน
+                        cached_data = dm.get_crypto_cache(coin_select)
+                        
+                        if cached_data:
+                            # เจอข้อมูลของวันนี้ -> แสดงเลย ไม่ต้องโหลด
+                            st.success(f"⚡ โหลดข้อมูลวิเคราะห์ประจำวันสำเร็จ (อัปเดตเมื่อ: {cached_data['updated_at']} น.)")
+                            st.markdown(cached_data['analysis'])
+                            st.caption("ℹ️ ข้อมูลนี้ถูกวิเคราะห์ไว้แล้ววันนี้เพื่อประหยัดทรัพยากร (Cache Hit)")
+                            st.session_state['trigger_analysis'] = False # ปิด Trigger
                             
-                            st.markdown(analysis_result)
-                            st.session_state['trigger_analysis'] = False 
+                        else:
+                            # ไม่เจอข้อมูล (หรือเป็นวันใหม่) -> เรียก AI
+                            msg_loading = f"กำลังเชื่อมต่อจิตกับ Gemini 2.5 เพื่อวิเคราะห์ {coin_select} (THB)..."
+                            with st.spinner(msg_loading):
+                                # [UPDATED] ส่งข้อมูล Indicators ใหม่ๆทั้งหมด
+                                indicators = {
+                                    "rsi": f"{rsi_val:.2f}",
+                                    "macd": f"{macd_val:.6f}",
+                                    "macd_signal": f"{macd_signal:.6f}",
+                                    "adx": f"{df['ADX'].iloc[-1]:.2f}" if 'ADX' in df.columns else "20",
+                                    "atr": f"{df['ATR'].iloc[-1]:,.2f}" if 'ATR' in df.columns else "0",
+                                    "support": f"{df['Support_Level'].iloc[-1]:,.2f}" if 'Support_Level' in df.columns else f"{latest_price * 0.95:,.2f}",
+                                    "resistance": f"{df['Resistance_Level'].iloc[-1]:,.2f}" if 'Resistance_Level' in df.columns else f"{latest_price * 1.05:,.2f}"
+                                }
+                                
+                                if ai_available and crypto_available:
+                                    # เรียก AI ด้วยข้อมูล Quant ใหม่
+                                    analysis_result = ai.analyze_crypto_god_mode(coin_select, latest_price, indicators, news, fg_index)
+                                    
+                                    # บันทึกลง Cache ทันที
+                                    dm.update_crypto_cache(coin_select, analysis_result)
+                                    
+                                    st.markdown(analysis_result)
+                                    st.caption(f"✨ วิเคราะห์สดเสร็จสิ้น (บันทึกเวลา: {datetime.datetime.now().strftime('%H:%M')} น.)")
+                                else:
+                                    st.error("ไม่สามารถทำการวิเคราะห์ได้ เนื่องจาก API ยังไม่พร้อม")
+                                
+                                st.session_state['trigger_analysis'] = False 
                 else:
-                    st.info("กดปุ่ม 'วิเคราะห์เหรียญนี้' ด้านบนเพื่อดูคำทำนาย")
+                    st.info("กดปุ่ม 'เรียกดูข้อมูล (God Mode)' ด้านบนเพื่อดูคำทำนาย")
             else:
                 st.error("ไม่สามารถดึงข้อมูลกราฟได้ (ตรวจสอบคู่เหรียญ THB)")
 
@@ -513,9 +538,24 @@ if st.session_state.get('show_crypto', False):
                     with st.expander(f"💎 {c_symbol} : ฿{last_p:,.4f} | RSI: {rsi_v:.1f}", expanded=False):
                         # เรียก AI (ถ้ามี Token เหลือ)
                         if ai_available:
-                            indicators_b = {"rsi": f"{rsi_v:.2f}", "macd_signal": "N/A"}
-                            # ใช้ข่าว dummy เพื่อความเร็ว
-                            res_batch = ai.analyze_crypto_god_mode(c_symbol + " (THB)", last_p, indicators_b, "วิเคราะห์ตามกราฟเทคนิคอลล่าสุด", {"value":"50", "value_classification":"Neutral"})
+                            # [UPDATED] ส่งข้อมูล Quant ใหม่ๆ
+                            macd_v = df_batch['MACD'].iloc[-1] if 'MACD' in df_batch.columns else 0
+                            macd_signal_v = df_batch['MACD_SIGNAL'].iloc[-1] if 'MACD_SIGNAL' in df_batch.columns else 0
+                            adx_v = df_batch['ADX'].iloc[-1] if 'ADX' in df_batch.columns else 20
+                            atr_v = df_batch['ATR'].iloc[-1] if 'ATR' in df_batch.columns else 0
+                            support_v = df_batch['Support_Level'].iloc[-1] if 'Support_Level' in df_batch.columns else (last_p * 0.95)
+                            resistance_v = df_batch['Resistance_Level'].iloc[-1] if 'Resistance_Level' in df_batch.columns else (last_p * 1.05)
+                            
+                            indicators_b = {
+                                "rsi": f"{rsi_v:.2f}",
+                                "macd": f"{macd_v:.6f}",
+                                "macd_signal": f"{macd_signal_v:.6f}",
+                                "adx": f"{adx_v:.2f}",
+                                "atr": f"{atr_v:,.2f}",
+                                "support": f"{support_v:,.2f}",
+                                "resistance": f"{resistance_v:,.2f}"
+                            }
+                            res_batch = ai.analyze_crypto_god_mode(c_symbol, last_p, indicators_b, "วิเคราะห์ตามกราฟเทคนิคอลล่าสุด", {"value":"50", "value_classification":"Neutral"})
                             st.markdown(res_batch)
                         else:
                             st.error("AI ไม่พร้อมใช้งาน")

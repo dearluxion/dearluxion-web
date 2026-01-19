@@ -4,6 +4,7 @@ import pandas as pd
 import pandas_ta as ta
 import feedparser
 import requests
+import numpy as np  # เพิ่ม numpy สำหรับคำนวณเชิงสถิติ
 
 # [UPDATE] ใช้ Ticker หลักเป็น USD เพื่อความแม่นยำของกราฟ
 COIN_MAP = {
@@ -95,6 +96,29 @@ def get_crypto_data(symbol_key, period="2y", interval="1d"):
         df['EMA_200'] = ta.ema(df['Close'], length=200)
     except: 
         pass
+
+    # [NEW] ADX (Trend Strength) - บอกว่าเทรนด์แรงแค่ไหน
+    try:
+        adx = ta.adx(df['High'], df['Low'], df['Close'], length=14)
+        if adx is not None and not adx.empty:
+            df['ADX'] = adx.iloc[:, 0]  # ADX_14
+    except: 
+        df['ADX'] = 20
+
+    # [NEW] ATR (Volatility) - บอกความผันผวน (ไว้คำนวณ Stop Loss)
+    try:
+        df['ATR'] = ta.atr(df['High'], df['Low'], df['Close'], length=14)
+    except: 
+        df['ATR'] = 0
+
+    # [NEW] Support/Resistance (คำนวณแนวรับต้านย้อนหลัง 30 วัน)
+    try:
+        last_30 = df.tail(30)
+        df['Support_Level'] = last_30['Low'].min()
+        df['Resistance_Level'] = last_30['High'].max()
+    except:
+        df['Support_Level'] = df['Close'].min()
+        df['Resistance_Level'] = df['Close'].max()
 
     return df
 

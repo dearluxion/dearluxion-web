@@ -15,11 +15,11 @@ current_key_index = 0 # ตัวชี้ว่าตอนนี้ใช้ K
 model = None
 is_ready = False
 
-# [UPDATE] ตัวแปรสำหรับ Bot API
+# ตัวแปรสำหรับ Bot API
 bot_token = None
 target_user_id = None 
 
-# [UPDATE] รับ bot_token และ boss_id แทน webhook
+# --- 0. INIT AI FUNCTION (ส่วนที่เคยหายไป) ---
 def init_ai(keys_list, discord_bot_token, boss_id):
     """
     เริ่มระบบ AI รองรับ Multi-Key และแจ้งเตือนผ่าน DM
@@ -62,15 +62,11 @@ def _setup_model():
     current_key = api_keys[current_key_index]
     genai.configure(api_key=current_key)
     
-    # [FIX] ลบ "response_mime_type": "application/json" ออก
-    # เพื่อให้ AI ตอบเป็นข้อความ Markdown ปกติได้ (สำหรับ Oracle)
-    # ส่วนฟังก์ชัน Comment ระบบมี clean_json_text จัดการให้อยู่แล้ว ไม่ต้องห่วง
     generation_config = {
         "temperature": 0.85,  
         "top_p": 0.95,
         "top_k": 40,
         "max_output_tokens": 8192,
-        # "response_mime_type": "application/json",  # <-- ลบบรรทัดนี้ทิ้ง
     }
 
     # ใช้ Model Gemini 2.5 Flash ตามปี 2026
@@ -80,7 +76,7 @@ def _setup_model():
     )
     print(f"🤖 AI switched to Key Index: {current_key_index+1} (Model: gemini-2.5-flash)")
 
-# [UPDATE] ฟังก์ชันแจ้งเตือนแบบ DM (Bot API)
+# ฟังก์ชันแจ้งเตือนแบบ DM (Bot API)
 def _rotate_key_and_notify(error_msg):
     """ฟังก์ชันภายใน: สลับ Key อัตโนมัติ + แจ้ง Discord DM"""
     global current_key_index, is_ready
@@ -141,7 +137,6 @@ def _safe_generate_content(inputs):
             return response
         except Exception as e:
             error_str = str(e)
-            # เช็คว่าเป็น Error เกี่ยวกับ Quota หรือไม่
             if "429" in error_str or "quota" in error_str.lower() or "exhausted" in error_str.lower():
                 print(f"⚠️ Key #{current_key_index+1} Failed. Switching...")
                 _rotate_key_and_notify(error_str)
@@ -151,17 +146,14 @@ def _safe_generate_content(inputs):
     
     raise Exception("💀 All API Keys are dead/exhausted.")
 
-# --- Helper: ล้าง JSON ---
 def clean_json_text(text):
     text = re.sub(r"```json\s*", "", text)
     text = re.sub(r"```\s*$", "", text)
     return text.strip()
 
-# --- [NEW] Helper: ดึงข้อมูล YouTube ---
 def get_youtube_data(url):
     """แกะ ID, ดึงรูปปก, และดึงซับไตเติ้ล"""
     video_id = None
-    # Regex หา Video ID แบบครอบคลุม
     match = re.search(r'(?:v=|\/|youtu\.be\/)([0-9A-Za-z_-]{11})', url)
     if match:
         video_id = match.group(1)
@@ -169,15 +161,10 @@ def get_youtube_data(url):
     if not video_id:
         return None, None
 
-    # 1. สร้างลิงก์รูปปก (เอาไว้ให้ Vision Model ดู)
     thumbnail_url = f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
-    
-    # 2. พยายามดึงซับไทย/อังกฤษ
     transcript_text = ""
     try:
-        # พยายามดึงซับไทยก่อน ถ้าไม่มีเอาอังกฤษ
         transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['th', 'en'])
-        # รวมประโยคเป็นก้อนเดียว (เพิ่ม Limit เป็น 2500 ตัวอักษร เพื่อข้อมูลที่แน่นขึ้น)
         full_text = " ".join([t['text'] for t in transcript])
         transcript_text = f"เนื้อหาเสียงในคลิป (Transcript): {full_text[:2500]}..." 
     except Exception as e:
@@ -187,31 +174,25 @@ def get_youtube_data(url):
     return thumbnail_url, transcript_text
 
 # ==========================================
-#  ฟังก์ชันเรียกใช้งาน (Multimodal: Text + Image + YouTube)
+#  ฟังก์ชันเรียกใช้งานหลัก
 # ==========================================
 
-# 1. Crowd Simulation (อัปเกรดสมอง 2.5 - Discord Edition)
+# 1. Crowd Simulation
 def generate_post_engagement(post_content, image_url=None, youtube_url=None):
     if not is_ready:
         return [{"user": "🧚‍♀️ Myla (Offline)", "text": "ระบบพักผ่อน... แต่รักบอสนะ!", "reaction": "😻"}]
     
-    # [UPDATE] สุ่มจำนวนคอมเมนต์ (8-35 คน) ตามที่ขอ
     num_bots = random.randint(8, 35)
     
-    # --- ส่วนเสริม YouTube ---
     yt_context = ""
     if youtube_url:
         print(f"🎥 Analyzing YouTube: {youtube_url}")
         yt_thumb, yt_text = get_youtube_data(youtube_url)
-        
-        # ถ้ามีข้อมูล YouTube
         if yt_thumb:
             yt_context = f"\n[ข้อมูลเชิงลึกจาก YouTube Transcript]\n{yt_text}"
             if not image_url: 
                 image_url = yt_thumb
-                print("✅ Using YouTube Thumbnail as Image Context")
 
-    # [PROMPT UPGRADE 2.5] ปรับจูนให้เป็นสังคม Discord และคุมสรรพนามเคร่งครัด
     prompt_text = f"""
     Role: คุณคือ Simulator จำลองสังคม Community ใน Discord ของกลุ่มวัยรุ่น/Gamer ในปี 2026
     Task: สร้างรายการคอมเมนต์จำลองจำนวน {num_bots} รายการ สำหรับโพสต์นี้
@@ -219,40 +200,26 @@ def generate_post_engagement(post_content, image_url=None, youtube_url=None):
     Post Content (จากแอดมิน): "{post_content}"
     {yt_context}
     
-    คำสั่งพิเศษ (Strict Instruction):
-    1. **Username Style:** ชื่อคนคอมเมนต์ต้องดูเป็น **User Discord/Gamer Tag** เท่านั้น (ห้ามใช้ชื่อจริง-นามสกุลจริงแบบ Facebook) 
-       - ตัวอย่างที่ดี: `ShadowHunter`, `xX_Zero_Xx`, `Kira_Yamato`, `N00bSlayer`, `MooDeng_Fan`, `CryptoBoy`, `Just_A_Cat`, `lnwZa007`
+    คำสั่งพิเศษ:
+    1. **Username:** ชื่อคนคอมเมนต์ต้องดูเป็น User Discord/Gamer Tag (ห้ามใช้ชื่อจริง-นามสกุลจริง)
+    2. **Addressing:** เรียกเจ้าของโพสต์ว่า "แอด", "พี่เดียร์", "บอส", "เดียโบล" คละกันไป
+    3. **Character:**
+       - "🧚‍♀️ Myla": เรียก "ท่านเดียร์/บอส" นิสัยขี้อ้อน
+       - "🍸 Ariel": เรียก "เดียร์/นาย" นิสัยเย็นชา ปากแซ่บ
+       - "Members": สายปั่น, สายมีม, สายสาระ
     
-    2. **Addressing (สรรพนามการเรียกเจ้าของโพสต์):** ให้บอทหน้าม้า (ยกเว้น Myla/Ariel) สุ่มเรียกเจ้าของโพสต์ด้วยคำเหล่านี้คละกันไป:
-       - "แอด"
-       - "เดียโบล"
-       - "แอดโบล"
-       - "พี่"
-       - "พี่เดียร์"
-       - (บางคนอาจจะไม่เรียกชื่อเลย แค่คอมเมนต์เนื้อหา)
-
-    3. **Reaction:** ให้เลือก Emoji Reaction ที่หลากหลายตามอารมณ์ (Love, Wow, Sad, Angry, Smart)
-    
-    Character Profiles (ต้องมีตัวละครหลัก):
-    - **"🧚‍♀️ Myla"** (AI น้องสาว): **บังคับเรียกเจ้าของว่า "ท่านเดียร์" หรือ "บอส" เท่านั้น** นิสัยขี้อ้อน, ให้กำลังใจ, อวยยศเจ้าของ, พิมพ์คะ/ค่ะ น่ารักๆ
-    - **"🍸 Ariel"** (AI ปากแซ่บ): **บังคับเรียกเจ้าของว่า "เดียร์" หรือ "นาย" เท่านั้น** (ห้ามเรียกพี่/ท่าน) นิสัยเย็นชา, ปากจัด, ขวางโลก, พิมพ์ห้วนๆ
-    - **"Discord Members"**: สมาชิกห้อง Discord ทั่วไป มีทั้งสายปั่น, สายสาระ, สายกวนตีน, สายมีม (Meme)
-    
-    Response Format (JSON Array เท่านั้น):
+    Response Format (JSON Array):
     [
-        {{ "user": "Discord_Name", "text": "ข้อความคอมเมนต์ (ภาษาวัยรุ่น/Discord)", "reaction": "เลือก 1 ตัว [😻, 🙀, 😿, 😾, 🧠] หรือ null" }}
+        {{ "user": "Name", "text": "Comment", "reaction": "Emoji [😻, 🙀, 😿, 😾, 🧠] or null" }}
     ]
     """
     
     inputs = [prompt_text]
-
     if image_url:
         try:
-            print(f"🖼️ Downloading image for AI: {image_url}")
             img_response = requests.get(image_url, timeout=10)
             img_data = Image.open(io.BytesIO(img_response.content))
             inputs.append(img_data)
-            print("✅ Image loaded successfully!")
         except Exception as e:
             print(f"⚠️ Failed to load image: {e}")
 
@@ -262,11 +229,9 @@ def generate_post_engagement(post_content, image_url=None, youtube_url=None):
         return json.loads(cleaned_text)
     except Exception as e:
         print(f"AI Engagement Error: {e}")
-        return [{"user": "🧚‍♀️ Myla (System)", "text": "คนเยอะจัด เซิร์ฟเวอร์บินชั่วคราวค่ะบอส! (ลองใหม่นะ)", "reaction": "🙀"}]
+        return [{"user": "🧚‍♀️ Myla (System)", "text": "คนเยอะจัด เซิร์ฟเวอร์บินชั่วคราวค่ะบอส!", "reaction": "🙀"}]
 
-# ... (ฟังก์ชันอื่นด้านล่างเหมือนเดิม) ...
-
-# 2. Mood Mocktail (คงเดิม)
+# 2. Mood Mocktail
 def get_cocktail_recipe(user_mood):
     if not is_ready: return "AI เมาค้าง... ลองใหม่นะ"
     prompt = f"คุณคือ 'บาร์เทนเดอร์ AI' ประจำคลับของ Dearluxion ลูกค้าบอกอารมณ์มาว่า: '{user_mood}' คิดสูตร 'Mocktail' (ชื่อ, ส่วนผสมลับนามธรรม, วิธีดื่ม, คำคม) ให้หน่อย"
@@ -275,14 +240,13 @@ def get_cocktail_recipe(user_mood):
         return res.text
     except Exception as e: return f"ชงไม่ได้ครับ แก้วแตก! ({e})"
 
-# 3. Ariel Chat (คงเดิม)
+# 3. Ariel Chat
 def get_ariel_response(user_msg):
     if not is_ready: return "API ยังไม่พร้อม..."
     ariel_persona = """
     คุณคือ "เอเรียล" หญิงสาวบุคลิกเย็นชา ซับซ้อน มีอดีตที่บอบช้ำ               
-    - **การเรียกคู่สนทนา:** เรียกว่า "เดียร์" คำเดียวห้วนๆ (หรือ "นาย" ถ้าโมโห) ห้ามเรียกพี่ เรียกท่าน
-    - นิสัย: พูดน้อย ทรงพลัง ไม่ลงท้าย "คะ/ขา" เกลียดความโลกสวย
-    - สไตล์: ปากไม่ตรงกับใจ (Tsundere) ประชดประชัน ชอบกินเงาะกระป๋อง
+    - เรียกว่า "เดียร์" คำเดียวห้วนๆ (หรือ "นาย") ห้ามเรียกพี่ เรียกท่าน
+    - ปากไม่ตรงกับใจ (Tsundere) ประชดประชัน ชอบกินเงาะกระป๋อง
     """
     full_prompt = f"{ariel_persona}\n\nUser: {user_msg}\nAriel:"
     try:
@@ -290,7 +254,7 @@ def get_ariel_response(user_msg):
         return res.text.strip()
     except Exception as e: return f"เอเรียลไม่อยากคุยตอนนี้ ({e})"
 
-# 4. Battle Mode (คงเดิม)
+# 4. Battle Mode
 def get_battle_result(topic):
     if not is_ready: return "AI ไม่พร้อม", "AI ไม่พร้อม"
     try:
@@ -298,49 +262,95 @@ def get_battle_result(topic):
         res_ariel = _safe_generate_content([f"คุณคือ Ariel AI (เอเรียล) หญิงสาวเย็นชา เรียกคู่สนทนาว่า 'เดียร์' ตอบเรื่อง '{topic}' แบบขวานผ่าซาก ประชดนิดๆ"]).text
         return res_myla, res_ariel
     except Exception as e: return f"Error: {e}", f"Error: {e}"
-    # ... (โค้ดเดิม) ...
 
-# 5. Crypto God Mode (เนตรมารพยากรณ์)
+# 5. Crypto God Mode (Quant Analyst - Probability & Risk Assessment)
 def analyze_crypto_god_mode(coin_name, current_price, indicators, news_text, fear_greed):
     if not is_ready: return "⚠️ ระบบ AI ยังไม่พร้อม (กรุณาใส่ API Key)"
     
-    # Prompt แบบโหด 2.0 (เน้น Actionable Advice)
+    # ดึงค่า Technical ใหม่ๆ ออกมา
+    rsi = float(indicators.get('rsi', 50))
+    macd = float(indicators.get('macd', 0))
+    macd_signal = float(indicators.get('macd_signal', 0))
+    adx = float(indicators.get('adx', 20))  # ความแข็งแกร่งของเทรนด์ (>25 = มีเทรนด์)
+    atr = float(indicators.get('atr', 0))   # ความผันผวน
+    support = float(indicators.get('support', current_price * 0.95))
+    resistance = float(indicators.get('resistance', current_price * 1.05))
+    
     prompt = f"""
-    Role: คุณคือ "Shadow Oracle" AI นักวิเคราะห์กราฟระดับสูง ผู้มองเห็นอนาคต
-    Task: วิเคราะห์กราฟและข่าวของ {coin_name} แล้วให้คำแนะนำที่ "ชัดเจน" และ "นำไปใช้ได้จริง"
+    Role: You are a "Senior Quantitative Analyst" (Quant) for a high-frequency trading fund.
+    Task: Analyze {coin_name} strictly based on the provided technical data. Calculate probabilities for the next 1-3 days.
     
-    [ข้อมูลปัจจุบัน]
-    - ราคา: {current_price}
-    - RSI: {indicators.get('rsi', 'N/A')}
-    - MACD: {indicators.get('macd_signal', 'N/A')}
-    - ความกลัว/ความโลภ: {fear_greed['value']} ({fear_greed['value_classification']})
+    [LIVE MARKET DATA - THB ONLY]
+    Current Price: {current_price:,.2f} THB
+    RSI (14): {rsi:.2f} (Overbought > 70, Oversold < 30, Neutral 40-60)
+    MACD: {macd:.6f} | Signal: {macd_signal:.6f}
+    ADX (Trend Strength): {adx:.2f} (Strong Trend if > 25, Weak/Ranging if < 20)
+    ATR (Daily Volatility): {atr:,.2f} THB (Daily swing range)
+    Support Level (30-day low): {support:,.2f} THB
+    Resistance Level (30-day high): {resistance:,.2f} THB
+    Market Sentiment: {fear_greed['value']} ({fear_greed['value_classification']})
     
-    [ข่าวล่าสุด]
+    [NEWS CONTEXT]
     {news_text}
     
-    [คำสั่งสำคัญ - ต้องระบุให้ครบถ้วน]
-    1. **Action (การกระทำ):** ต้องฟันธงเลือก 1 อย่าง: "🟢 ซื้อเลย (Buy Now)", "🔴 ขายทิ้ง (Sell Now)", หรือ "🟡 รอไปก่อน (Wait)"
-    2. **Forecast (การคาดการณ์):** ต้องระบุระยะเวลาที่ราคาจะเปลี่ยนทิศทาง เช่น "จะขึ้นในอีก 2-3 วัน", "จะร่วงหนักในสัปดาห์หน้า" 
-    3. **Target (เป้าหมาย):** ต้องระบุราคาที่ควรเข้าซื้อ และราคาที่ควรขายทำกำไร
-    4. **Tone:** จริงจัง แม่นยำ เหมือนโค้ชสอนเทรด ไม่ต้องใช้น้ำเยอะ
+    [REQUIRED ANALYSIS PROTOCOL]
+    1. **Probability Assessment (Must sum to 100%):** Based on RSI + MACD + ADX, calculate probability:
+       - Bullish (Up to Resistance): X%
+       - Sideways/Range: Y%
+       - Bearish (Down to Support): Z%
     
-    Output Format (Markdown):
-    ## 📑 บทวิเคราะห์สำหรับ {coin_name}
+    2. **"Doi" Risk Calculation:** What's the % chance of getting trapped at a local top if buying NOW?
+       - Use: How far from current price to Resistance? Is RSI already overbought?
     
-    **🚦 คำแนะนำ:** [ใส่ ACTION ตัวใหญ่ๆ]
-    **📅 การคาดการณ์:** [ระบุวันเวลาที่จะขึ้น/ลง]
+    3. **Option Comparison (Critical):**
+       - Option A: Buy IMMEDIATELY at {current_price:,.2f} THB
+       - Option B: Wait 1-3 days for better entry
+       Compare win rate %, "Doi" risk, and expected return for each.
     
-    ### 🎯 แผนการเทรด (Strategy)
-    * **จุดเข้าซื้อ (Entry):** $...
-    * **จุดขายทำกำไร (Take Profit):** $...
-    * **จุดหนีตาย (Stop Loss):** $...
+    4. **Price Targets (3-day horizon):** Give specific THB targets with confidence %.
     
-    ### 👁️ เหตุผลประกอบ
-    ... (วิเคราะห์จากกราฟและข่าวสั้นๆ) ...
+    [OUTPUT FORMAT - STRICT MARKDOWN]
+    ## 📊 QUANT ANALYSIS: {coin_name}
+    **Analysis Time:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')} (THB)
+    
+    ### 1️⃣ 🎲 Probability Assessment (Next 72 Hours)
+    * **📈 Bullish Case:** ...% (Price targets: ฿..., Reasoning: ...)
+    * **🦀 Sideways Range:** ...% (Price range: ฿... to ฿..., Reasoning: ...)
+    * **📉 Bearish Case:** ...% (Support level: ฿..., Reasoning: ...)
+    
+    ### 2️⃣ ⚠️ "Doi" (Trap) Risk Assessment
+    - **If buy NOW:** ...% risk of being trapped (too high/too risky)
+    - **Key concern:** {reason_based_on_rsi_resistance}
+    
+    ### 3️⃣ ⚖️ Strategy Comparison
+    
+    | Factor | Option A: Buy NOW | Option B: Wait 1-3D |
+    | :--- | :---: | :---: |
+    | **Win Probability** | ...% | ...% |
+    | **Trap Risk ("Doi")** | ...% | ...% |
+    | **Avg Entry Price** | ฿{current_price:,.2f} | ฿...  |
+    | **Expected Return (per THB)** | ...% | ...% |
+    | **Volatility (ATR)** | ±฿{atr:,.2f} | Higher/Same/Lower |
+    
+    **🏆 Verdict:** CHOOSE OPTION **[A or B]** because...
+    
+    ### 4️⃣ 🎯 3-Day Price Targets
+    * **Best Case (High Confidence):** ฿... (70% probability)
+    * **Mid Case (Medium Confidence):** ฿... (50% probability)
+    * **Worst Case (Support Breakdown):** ฿... (20% probability)
+    * **Daily Range (ATR):** Expect ±฿{atr:,.2f} per day
+    
+    ### 5️⃣ 📈 Technical Summary
+    - **Trend:** ADX={adx:.1f} → {'STRONG' if adx > 25 else 'WEAK/RANGING'}
+    - **Momentum:** RSI={rsi:.1f} → {'OVERBOUGHT (⚠️)' if rsi > 70 else 'OVERSOLD (↑)' if rsi < 30 else 'NEUTRAL'}
+    - **Signal Cross:** MACD {'BULLISH (✓)' if macd > macd_signal else 'BEARISH (✗)'} (Macd > Signal)
+    
+    ---
+    *⚖️ Disclaimer: This is AI-generated technical analysis for educational purposes only, NOT financial advice.*
     """
     
     try:
         res = _safe_generate_content([prompt])
         return res.text
     except Exception as e:
-        return f"Oracle Error: {e}"
+        return f"Quant System Error: {e}"
