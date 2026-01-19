@@ -380,7 +380,8 @@ if st.session_state.get('show_crypto', False):
         with col_c1:
             coin_select = st.selectbox("เลือกสินทรัพย์ประหาร:", ["BTC", "SHIB"])
         with col_c2:
-            if st.button("🔮 เรียก Oracle", type="primary", use_container_width=True):
+            # [UPDATE] เปลี่ยนชื่อปุ่มตามสั่ง
+            if st.button("วิเคราะห์ตลาด", type="primary", use_container_width=True):
                 st.session_state['trigger_analysis'] = True
 
         # ดึงข้อมูล
@@ -441,9 +442,10 @@ if st.session_state.get('show_crypto', False):
             # 3. AI Analysis Section
             st.markdown("---")
             if st.session_state.get('trigger_analysis'):
-                st.markdown("### 👁️ Shadow Oracle Analysis")
+                # [UPDATE] เปลี่ยนหัวข้อตามสั่ง
+                st.markdown("### ข้อมูลจากนักวิเคราะห์")
                 with st.chat_message("ai", avatar="👁️"):
-                    with st.spinner("AI กำลังเข้าทรง... อ่านกราฟและข่าว..."):
+                    with st.spinner("AI กำลังคำนวณวันเวลารวย..."):
                         # เตรียมข้อมูลส่งให้ AI
                         indicators = {
                             "rsi": f"{rsi_val:.2f}",
@@ -458,7 +460,7 @@ if st.session_state.get('show_crypto', False):
                         st.markdown(analysis_result)
                         st.session_state['trigger_analysis'] = False # Reset
             else:
-                st.info("กดปุ่ม '🔮 เรียก Oracle' ด้านบนเพื่อดูคำทำนายทิศทางราคา")
+                st.info("กดปุ่ม 'วิเคราะห์ตลาด' ด้านบนเพื่อดูคำทำนายทิศทางราคา")
 
         else:
             st.error("ไม่สามารถดึงข้อมูลกราฟได้ ลองใหม่ภายหลัง")
