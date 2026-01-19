@@ -276,6 +276,15 @@ def analyze_crypto_god_mode(coin_name, current_price, indicators, news_text, fea
     support = float(indicators.get('support', current_price * 0.95))
     resistance = float(indicators.get('resistance', current_price * 1.05))
     
+    # --- [FIX] ส่วนที่ต้องเพิ่มเพื่อแก้ NameError ---
+    if rsi > 70:
+        reason_based_on_rsi_resistance = "RSI Overbought (>70) เสี่ยงราคาร่วงแรง"
+    elif current_price >= resistance * 0.98:
+        reason_based_on_rsi_resistance = "ราคาชนแนวต้านสำคัญ (Resistance Test)"
+    else:
+        reason_based_on_rsi_resistance = "ความผันผวนของตลาด (Market Volatility)"
+    # ---------------------------------------------
+    
     prompt = f"""
     Role: You are a "Senior Quantitative Analyst" (Quant) for a high-frequency trading fund.
     Task: Analyze {coin_name} strictly based on the provided technical data. Calculate probabilities for the next 1-3 days.
