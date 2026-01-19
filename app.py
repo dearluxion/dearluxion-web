@@ -375,97 +375,137 @@ if st.session_state.get('show_crypto', False):
         st.markdown("## 📈 Crypto War Room (Shadow Oracle)")
         st.caption("พื้นที่วิเคราะห์กราฟด้วย AI ระดับ God-Tier สำหรับท่าน Dearluxion")
         
-        # เลือกเหรียญ
-        col_c1, col_c2 = st.columns([3, 1])
-        with col_c1:
-            coin_select = st.selectbox("เลือกสินทรัพย์ประหาร:", ["BTC", "SHIB"])
-        with col_c2:
-            # [UPDATE] เปลี่ยนชื่อปุ่มตามสั่ง
-            if st.button("วิเคราะห์ตลาด", type="primary", use_container_width=True):
-                st.session_state['trigger_analysis'] = True
-
-        # ดึงข้อมูล
-        with st.spinner(f"กำลังดึงข้อมูลตลาดล่าสังหารของ {coin_select}..."):
-            df = ce.get_crypto_data(coin_select)
-            news = ce.get_crypto_news(coin_select)
-            fg_index = ce.get_fear_and_greed()
+        # [UPDATE] รายชื่อเหรียญครบ 8 ตัวตามสั่ง
+        coin_list = ["BTC", "ETH", "BNB", "SOL", "XRP", "DOGE", "PEPE", "SHIB"]
         
-        if df is not None:
-            # 1. แสดงกราฟ Interactive (Candlestick + EMA)
-            latest_price = df['Close'].iloc[-1]
-            price_change = df['Close'].iloc[-1] - df['Close'].iloc[-2] if len(df) > 1 else 0
-            color_price = "green" if price_change >= 0 else "red"
-            
-            st.markdown(f"### 💎 {coin_select} Price: <span style='color:{color_price}'>${latest_price:,.4f}</span>", unsafe_allow_html=True)
-            
-            # สร้างกราฟด้วย Plotly
-            fig = go.Figure()
-            fig.add_trace(go.Candlestick(x=df.index,
-                            open=df['Open'], high=df['High'],
-                            low=df['Low'], close=df['Close'], name='Price'))
-            if 'EMA_50' in df.columns:
-                fig.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], line=dict(color='orange', width=1), name='EMA 50'))
-            if 'EMA_200' in df.columns:
-                fig.add_trace(go.Scatter(x=df.index, y=df['EMA_200'], line=dict(color='blue', width=1), name='EMA 200'))
-            
-            fig.update_layout(template="plotly_dark", height=500, margin=dict(l=0, r=0, t=30, b=0))
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # 2. แสดง Dashboard Indicators
-            k1, k2, k3, k4 = st.columns(4)
-            rsi_val = df['RSI'].iloc[-1] if 'RSI' in df.columns else 50
-            macd_val = df['MACD'].iloc[-1] if 'MACD' in df.columns else 0
-            macd_signal = df['MACD_SIGNAL'].iloc[-1] if 'MACD_SIGNAL' in df.columns else 0
-            
-            k1.metric("RSI (14)", f"{rsi_val:.2f}", delta="Overbought" if rsi_val > 70 else "Oversold" if rsi_val < 30 else "Neutral")
-            k2.metric("MACD", f"{macd_val:.4f}")
-            k3.metric("Fear & Greed", f"{fg_index.get('value', 'N/A')}", f"{fg_index.get('value_classification', '')}")
-            
-            # --- [Safe EMA Trend Logic] ---
-            ema_trend = "N/A"
-            if 'EMA_200' in df.columns:
-                try:
-                    import pandas as pd
-                    # ดึงค่าล่าสุดมาแปลงเป็น float ให้ชัวร์ (กันเหนียว)
-                    c_val = float(df['Close'].iloc[-1])
-                    e_val = float(df['EMA_200'].iloc[-1])
-                    
-                    # ถ้าค่า EMA เป็น NaN (คำนวณไม่ได้) จะข้ามไป catch
-                    if pd.isna(e_val): raise ValueError("EMA is NaN")
-                    
-                    ema_trend = "Bullish" if c_val > e_val else "Bearish"
-                except:
-                    ema_trend = "N/A (ข้อมูลไม่พอ)"
-            
-            k4.metric("EMA Trend", ema_trend)
+        col_c1, col_c2 = st.columns([2, 1])
+        with col_c1:
+            coin_select = st.selectbox("เลือกสินทรัพย์ประหาร:", coin_list)
+        with col_c2:
+            if st.button("วิเคราะห์เหรียญนี้", type="primary", use_container_width=True):
+                st.session_state['trigger_analysis'] = True
+                st.session_state['analyze_all'] = False # Reset โหมดเหมา
+        
+        # [NEW] ปุ่มวิเคราะห์เหมาเข่ง
+        if st.button("🚀 วิเคราะห์ทั้ง 8 เหรียญ โปรดของท่านเดียร์", use_container_width=True):
+            st.session_state['analyze_all'] = True
+            st.session_state['trigger_analysis'] = False
+            st.rerun()
 
-            # 3. AI Analysis Section
-            st.markdown("---")
-            if st.session_state.get('trigger_analysis'):
-                # [UPDATE] เปลี่ยนหัวข้อตามสั่ง
-                st.markdown("### ข้อมูลจากนักวิเคราะห์")
-                with st.chat_message("ai", avatar="👁️"):
-                    # [UPDATE] เปลี่ยนข้อความโหลดให้ดูโปรและชัดเจนขึ้น
-                    msg_loading = "รอแป๊บนึงนะคะ! ไมล่ากำลังสแกนข่าวทั่วโลก 🌍 อ่านกราฟด้วยโมเดล Gemini 2.5 Flash 🧠 และคำนวณ % ความน่าจะเป็น..."
-                    with st.spinner(msg_loading):
-                        # เตรียมข้อมูลส่งให้ AI
-                        indicators = {
-                            "rsi": f"{rsi_val:.2f}",
-                            "macd_signal": "Bullish" if macd_val > macd_signal else "Bearish"
-                        }
-                        # เรียก AI Manager
-                        if ai_available and crypto_available:
-                            analysis_result = ai.analyze_crypto_god_mode(coin_select, latest_price, indicators, news, fg_index)
-                        else:
-                            analysis_result = "ไม่สามารถทำการวิเคราะห์ได้ เนื่องจาก API ยังไม่พร้อม"
-                        
-                        st.markdown(analysis_result)
-                        st.session_state['trigger_analysis'] = False # Reset
+        # =========================================================
+        # CASE A: วิเคราะห์ทีละเหรียญ (Logic เดิมแต่ปรับปรุง)
+        # =========================================================
+        if not st.session_state.get('analyze_all'):
+            # ดึงข้อมูล
+            with st.spinner(f"กำลังดึงข้อมูลตลาดล่าสังหารของ {coin_select}..."):
+                df = ce.get_crypto_data(coin_select)
+                news = ce.get_crypto_news(coin_select)
+                fg_index = ce.get_fear_and_greed()
+            
+            if df is not None:
+                # 1. แสดงกราฟ Interactive
+                latest_price = df['Close'].iloc[-1]
+                price_change = df['Close'].iloc[-1] - df['Close'].iloc[-2] if len(df) > 1 else 0
+                color_price = "green" if price_change >= 0 else "red"
+                
+                # Format ราคาตามความเหมาะสม (PEPE/SHIB ทศนิยมเยอะหน่อย)
+                price_fmt = "{:,.8f}" if coin_select in ["SHIB", "PEPE", "DOGE"] else "{:,.2f}"
+                st.markdown(f"### 💎 {coin_select} Price: <span style='color:{color_price}'>${price_fmt.format(latest_price)}</span>", unsafe_allow_html=True)
+                
+                # สร้างกราฟด้วย Plotly
+                fig = go.Figure()
+                fig.add_trace(go.Candlestick(x=df.index,
+                                open=df['Open'], high=df['High'],
+                                low=df['Low'], close=df['Close'], name='Price'))
+                if 'EMA_50' in df.columns:
+                    fig.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], line=dict(color='orange', width=1), name='EMA 50'))
+                if 'EMA_200' in df.columns:
+                    fig.add_trace(go.Scatter(x=df.index, y=df['EMA_200'], line=dict(color='blue', width=1), name='EMA 200'))
+                
+                fig.update_layout(template="plotly_dark", height=500, margin=dict(l=0, r=0, t=30, b=0))
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # 2. Dashboard Indicators
+                k1, k2, k3, k4 = st.columns(4)
+                rsi_val = df['RSI'].iloc[-1] if 'RSI' in df.columns else 50
+                macd_val = df['MACD'].iloc[-1] if 'MACD' in df.columns else 0
+                macd_signal = df['MACD_SIGNAL'].iloc[-1] if 'MACD_SIGNAL' in df.columns else 0
+                
+                k1.metric("RSI (14)", f"{rsi_val:.2f}", delta="Overbought" if rsi_val > 70 else "Oversold" if rsi_val < 30 else "Neutral")
+                k2.metric("MACD", f"{macd_val:.6f}")
+                k3.metric("Fear & Greed", f"{fg_index.get('value', 'N/A')}", f"{fg_index.get('value_classification', '')}")
+                
+                ema_trend = "N/A"
+                if 'EMA_200' in df.columns:
+                    try:
+                        c_val = float(df['Close'].iloc[-1])
+                        e_val = float(df['EMA_200'].iloc[-1])
+                        ema_trend = "Bullish" if c_val > e_val else "Bearish"
+                    except: pass
+                
+                k4.metric("EMA Trend", ema_trend)
+
+                # 3. AI Analysis Section
+                st.markdown("---")
+                if st.session_state.get('trigger_analysis'):
+                    st.markdown("### 🧠 ข้อมูลจากนักวิเคราะห์ (AI)")
+                    with st.chat_message("ai", avatar="👁️"):
+                        msg_loading = f"รอแป๊บนึงนะคะ! ไมล่ากำลังสแกนกราฟ {coin_select} ด้วย Gemini 2.5..."
+                        with st.spinner(msg_loading):
+                            indicators = {
+                                "rsi": f"{rsi_val:.2f}",
+                                "macd_signal": "Bullish" if macd_val > macd_signal else "Bearish"
+                            }
+                            if ai_available and crypto_available:
+                                analysis_result = ai.analyze_crypto_god_mode(coin_select, latest_price, indicators, news, fg_index)
+                            else:
+                                analysis_result = "ไม่สามารถทำการวิเคราะห์ได้ เนื่องจาก API ยังไม่พร้อม"
+                            
+                            st.markdown(analysis_result)
+                            st.session_state['trigger_analysis'] = False 
+                else:
+                    st.info("กดปุ่ม 'วิเคราะห์เหรียญนี้' ด้านบนเพื่อดูคำทำนาย")
             else:
-                st.info("กดปุ่ม 'วิเคราะห์ตลาด' ด้านบนเพื่อดูคำทำนายทิศทางราคา")
+                st.error("ไม่สามารถดึงข้อมูลกราฟได้")
 
+        # =========================================================
+        # CASE B: วิเคราะห์รวดเดียว 8 เหรียญ (Analyze All)
+        # =========================================================
         else:
-            st.error("ไม่สามารถดึงข้อมูลกราฟได้ ลองใหม่ภายหลัง")
+            st.markdown("### 🚀 รายงานสรุป 8 เหรียญโปรด (God Mode Batch)")
+            if st.button("❌ ปิดโหมดวิเคราะห์รวม"):
+                st.session_state['analyze_all'] = False
+                st.rerun()
+
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # วนลูปวิเคราะห์ทีละตัว
+            for idx, c_symbol in enumerate(coin_list):
+                status_text.text(f"กำลังเจาะระบบวิเคราะห์ {c_symbol} ({idx+1}/{len(coin_list)})...")
+                
+                # Fetch Data แบบเร็ว
+                df_batch = ce.get_crypto_data(c_symbol)
+                
+                if df_batch is not None:
+                    last_p = df_batch['Close'].iloc[-1]
+                    rsi_v = df_batch['RSI'].iloc[-1] if 'RSI' in df_batch.columns else 50
+                    
+                    # Expander แยกแต่ละเหรียญ
+                    with st.expander(f"💎 {c_symbol} : ${last_p:,.6f} | RSI: {rsi_v:.1f}", expanded=False):
+                        # เรียก AI (ถ้ามี Token เหลือ)
+                        if ai_available:
+                            indicators_b = {"rsi": f"{rsi_v:.2f}", "macd_signal": "N/A"}
+                            # ใช้ข่าว dummy เพื่อความเร็ว
+                            res_batch = ai.analyze_crypto_god_mode(c_symbol, last_p, indicators_b, "วิเคราะห์ตามกราฟเทคนิคอลล่าสุด", {"value":"50", "value_classification":"Neutral"})
+                            st.markdown(res_batch)
+                        else:
+                            st.error("AI ไม่พร้อมใช้งาน")
+                
+                progress_bar.progress((idx + 1) / len(coin_list))
+                time.sleep(0.5) # พักหายใจนิดนึง กัน API รวน
+            
+            status_text.success("✅ วิเคราะห์ครบ 8 เหรียญแล้วครับท่านเดียร์!")
 
 elif st.session_state['show_shop']:
     st.markdown("## 🛒 ร้านค้า (Shop Zone)")

@@ -5,8 +5,15 @@ import pandas_ta as ta
 import feedparser
 import requests
 
+# [UPDATE] เพิ่มรายชื่อเหรียญให้ครบ 8 ตัว
 COIN_MAP = {
     "BTC": "BTC-USD",
+    "ETH": "ETH-USD",
+    "BNB": "BNB-USD",
+    "SOL": "SOL-USD",
+    "XRP": "XRP-USD",
+    "DOGE": "DOGE-USD",
+    "PEPE": "PEPE-USD",
     "SHIB": "SHIB-USD"
 }
 
