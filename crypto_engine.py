@@ -5,48 +5,69 @@ import pandas_ta as ta
 import feedparser
 import requests
 
-# [UPDATE] เปลี่ยนรายชื่อเหรียญเป็นคู่เงินบาท (THB)
+# [UPDATE] ใช้ Ticker หลักเป็น USD เพื่อความแม่นยำของกราฟ
 COIN_MAP = {
-    "BTC": "BTC-THB",
-    "ETH": "ETH-THB",
-    "BNB": "BNB-THB",
-    "SOL": "SOL-THB",
-    "XRP": "XRP-THB",
-    "DOGE": "DOGE-THB",
-    "PEPE": "PEPE-THB", # หมายเหตุ: บางครั้ง PEPE/SHIB ใน Yahoo Finance แบบ THB อาจหาข้อมูลยาก ถ้าไม่ขึ้นกราฟอาจต้องใช้ USD
-    "SHIB": "SHIB-THB"
+    "BTC": "BTC-USD",
+    "ETH": "ETH-USD",
+    "BNB": "BNB-USD",
+    "SOL": "SOL-USD",
+    "XRP": "XRP-USD",
+    "DOGE": "DOGE-USD",
+    "PEPE": "PEPE-USD",
+    "SHIB": "SHIB-USD"
 }
 
 @st.cache_data(ttl=300)
+def get_exchange_rate():
+    try:
+        # ดึงค่าเงินบาทล่าสุดจาก Yahoo Finance
+        ticker = yf.Ticker("USDTHB=X")
+        # ดึงย้อนหลัง 1 วัน เอาตัวล่าสุด
+        df = ticker.history(period="1d")
+        if not df.empty:
+            rate = df['Close'].iloc[-1]
+            return float(rate)
+        return 34.0 # ค่าสำรองกันตาย
+    except:
+        return 34.0
+
+@st.cache_data(ttl=300)
 def get_crypto_data(symbol_key, period="2y", interval="1d"):
-    symbol = COIN_MAP.get(symbol_key, "BTC-THB")
-    
-    # [Tweak] เพิ่ม auto_adjust=True เพื่อให้ได้กราฟที่คลีนขึ้น
+    # 1. ดึงข้อมูล Crypto เป็น USD
+    symbol = COIN_MAP.get(symbol_key, "BTC-USD")
     df = yf.download(symbol, period=period, interval=interval, auto_adjust=True)
     
     if df.empty:
-        # Fallback: ถ้าหา THB ไม่เจอ ลองหา USD แล้วคูณอัตราแลกเปลี่ยน (แบบคร่าวๆ หรือแจ้งเตือน)
-        # แต่ในที่นี้จะ return None ไปก่อนเพื่อให้ App แจ้งว่าดึงข้อมูลไม่ได้
         return None
 
-    # [Fix MultiIndex] แก้ปัญหาหัวตารางซ้อนกัน 2 ชั้น
+    # [Fix MultiIndex] แก้ปัญหาหัวตารางซ้อนกัน
     try:
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
     except: 
         pass
 
-    # เช็คว่ามีคอลัมน์ Close ไหม ถ้าไม่มีให้จบการทำงาน
     if 'Close' not in df.columns:
         return None
 
-    # คำนวณ RSI
+    # 2. [NEW] แปลงเป็นเงินบาท (THB)
+    # ดึงเรทเงินบาท
+    thb_rate = get_exchange_rate()
+    
+    # คูณค่าเงินเข้าไปในคอลัมน์ราคาต่างๆ
+    cols_to_convert = ['Open', 'High', 'Low', 'Close']
+    for c in cols_to_convert:
+        if c in df.columns:
+            df[c] = df[c] * thb_rate
+
+    # 3. คำนวณอินดิเคเตอร์ (คำนวณจากราคาไทยที่แปลงแล้ว)
+    # RSI
     try:
         df['RSI'] = ta.rsi(df['Close'], length=14)
     except: 
         df['RSI'] = 50
     
-    # คำนวณ MACD
+    # MACD
     try:
         macd = ta.macd(df['Close'])
         if macd is not None and not macd.empty:
