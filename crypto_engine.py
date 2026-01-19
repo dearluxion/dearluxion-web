@@ -11,7 +11,7 @@ COIN_MAP = {
 }
 
 @st.cache_data(ttl=300)
-def get_crypto_data(symbol_key, period="6mo", interval="1d"):
+def get_crypto_data(symbol_key, period="2y", interval="1d"):
     symbol = COIN_MAP.get(symbol_key, "BTC-USD")
     
     # [Tweak] เพิ่ม auto_adjust=True เพื่อให้ได้กราฟที่คลีนขึ้น

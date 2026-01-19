@@ -419,7 +419,24 @@ if st.session_state.get('show_crypto', False):
             k1.metric("RSI (14)", f"{rsi_val:.2f}", delta="Overbought" if rsi_val > 70 else "Oversold" if rsi_val < 30 else "Neutral")
             k2.metric("MACD", f"{macd_val:.4f}")
             k3.metric("Fear & Greed", f"{fg_index.get('value', 'N/A')}", f"{fg_index.get('value_classification', '')}")
-            k4.metric("EMA Trend", "Bullish" if df['Close'].iloc[-1] > df['EMA_200'].iloc[-1] else "Bearish" if 'EMA_200' in df.columns else "N/A")
+            
+            # --- [Safe EMA Trend Logic] ---
+            ema_trend = "N/A"
+            if 'EMA_200' in df.columns:
+                try:
+                    import pandas as pd
+                    # ดึงค่าล่าสุดมาแปลงเป็น float ให้ชัวร์ (กันเหนียว)
+                    c_val = float(df['Close'].iloc[-1])
+                    e_val = float(df['EMA_200'].iloc[-1])
+                    
+                    # ถ้าค่า EMA เป็น NaN (คำนวณไม่ได้) จะข้ามไป catch
+                    if pd.isna(e_val): raise ValueError("EMA is NaN")
+                    
+                    ema_trend = "Bullish" if c_val > e_val else "Bearish"
+                except:
+                    ema_trend = "N/A (ข้อมูลไม่พอ)"
+            
+            k4.metric("EMA Trend", ema_trend)
 
             # 3. AI Analysis Section
             st.markdown("---")
