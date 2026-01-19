@@ -62,13 +62,15 @@ def _setup_model():
     current_key = api_keys[current_key_index]
     genai.configure(api_key=current_key)
     
-    # [UPGRADE 2.0] เพิ่ม Config ให้ AI มีความ Creativity สูงขึ้น (Temperature 0.85)
+    # [FIX] ลบ "response_mime_type": "application/json" ออก
+    # เพื่อให้ AI ตอบเป็นข้อความ Markdown ปกติได้ (สำหรับ Oracle)
+    # ส่วนฟังก์ชัน Comment ระบบมี clean_json_text จัดการให้อยู่แล้ว ไม่ต้องห่วง
     generation_config = {
-        "temperature": 0.85,  # เพิ่มความสร้างสรรค์/หลากหลาย
+        "temperature": 0.85,  
         "top_p": 0.95,
         "top_k": 40,
         "max_output_tokens": 8192,
-        "response_mime_type": "application/json", # บังคับตอบเป็น JSON
+        # "response_mime_type": "application/json",  # <-- ลบบรรทัดนี้ทิ้ง
     }
 
     # ใช้ Model Gemini 2.5 Flash ตามปี 2026
