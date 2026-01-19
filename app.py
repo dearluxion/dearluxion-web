@@ -364,6 +364,8 @@ if st.session_state['is_admin']:
     st.markdown("---")
 
 # --- 5. Feed Display ---
+filtered = []  # <--- เติมบรรทัดนี้ลงไปดักไว้ก่อนเลยครับ
+
 # [Crypto War Room Display]
 if st.session_state.get('show_crypto', False):
     if not crypto_available:
@@ -621,6 +623,8 @@ if filtered:
                                 if not st.session_state['is_admin']: st.session_state['last_comment_time'] = now 
                                 st.rerun()
 else:
-    if not st.session_state['show_shop']: st.info("ยังไม่มีโพสต์ครับ")
+    # เพิ่มเงื่อนไขว่าต้องไม่ใช่หน้า Crypto ด้วย (not st.session_state['show_crypto'])
+    if not st.session_state['show_shop'] and not st.session_state['show_crypto']: 
+        st.info("ยังไม่มีโพสต์ครับ")
 
 st.markdown("<br><center><small style='color:#A370F7'>Small Group by Dearluxion © 2025</small></center>", unsafe_allow_html=True)
