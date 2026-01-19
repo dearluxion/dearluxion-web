@@ -12,7 +12,7 @@ def render_sidebar(ai_available):
     # --- เช็คสถานะ Login เพื่อใช้ควบคุมการเข้าถึงมินิเกม ---
     is_logged_in = st.session_state.get('discord_user') or st.session_state.get('is_admin')
 
-    # --- Sidebar (เมนู & Q&A) ---
+    # --- 3. Sidebar (เมนู & Q&A) ---
     st.sidebar.title("🍸 เมนูหลัก")
 
     # Q&A ไมล่า 
@@ -465,6 +465,7 @@ def render_sidebar(ai_available):
     st.sidebar.markdown("---")
 
     # Mailbox (Secret Box with TRAP & AVATAR)
+    # [จุดสำคัญ: โค้ดส่งจดหมายลับยังอยู่ครบครับ!]
     with st.sidebar.expander("💌 ตู้จดหมายลับ (Secret Box)"):
         st.caption("ฝากข้อความถึง **Dearluxion** แบบไม่ระบุตัวตน (มีแค่บอสที่เห็น)")
         with st.form("secret_msg_form"):
@@ -504,7 +505,7 @@ def render_sidebar(ai_available):
 
     st.sidebar.markdown("---")
 
-    # Search & Filter (Clean Version: No Duplicate)
+    # Search & Filter
     search_query = st.sidebar.text_input("🔍 ค้นหา...", placeholder="พิมพ์คำค้นหา")
     posts = dm.load_data()
     all_hashtags = set()
@@ -521,8 +522,7 @@ def render_sidebar(ai_available):
             st.session_state['show_shop'] = False
             st.rerun()
     else:
-        # [UPDATE] เพิ่ม "Crypto Zone" ตรงนี้
-        selected_zone = st.sidebar.radio("หมวดหมู่:", ["🏠 รวมทุกโซน", "📈 Crypto Zone"] + sorted(list(all_hashtags)))
+        selected_zone = st.sidebar.radio("หมวดหมู่:", ["🏠 รวมทุกโซน"] + sorted(list(all_hashtags)))
 
     st.sidebar.markdown("---")
     
