@@ -4,3 +4,8 @@ gspread
 google-auth
 oauth2client
 youtube-transcript-api
+requests
+Pillow
+yfinance          
+plotly            
+pandas            

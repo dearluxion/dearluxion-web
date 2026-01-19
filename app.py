@@ -5,6 +5,8 @@ import re
 import time
 import random
 import base64
+import yfinance as yf
+import plotly.graph_objects as go
 
 # --- [IMPORTED MODULES] ---
 from styles import get_css 
@@ -70,7 +72,6 @@ if "code" in st.query_params:
         st.session_state['discord_user'] = user_info
         
         # --- 🚀 ส่วนเช็ค ID บอส (Hardcode ตามคำขอ) ---
-        
         if str(user_info['id']) == BOSS_ID:
             st.session_state['is_admin'] = True
             st.toast(f"👑 ยินดีต้อนรับ Boss {user_info['username']}!", icon="😎")
@@ -96,7 +97,6 @@ if now - st.session_state['last_bar_regen'] >= 3600:
     st.session_state['last_bar_regen'] = now
 
 # --- 2. Render Sidebar ---
-# ไม่ต้องส่ง model แล้ว ส่งแค่สถานะว่าพร้อมไหม
 search_query, selected_zone = sm.render_sidebar(ai_available) 
 
 # --- 3. Header & Profile ---
@@ -355,186 +355,216 @@ if st.session_state['is_admin']:
         else: st.info("ยังไม่มีจดหมายลับมาส่งครับ")
     st.markdown("---")
 
-# --- 5. Feed Display ---
-posts = dm.load_data()
-filtered = posts
-if st.session_state['show_shop']:
-    st.markdown("## 🛒 ร้านค้า (Shop Zone)")
-    with st.expander("🧚‍♀️ พี่จ๋า~ หาทางกลับไม่เจอเหรอคะ? (จิ้มไมล่าสิ!) 💖", expanded=True):
-        st.markdown("""<div class="cute-guide">✨ ทางลัดพิเศษสำหรับพี่คนโปรดของไมล่า! 🌈</div>""", unsafe_allow_html=True)
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("🏠 กลับบ้านกับไมล่า!", use_container_width=True):
-                st.session_state['show_shop'] = False
-                st.balloons(); time.sleep(1); st.rerun()
-        with c2: st.info("👈 กดปุ่มนี้ ไมล่าจะพาพี่กลับหน้าหลักเองค่ะ!")
-    filtered = [p for p in filtered if p.get('price', 0) > 0 or "#ร้านค้า" in p['content']]
-    if not filtered: st.warning("ยังไม่มีสินค้าวางขายจ้า")
+# --- 5. Feed Display & Crypto Zone (Main Logic) ---
+
+if selected_zone == "📈 Crypto Zone":
+    st.markdown("## 📈 Crypto AI Analyst (Myla & Ariel)")
+    st.info("⚠️ **คำเตือน:** การลงทุนมีความเสี่ยง AI วิเคราะห์เพื่อความบันเทิงเท่านั้น (NFA)")
+
+    # 1. เลือกเหรียญ
+    col_coin, col_btn = st.columns([3, 1])
+    with col_coin:
+        coin_opt = st.selectbox("เลือกเหรียญที่จะส่อง:", 
+            ["Bitcoin (BTC-USD)", "Shiba Inu (SHIB-USD)", "Ethereum (ETH-USD)", "Dogecoin (DOGE-USD)"])
+        ticker_symbol = coin_opt.split("(")[1].replace(")", "")
+    
+    # 2. ดึงข้อมูล
+    with st.spinner(f"กำลังดึงกราฟ {ticker_symbol} ..."):
+        try:
+            # ดึงข้อมูลย้อนหลัง 5 วัน กราฟรายชั่วโมง
+            df = yf.download(ticker_symbol, period="5d", interval="1h", progress=False)
+            
+            # แก้ไขบั๊ก yfinance บางเวอร์ชันคืนค่าเป็น MultiIndex
+            if hasattr(df.columns, 'nlevels') and df.columns.nlevels > 1:
+                df.columns = df.columns.get_level_values(0)
+
+            if not df.empty:
+                current_price = float(df['Close'].iloc[-1])
+                # คำนวณ % เปลี่ยนแปลง 24 ชม. (24 แท่งเทียนย้อนหลัง)
+                if len(df) > 24:
+                    prev_price = float(df['Close'].iloc[-24])
+                    change_24h = ((current_price - prev_price) / prev_price) * 100
+                else:
+                    change_24h = 0.0
+
+                # 3. แสดงกราฟสวยๆ ด้วย Plotly
+                fig = go.Figure(data=[go.Candlestick(x=df.index,
+                                open=df['Open'], high=df['High'],
+                                low=df['Low'], close=df['Close'])])
+                fig.update_layout(title=f"กราฟ {ticker_symbol} (5 วันล่าสุด)", 
+                                  yaxis_title="ราคา (USD)", 
+                                  template="plotly_dark",
+                                  height=400)
+                st.plotly_chart(fig, use_container_width=True)
+
+                # แสดงราคาปัจจุบัน
+                st.metric("ราคาปัจจุบัน", f"${current_price:,.6f}", f"{change_24h:.2f}%")
+
+                # 4. ปุ่มให้ AI วิเคราะห์
+                with col_btn:
+                    st.write("") # ดันปุ่มลงมา
+                    st.write("")
+                    if st.button("🔮 ให้ AI วิเคราะห์", type="primary"):
+                        # แปลงข้อมูลกราฟเป็น Text สั้นๆ ส่งให้ AI (เอา 5 จุดสุดท้าย)
+                        trend_summary = str(df['Close'].tail(5).tolist())
+                        
+                        with st.spinner("Myla กำลังดูกราฟ... Ariel กำลังคำนวณ..."):
+                            # เรียกฟังก์ชันใน ai_manager.py
+                            analysis_result = ai.analyze_crypto(ticker_symbol, current_price, change_24h, trend_summary)
+                            
+                            st.markdown("---")
+                            st.markdown("### 💬 ความเห็นจาก AI Persona")
+                            st.markdown(analysis_result)
+            else:
+                st.error("ไม่สามารถดึงข้อมูลกราฟได้ (ตลาดอาจปิดหรือ API มีปัญหา)")
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาด: {e}")
+
 else:
-    if selected_zone != "🏠 รวมทุกโซน": filtered = [p for p in filtered if selected_zone in p['content']]
-    if search_query: filtered = [p for p in filtered if search_query.lower() in p['content'].lower()]
+    # --- 6. Feed Display (Original Feed Logic) ---
+    posts = dm.load_data()
+    filtered = posts
+    
+    # Filter Logic
+    if st.session_state['show_shop']:
+        st.markdown("## 🛒 ร้านค้า (Shop Zone)")
+        with st.expander("🧚‍♀️ พี่จ๋า~ หาทางกลับไม่เจอเหรอคะ? (จิ้มไมล่าสิ!) 💖", expanded=True):
+            st.markdown("""<div class="cute-guide">✨ ทางลัดพิเศษสำหรับพี่คนโปรดของไมล่า! 🌈</div>""", unsafe_allow_html=True)
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("🏠 กลับบ้านกับไมล่า!", use_container_width=True):
+                    st.session_state['show_shop'] = False
+                    st.balloons(); time.sleep(1); st.rerun()
+            with c2: st.info("👈 กดปุ่มนี้ ไมล่าจะพาพี่กลับหน้าหลักเองค่ะ!")
+        filtered = [p for p in filtered if p.get('price', 0) > 0 or "#ร้านค้า" in p['content']]
+        if not filtered: st.warning("ยังไม่มีสินค้าวางขายจ้า")
+    else:
+        if selected_zone != "🏠 รวมทุกโซน": filtered = [p for p in filtered if selected_zone in p['content']]
+        if search_query: filtered = [p for p in filtered if search_query.lower() in p['content'].lower()]
 
-if filtered:
-    for post in reversed(filtered):
-        accent = post.get('color', '#A370F7')
-        if 'reactions' not in post: post['reactions'] = {'😻': post.get('likes', 0), '🙀': 0, '😿': 0, '😾': 0, '🧠': 0}
-        for e in ['😻', '🙀', '😿', '😾', '🧠']: 
-            if e not in post['reactions']: post['reactions'][e] = 0
+    # Display Logic
+    if filtered:
+        for post in reversed(filtered):
+            accent = post.get('color', '#A370F7')
+            
+            # Init Reactions
+            if 'reactions' not in post: post['reactions'] = {'😻': post.get('likes', 0), '🙀': 0, '😿': 0, '😾': 0, '🧠': 0}
+            for e in ['😻', '🙀', '😿', '😾', '🧠']: 
+                if e not in post['reactions']: post['reactions'][e] = 0
 
-        with st.container():
-            col_head, col_del = st.columns([0.85, 0.15])
-            with col_head:
+            with st.container():
                 st.markdown(f"""
-                <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
-                    <div style="font-size:40px; line-height:1; filter: drop-shadow(0 0 5px {accent});">{user_emoji}</div>
-                    <div style="line-height:1.2;">
-                        <div style="font-size:18px; font-weight:bold; color:#E6EDF3;">
-                            {profile_data.get('name', 'Dearluxion')} 
-                            <span style="color:{accent}; font-size:14px;">🛡️ Verified</span>
-                        </div>
-                        <div style="font-size:12px; color:#8B949E;">{post['date']}</div>
+                <div class="work-card-base" style="border-left: 5px solid {accent};">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:12px; color:#8B949E; background:#21262D; padding:2px 8px; border-radius:10px;">📅 {post['date']}</span>
+                        <span style="font-size:12px; color:{accent};">ID: {post['id']}</span>
                     </div>
+                    <div style="margin-top:10px; font-size:16px; white-space: pre-wrap;">{make_clickable(post['content'])}</div>
                 </div>
                 """, unsafe_allow_html=True)
-            
-            with col_del:
-                if st.session_state['is_admin']:
-                    if st.button("🗑️", key=f"del_{post['id']}"):
-                        all_p = dm.load_data()
-                        dm.save_data([x for x in all_p if x['id'] != post['id']])
-                        st.rerun()
 
-            if post.get('images'):
-                valid_imgs = [img for img in post['images'] if img.startswith("http")]
-                if valid_imgs:
-                    if len(valid_imgs) == 1: st.image(valid_imgs[0], use_container_width=True)
-                    else:
-                        img_cols = st.columns(3)
-                        for idx, img in enumerate(valid_imgs):
-                            with img_cols[idx % 3]: st.image(img, use_container_width=True)
-            elif post.get('image') and os.path.exists(post['image']): 
-                st.image(post['image'], use_container_width=True)
+                # Show Price
+                if post.get('price', 0) > 0:
+                    st.markdown(f"""<div class="price-tag">💰 ราคา: {post['price']:,} บาท</div>""", unsafe_allow_html=True)
+                    if st.button(f"🛒 สนใจสั่งซื้อ (Item {post['id']})", key=f"buy_{post['id']}"):
+                        st.markdown(f"<meta http-equiv='refresh' content='0; url={profile_data.get('ig', '#')}'>", unsafe_allow_html=True)
 
-            videos = post.get('video')
-            if videos:
-                if isinstance(videos, str): videos = [videos]
-                for vid in videos:
-                    if "drive.google.com" in vid and "preview" in vid:
-                        st.markdown(f'<iframe src="{vid}" width="100%" height="300" style="border:none; border-radius:10px;"></iframe>', unsafe_allow_html=True)
-                    elif vid.startswith("http") or os.path.exists(vid): st.video(vid)
-            
-            content_display = make_clickable(post['content']) 
-            yt = re.search(r'(https?://)?(www\.)?(youtube|youtu|youtube-nocookie)\.(com|be)/(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})', post['content'])
-            if yt: st.video(f"https://youtu.be/{yt.group(6)}")
-            
-            st.markdown(f"""<div class="work-card-base" style="border-left: 5px solid {accent};">{content_display}</div>""", unsafe_allow_html=True)
-            
-            if post.get('price', 0) > 0:
-                st.markdown(f"<div class='price-tag'>💰 ราคา: {post['price']:,} บาท</div>", unsafe_allow_html=True)
-                buy_link = profile_data.get('ig') or profile_data.get('discord') or "#"
-                st.markdown(f"""<a href="{buy_link}" target="_blank"><button style="background-color:{accent}; color:white; border:none; padding:8px 16px; border-radius:8px; width:100%; cursor:pointer;">🛍️ สนใจสั่งซื้อ (คลิก)</button></a><br><br>""", unsafe_allow_html=True)
-
-            st.write("---")
-            rx_cols = st.columns(5)
-            emojis = ['😻', '🙀', '😿', '😾', '🧠']
-            user_react = st.session_state['user_reactions'].get(post['id'])
-
-            for i, emo in enumerate(emojis):
-                with rx_cols[i]:
-                    count = post['reactions'].get(emo, 0)
-                    if st.button(f"{emo} {count}", key=f"react_{post['id']}_{i}", type="primary" if user_react == emo else "secondary"):
-                        d = dm.load_data()
-                        for p in d:
-                            if p['id'] == post['id']:
-                                if 'reactions' not in p: p['reactions'] = {'😻': 0, '🙀': 0, '😿': 0, '😾': 0, '🧠': 0}
-                                for e_key in emojis: 
-                                    if e_key not in p['reactions']: p['reactions'][e_key] = 0
-                                
-                                if user_react == emo:
-                                    p['reactions'][emo] = max(0, p['reactions'][emo] - 1)
-                                    del st.session_state['user_reactions'][post['id']]
-                                else:
-                                    if user_react and user_react in p['reactions']: 
-                                        p['reactions'][user_react] = max(0, p['reactions'][user_react] - 1)
-                                    p['reactions'][emo] += 1
-                                    st.session_state['user_reactions'][post['id']] = emo
-                                    
-                                    if emo == '😻': st.balloons()
-                                    elif emo == '🙀': st.snow()
-                                    elif emo == '😿': st.toast("โอ๋ๆ ไม่ร้องนะคะคนเก่ง... 😿☔", icon="☔")
-                                    elif emo == '😾': st.toast("ใจเย็นๆ นะคะพี่จ๋า! 🔥🔥", icon="🔥")
-                                    elif emo == '🧠': st.toast("สุดยอด! บิ๊กเบรนมากค่ะ! ✨🧠✨", icon="🧠")
-                                break
-                        dm.save_data(d)
-                        time.sleep(1.5); st.rerun()
-
-            # --- ส่วน Comment (ปรับใหม่ให้ซ่อนถ้าไม่ Login) ---
-            is_logged_in = st.session_state.get('discord_user') or st.session_state.get('is_admin')
-
-            with st.expander(f"💬 ความคิดเห็น ({len(post['comments'])})"):
-                # กรณี: ยังไม่ Login (ซ่อนคอมเมนต์แบบยั่วๆ)
-                if not is_logged_in:
-                    st.markdown("""
-                    <div style="background: repeating-linear-gradient(45deg, #161B22, #161B22 10px, #0d1117 10px, #0d1117 20px); 
-                                padding: 20px; text-align: center; border-radius: 10px; border: 1px dashed #A370F7; color: #8B949E;">
-                        <h3>🔒 ความลับของชาวแก๊ง!</h3>
-                        <p>มีบทสนทนาลับๆ ซ่อนอยู่ {num} ข้อความ...</p>
-                        <p style="font-size: 12px;">(Login Discord ที่เมนูซ้ายมือเพื่อปลดล็อคและร่วมวงสนทนา)</p>
-                    </div>
-                    """.format(num=len(post['comments'])), unsafe_allow_html=True)
-                
-                # กรณี: Login แล้ว (โชว์ตามปกติ)
-                else:
-                    if post['comments']:
-                        for i, c in enumerate(post['comments']):
-                            is_admin_comment = c.get('is_admin', False)
-                            if is_admin_comment:
-                                st.markdown(f"""<div class='admin-comment-box'><b>👑 {c['user']} (Owner):</b> {c['text']}</div>""", unsafe_allow_html=True)
-                                if c.get('image'):
-                                    if c['image'].startswith("http"): st.image(c['image'], width=200)
-                                    elif os.path.exists(c['image']): st.image(c['image'], width=200)
+                # Show Images
+                if post.get('images'):
+                    cols = st.columns(len(post['images']))
+                    for idx, img_url in enumerate(post['images']):
+                        with cols[idx]:
+                            if "drive.google.com" in img_url and "thumbnail" in img_url:
+                                st.markdown(f'<img src="{img_url}" style="width:100%; border-radius:10px;">', unsafe_allow_html=True)
                             else:
-                                st.markdown(f"<div class='comment-box'><b>{c['user']}:</b> {c['text']}</div>", unsafe_allow_html=True)
-                            
-                            # ปุ่มลบของ Admin
-                            if st.session_state['is_admin'] and st.button("ลบ", key=f"dc_{post['id']}_{i}"):
-                                d = dm.load_data()
-                                for x in d:
-                                    if x['id'] == post['id']: x['comments'].pop(i); break
-                                dm.save_data(d); st.rerun()
+                                st.image(img_url, use_container_width=True)
 
-                    # ฟอร์มคอมเมนต์ (เฉพาะคน Login แล้ว)
-                    admin_cmt_img_link = None
-                    if st.session_state['is_admin']:
-                        st.caption("👑 ตอบกลับในฐานะ Admin")
-                        admin_cmt_img_link = st.text_input("ลิงก์รูป (Google Drive/Web)", key=f"ci_{post['id']}", placeholder="https://...")
+                # Show Video
+                if post.get('video'):
+                    for v_link in post['video']:
+                        if "youtube.com" in v_link or "youtu.be" in v_link:
+                            st.video(v_link)
+                        elif "drive.google.com" in v_link:
+                            st.markdown(f'<iframe src="{v_link}" width="100%" height="300" frameborder="0" allow="autoplay"></iframe>', unsafe_allow_html=True)
 
-                    with st.form(key=f"cf_{post['id']}"):
+                # Reactions Buttons
+                c_react = st.columns([1,1,1,1,1, 3])
+                emojis = ['😻', '🙀', '😿', '😾', '🧠']
+                for idx, e in enumerate(emojis):
+                    with c_react[idx]:
+                        count = post['reactions'][e]
+                        if st.button(f"{e} {count}", key=f"r_{post['id']}_{e}"):
+                            # Update Logic
+                            d = dm.load_data()
+                            for x in d:
+                                if x['id'] == post['id']:
+                                    if 'reactions' not in x: x['reactions'] = post['reactions']
+                                    x['reactions'][e] = x['reactions'].get(e, 0) + 1
+                                    break
+                            dm.save_data(d)
+                            st.rerun()
+
+                # Comments Section
+                is_logged_in = st.session_state.get('discord_user') or st.session_state.get('is_admin')
+                
+                with st.expander(f"💬 ความคิดเห็น ({len(post['comments'])})"):
+                    if not is_logged_in:
+                        st.markdown(f"""
+                        <div style="background: repeating-linear-gradient(45deg, #161B22, #161B22 10px, #0d1117 10px, #0d1117 20px); 
+                                    padding: 20px; text-align: center; border-radius: 10px; border: 1px dashed #A370F7; color: #8B949E;">
+                            <h3>🔒 ความลับของชาวแก๊ง!</h3>
+                            <p>มีบทสนทนาลับๆ ซ่อนอยู่ {len(post['comments'])} ข้อความ...</p>
+                            <small>(Login Discord เพื่อดูและคอมเมนต์)</small>
+                        </div>""", unsafe_allow_html=True)
+                    else:
+                        if post['comments']:
+                            for i, c in enumerate(post['comments']):
+                                is_admin_comment = c.get('is_admin', False)
+                                user_display = f"👑 {c['user']} (Owner)" if is_admin_comment else f"{c['user']}"
+                                css_class = "admin-comment-box" if is_admin_comment else "comment-box"
+                                
+                                st.markdown(f"<div class='{css_class}'><b>{user_display}:</b> {c['text']}</div>", unsafe_allow_html=True)
+                                if c.get('image'): st.image(c['image'], width=200)
+
+                                if st.session_state['is_admin'] and st.button("ลบ", key=f"dc_{post['id']}_{i}"):
+                                    d = dm.load_data()
+                                    for x in d:
+                                        if x['id'] == post['id']: x['comments'].pop(i); break
+                                    dm.save_data(d); st.rerun()
+
+                        # Comment Form
+                        st.markdown("---")
+                        admin_cmt_img = None
                         if st.session_state['is_admin']:
-                            u = st.text_input("ชื่อ (Admin)", value="Dearluxion")
-                        else:
-                            d_name = st.session_state['discord_user']['username']
-                            st.text_input("ชื่อผู้ใช้", value=d_name, disabled=True)
-                            u = d_name
+                            st.caption("👑 ตอบกลับในฐานะ Admin")
+                            admin_cmt_img = st.text_input("ลิงก์รูป (Optional)", key=f"ci_{post['id']}")
 
-                        t = st.text_input("ข้อความ", placeholder="แสดงความคิดเห็น...", label_visibility="collapsed")
-                        
-                        if st.form_submit_button("ส่ง"):
-                            now = time.time()
-                            if not st.session_state['is_admin'] and now - st.session_state['last_comment_time'] < 35:
-                                st.toast(f"🧚‍♀️ ไมล่า: รออีก {35 - int(now - st.session_state['last_comment_time'])} วินาทีก่อนนะ!", icon="⛔")
-                            elif t:
-                                cmt_img_val = None
-                                if admin_cmt_img_link: cmt_img_val = convert_drive_link(admin_cmt_img_link)
-                                d = dm.load_data()
-                                for x in d:
-                                    if x['id'] == post['id']: 
-                                        x['comments'].append({"user": u, "text": t, "is_admin": st.session_state['is_admin'], "image": cmt_img_val})
-                                        break
-                                dm.save_data(d)
-                                if not st.session_state['is_admin']: st.session_state['last_comment_time'] = now 
-                                st.rerun()
-else:
-    if not st.session_state['show_shop']: st.info("ยังไม่มีโพสต์ครับ")
+                        with st.form(key=f"cf_{post['id']}"):
+                            if st.session_state['is_admin']:
+                                u_name = st.text_input("ชื่อคนตอบ", value="Dearluxion")
+                            else:
+                                u_name = st.session_state['discord_user']['username']
+                                st.text_input("ชื่อผู้ใช้", value=u_name, disabled=True)
 
-st.markdown("<br><center><small style='color:#A370F7'>Small Group by Dearluxion © 2025</small></center>", unsafe_allow_html=True)
+                            txt = st.text_input("ข้อความ", placeholder="แสดงความคิดเห็น...")
+                            
+                            if st.form_submit_button("ส่งคอมเมนต์"):
+                                now = time.time()
+                                if not st.session_state['is_admin'] and now - st.session_state['last_comment_time'] < 30:
+                                    st.toast("ใจเย็นๆ พิมพ์เร็วไปแล้ว!", icon="⛔")
+                                elif txt:
+                                    final_img = convert_drive_link(admin_cmt_img) if admin_cmt_img else None
+                                    d = dm.load_data()
+                                    for x in d:
+                                        if x['id'] == post['id']:
+                                            x['comments'].append({"user": u_name, "text": txt, "is_admin": st.session_state['is_admin'], "image": final_img})
+                                            break
+                                    dm.save_data(d)
+                                    if not st.session_state['is_admin']: st.session_state['last_comment_time'] = now
+                                    st.rerun()
+                st.markdown("---")
+
+    else:
+        if not st.session_state['show_shop']: st.info("ยังไม่มีโพสต์ครับ")
+
+st.markdown("<br><center><small style='color:#A370F7'>Small Group by Dearluxion © 2026</small></center>", unsafe_allow_html=True)
