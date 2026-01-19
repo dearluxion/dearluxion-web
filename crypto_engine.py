@@ -13,39 +13,59 @@ COIN_MAP = {
 @st.cache_data(ttl=300)
 def get_crypto_data(symbol_key, period="6mo", interval="1d"):
     symbol = COIN_MAP.get(symbol_key, "BTC-USD")
-    df = yf.download(symbol, period=period, interval=interval)
+    
+    # [Tweak] เพิ่ม auto_adjust=True เพื่อให้ได้กราฟที่คลีนขึ้น
+    df = yf.download(symbol, period=period, interval=interval, auto_adjust=True)
     
     if df.empty:
         return None
 
-    # --- [จุดแก้ปัญหาโลกแตก] ---
-    # yfinance ชอบส่งหัวตารางซ้อนกันมา (MultiIndex) เราต้องตบให้เรียบก่อน
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    # -------------------------
+    # [Fix MultiIndex] แก้ปัญหาหัวตารางซ้อนกัน 2 ชั้น
+    try:
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+    except: 
+        pass
+
+    # เช็คว่ามีคอลัมน์ Close ไหม ถ้าไม่มีให้จบการทำงาน
+    if 'Close' not in df.columns:
+        return None
 
     # คำนวณ RSI
-    df['RSI'] = ta.rsi(df['Close'], length=14)
+    try:
+        df['RSI'] = ta.rsi(df['Close'], length=14)
+    except: 
+        df['RSI'] = 50
     
-    # คำนวณ MACD
-    macd = ta.macd(df['Close'])
-    # กันเหนียว: ถ้าคำนวณไม่ได้ ให้ใส่ 0 ไปก่อน
-    if macd is not None:
-        df['MACD'] = macd['MACD_12_26_9']
-        df['MACD_SIGNAL'] = macd['MACDs_12_26_9']
-    else:
+    # คำนวณ MACD (จุดที่เคย Error)
+    try:
+        macd = ta.macd(df['Close'])
+        if macd is not None and not macd.empty:
+            # ดึงชื่อคอลัมน์อัตโนมัติ (กันชื่อเปลี่ยน)
+            df['MACD'] = macd.iloc[:, 0] 
+            df['MACD_SIGNAL'] = macd.iloc[:, 2]
+        else:
+            df['MACD'] = 0
+            df['MACD_SIGNAL'] = 0
+    except:
         df['MACD'] = 0
         df['MACD_SIGNAL'] = 0
     
     # Bollinger Bands
-    bb = ta.bbands(df['Close'], length=20)
-    if bb is not None:
-        df['BB_UPPER'] = bb['BBU_20_2.0']
-        df['BB_LOWER'] = bb['BBL_20_2.0']
+    try:
+        bb = ta.bbands(df['Close'], length=20)
+        if bb is not None and not bb.empty:
+            df['BB_UPPER'] = bb.iloc[:, 0]
+            df['BB_LOWER'] = bb.iloc[:, 2]
+    except: 
+        pass
 
     # EMA
-    df['EMA_50'] = ta.ema(df['Close'], length=50)
-    df['EMA_200'] = ta.ema(df['Close'], length=200)
+    try:
+        df['EMA_50'] = ta.ema(df['Close'], length=50)
+        df['EMA_200'] = ta.ema(df['Close'], length=200)
+    except: 
+        pass
 
     return df
 
@@ -64,9 +84,11 @@ def get_crypto_news(symbol_key):
             if keyword in title or keyword in summary or "market" in title or "bitcoin" in title:
                 news_list.append(f"- {entry.title} ({entry.published})")
                 count += 1
-                if count >= 5: break 
+                if count >= 5: 
+                    break 
                 
-        if not news_list: return "ไม่มีข่าวสำคัญในช่วง 24 ชม. ให้วิเคราะห์จากกราฟเป็นหลัก"
+        if not news_list: 
+            return "ไม่มีข่าวสำคัญในช่วง 24 ชม. ให้วิเคราะห์จากกราฟเป็นหลัก"
         return "\n".join(news_list)
     except:
         return "ไม่สามารถดึงข่าวได้ (RSS Error)"

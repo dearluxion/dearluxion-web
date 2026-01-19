@@ -62,6 +62,8 @@ if 'num_vid_links' not in st.session_state: st.session_state['num_vid_links'] = 
 if 'discord_user' not in st.session_state: st.session_state['discord_user'] = None
 if 'show_crypto' not in st.session_state: st.session_state['show_crypto'] = False
 if 'trigger_analysis' not in st.session_state: st.session_state['trigger_analysis'] = False
+if 'filtered' not in st.session_state: st.session_state['filtered'] = []
+filtered = []  # ประกาศตัวแปร global ดักไว้เลย กันพลาด
 
 # --- Login Discord Logic (Auto Admin Check) ---
 if "code" in st.query_params:
@@ -364,8 +366,6 @@ if st.session_state['is_admin']:
     st.markdown("---")
 
 # --- 5. Feed Display ---
-filtered = []  # ✅ สำคัญมาก! ต้องวางชิดซ้ายสุด (ไม่ต้องย่อหน้า)
-
 # [Crypto War Room Display]
 if st.session_state.get('show_crypto', False):
     filtered = []  # รีเซต filtered สำหรับโหมด Crypto
