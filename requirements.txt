@@ -6,6 +6,10 @@ oauth2client
 youtube-transcript-api
 requests
 Pillow
-yfinance          
-plotly            
-pandas            
+yfinance
+plotly
+pandas
+pandas_ta
+feedparser
+beautifulsoup4
+scipy

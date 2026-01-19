@@ -5,13 +5,19 @@ import re
 import time
 import random
 import base64
+import plotly.graph_objects as go
 
 # --- [IMPORTED MODULES] ---
 from styles import get_css 
 from utils import convert_drive_link, convert_drive_video_link, make_clickable, send_post_to_discord, exchange_code_for_token, get_discord_user
 import data_manager as dm
 import sidebar_manager as sm
-import ai_manager as ai 
+import ai_manager as ai
+try:
+    import crypto_engine as ce
+    crypto_available = True
+except ImportError:
+    crypto_available = False 
 
 # --- 0. ตั้งค่า API KEY (Multi-Key Support) ---
 # ดึง Key ทั้งหมดจาก Secrets
@@ -54,6 +60,8 @@ if 'bar_result' not in st.session_state: st.session_state['bar_result'] = None
 if 'num_img_links' not in st.session_state: st.session_state['num_img_links'] = 1
 if 'num_vid_links' not in st.session_state: st.session_state['num_vid_links'] = 1
 if 'discord_user' not in st.session_state: st.session_state['discord_user'] = None
+if 'show_crypto' not in st.session_state: st.session_state['show_crypto'] = False
+if 'trigger_analysis' not in st.session_state: st.session_state['trigger_analysis'] = False
 
 # --- Login Discord Logic (Auto Admin Check) ---
 if "code" in st.query_params:
@@ -356,9 +364,86 @@ if st.session_state['is_admin']:
     st.markdown("---")
 
 # --- 5. Feed Display ---
-posts = dm.load_data()
-filtered = posts
-if st.session_state['show_shop']:
+# [Crypto War Room Display]
+if st.session_state.get('show_crypto', False):
+    if not crypto_available:
+        st.error("⚠️ โมดูล crypto_engine ยังไม่พร้อม กรุณาติดตั้ง")
+    else:
+        st.markdown("## 📈 Crypto War Room (Shadow Oracle)")
+        st.caption("พื้นที่วิเคราะห์กราฟด้วย AI ระดับ God-Tier สำหรับท่าน Dearluxion")
+        
+        # เลือกเหรียญ
+        col_c1, col_c2 = st.columns([3, 1])
+        with col_c1:
+            coin_select = st.selectbox("เลือกสินทรัพย์ประหาร:", ["BTC", "SHIB"])
+        with col_c2:
+            if st.button("🔮 เรียก Oracle", type="primary", use_container_width=True):
+                st.session_state['trigger_analysis'] = True
+
+        # ดึงข้อมูล
+        with st.spinner(f"กำลังดึงข้อมูลตลาดล่าสังหารของ {coin_select}..."):
+            df = ce.get_crypto_data(coin_select)
+            news = ce.get_crypto_news(coin_select)
+            fg_index = ce.get_fear_and_greed()
+        
+        if df is not None:
+            # 1. แสดงกราฟ Interactive (Candlestick + EMA)
+            latest_price = df['Close'].iloc[-1]
+            price_change = df['Close'].iloc[-1] - df['Close'].iloc[-2] if len(df) > 1 else 0
+            color_price = "green" if price_change >= 0 else "red"
+            
+            st.markdown(f"### 💎 {coin_select} Price: <span style='color:{color_price}'>${latest_price:,.4f}</span>", unsafe_allow_html=True)
+            
+            # สร้างกราฟด้วย Plotly
+            fig = go.Figure()
+            fig.add_trace(go.Candlestick(x=df.index,
+                            open=df['Open'], high=df['High'],
+                            low=df['Low'], close=df['Close'], name='Price'))
+            if 'EMA_50' in df.columns:
+                fig.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], line=dict(color='orange', width=1), name='EMA 50'))
+            if 'EMA_200' in df.columns:
+                fig.add_trace(go.Scatter(x=df.index, y=df['EMA_200'], line=dict(color='blue', width=1), name='EMA 200'))
+            
+            fig.update_layout(template="plotly_dark", height=500, margin=dict(l=0, r=0, t=30, b=0))
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # 2. แสดง Dashboard Indicators
+            k1, k2, k3, k4 = st.columns(4)
+            rsi_val = df['RSI'].iloc[-1] if 'RSI' in df.columns else 50
+            macd_val = df['MACD'].iloc[-1] if 'MACD' in df.columns else 0
+            macd_signal = df['MACD_SIGNAL'].iloc[-1] if 'MACD_SIGNAL' in df.columns else 0
+            
+            k1.metric("RSI (14)", f"{rsi_val:.2f}", delta="Overbought" if rsi_val > 70 else "Oversold" if rsi_val < 30 else "Neutral")
+            k2.metric("MACD", f"{macd_val:.4f}")
+            k3.metric("Fear & Greed", f"{fg_index.get('value', 'N/A')}", f"{fg_index.get('value_classification', '')}")
+            k4.metric("EMA Trend", "Bullish" if df['Close'].iloc[-1] > df['EMA_200'].iloc[-1] else "Bearish" if 'EMA_200' in df.columns else "N/A")
+
+            # 3. AI Analysis Section
+            st.markdown("---")
+            if st.session_state.get('trigger_analysis'):
+                st.markdown("### 👁️ Shadow Oracle Analysis")
+                with st.chat_message("ai", avatar="👁️"):
+                    with st.spinner("AI กำลังเข้าทรง... อ่านกราฟและข่าว..."):
+                        # เตรียมข้อมูลส่งให้ AI
+                        indicators = {
+                            "rsi": f"{rsi_val:.2f}",
+                            "macd_signal": "Bullish" if macd_val > macd_signal else "Bearish"
+                        }
+                        # เรียก AI Manager
+                        if ai_available and crypto_available:
+                            analysis_result = ai.analyze_crypto_god_mode(coin_select, latest_price, indicators, news, fg_index)
+                        else:
+                            analysis_result = "ไม่สามารถทำการวิเคราะห์ได้ เนื่องจาก API ยังไม่พร้อม"
+                        
+                        st.markdown(analysis_result)
+                        st.session_state['trigger_analysis'] = False # Reset
+            else:
+                st.info("กดปุ่ม '🔮 เรียก Oracle' ด้านบนเพื่อดูคำทำนายทิศทางราคา")
+
+        else:
+            st.error("ไม่สามารถดึงข้อมูลกราฟได้ ลองใหม่ภายหลัง")
+
+elif st.session_state['show_shop']:
     st.markdown("## 🛒 ร้านค้า (Shop Zone)")
     with st.expander("🧚‍♀️ พี่จ๋า~ หาทางกลับไม่เจอเหรอคะ? (จิ้มไมล่าสิ!) 💖", expanded=True):
         st.markdown("""<div class="cute-guide">✨ ทางลัดพิเศษสำหรับพี่คนโปรดของไมล่า! 🌈</div>""", unsafe_allow_html=True)
@@ -368,11 +453,12 @@ if st.session_state['show_shop']:
                 st.session_state['show_shop'] = False
                 st.balloons(); time.sleep(1); st.rerun()
         with c2: st.info("👈 กดปุ่มนี้ ไมล่าจะพาพี่กลับหน้าหลักเองค่ะ!")
-    filtered = [p for p in filtered if p.get('price', 0) > 0 or "#ร้านค้า" in p['content']]
+    posts = dm.load_data()
+    filtered = [p for p in posts if p.get('price', 0) > 0 or "#ร้านค้า" in p['content']]
     if not filtered: st.warning("ยังไม่มีสินค้าวางขายจ้า")
 else:
-    if selected_zone != "🏠 รวมทุกโซน": filtered = [p for p in filtered if selected_zone in p['content']]
-    if search_query: filtered = [p for p in filtered if search_query.lower() in p['content'].lower()]
+    posts = dm.load_data()
+    filtered = posts
 
 if filtered:
     for post in reversed(filtered):

@@ -515,14 +515,27 @@ def render_sidebar(ai_available):
             for t in tags: all_hashtags.add(f"#{t}")
 
     st.sidebar.markdown("### 📂 โซนของคุณ")
+    
+    # เพิ่มตัวแปร session state สำหรับหน้า Crypto
+    if 'show_crypto' not in st.session_state: st.session_state['show_crypto'] = False
+    
     selected_zone = "🏠 รวมทุกโซน"
     if st.session_state['show_shop']:
         st.sidebar.info("🛒 กำลังดูร้านค้า")
         if st.sidebar.button("🏠 กลับหน้าหลัก"):
             st.session_state['show_shop'] = False
             st.rerun()
+    elif st.session_state['show_crypto']:
+        st.sidebar.info("📈 กำลังอยู่ในห้องค้า (War Room)")
+        if st.sidebar.button("🏠 กลับหน้าหลัก", key="back_from_crypto"):
+            st.session_state['show_crypto'] = False
+            st.rerun()
     else:
         selected_zone = st.sidebar.radio("หมวดหมู่:", ["🏠 รวมทุกโซน"] + sorted(list(all_hashtags)))
+        # เพิ่มปุ่มเข้าห้อง Crypto ตรงนี้
+        if st.sidebar.button("📈 Crypto War Room (AI)", type="primary"):
+            st.session_state['show_crypto'] = True
+            st.rerun()
 
     st.sidebar.markdown("---")
     
