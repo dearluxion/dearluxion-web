@@ -364,10 +364,11 @@ if st.session_state['is_admin']:
     st.markdown("---")
 
 # --- 5. Feed Display ---
-filtered = []  # <--- เติมบรรทัดนี้ลงไปดักไว้ก่อนเลยครับ
+filtered = []  # ✅ สำคัญมาก! ต้องวางชิดซ้ายสุด (ไม่ต้องย่อหน้า)
 
 # [Crypto War Room Display]
 if st.session_state.get('show_crypto', False):
+    filtered = []  # รีเซต filtered สำหรับโหมด Crypto
     if not crypto_available:
         st.error("⚠️ โมดูล crypto_engine ยังไม่พร้อม กรุณาติดตั้ง")
     else:
