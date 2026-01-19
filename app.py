@@ -527,43 +527,49 @@ if st.session_state.get('show_crypto', False):
             for idx, c_symbol in enumerate(coin_list):
                 status_text.text(f"กำลังเจาะระบบวิเคราะห์ {c_symbol} ({idx+1}/{len(coin_list)})...")
                 
-                # Fetch Data แบบเร็ว
-                df_batch = ce.get_crypto_data(c_symbol)
+                # 1. เช็คก่อนว่าวันนี้วิเคราะห์ไปหรือยัง (ประหยัด API บอส)
+                cached_data = dm.get_crypto_cache(c_symbol)
                 
-                if df_batch is not None:
-                    last_p = df_batch['Close'].iloc[-1]
-                    rsi_v = df_batch['RSI'].iloc[-1] if 'RSI' in df_batch.columns else 50
+                if cached_data:
+                    # ถ้ามีใน Cache แล้ว ให้ดึงมาโชว์เลย
+                    with st.expander(f"💎 {c_symbol} (จากฐานข้อมูลเดิมวันนี้)", expanded=False):
+                        st.success(f"⚡ ใช้ข้อมูลเดิม (อัปเดตเมื่อ: {cached_data['updated_at']} น.)")
+                        st.markdown(cached_data['analysis'])
+                else:
+                    # 2. ถ้ายังไม่มี ให้ดึงข้อมูลกราฟและสั่ง AI วิเคราะห์ใหม่
+                    df_batch = ce.get_crypto_data(c_symbol)
                     
-                    # Expander แยกแต่ละเหรียญ (แสดงเป็น ฿)
-                    with st.expander(f"💎 {c_symbol} : ฿{last_p:,.4f} | RSI: {rsi_v:.1f}", expanded=False):
-                        # เรียก AI (ถ้ามี Token เหลือ)
-                        if ai_available:
-                            # [UPDATED] ส่งข้อมูล Quant ใหม่ๆ
-                            macd_v = df_batch['MACD'].iloc[-1] if 'MACD' in df_batch.columns else 0
-                            macd_signal_v = df_batch['MACD_SIGNAL'].iloc[-1] if 'MACD_SIGNAL' in df_batch.columns else 0
-                            adx_v = df_batch['ADX'].iloc[-1] if 'ADX' in df_batch.columns else 20
-                            atr_v = df_batch['ATR'].iloc[-1] if 'ATR' in df_batch.columns else 0
-                            support_v = df_batch['Support_Level'].iloc[-1] if 'Support_Level' in df_batch.columns else (last_p * 0.95)
-                            resistance_v = df_batch['Resistance_Level'].iloc[-1] if 'Resistance_Level' in df_batch.columns else (last_p * 1.05)
-                            
-                            indicators_b = {
-                                "rsi": f"{rsi_v:.2f}",
-                                "macd": f"{macd_v:.6f}",
-                                "macd_signal": f"{macd_signal_v:.6f}",
-                                "adx": f"{adx_v:.2f}",
-                                "atr": f"{atr_v:.2f}",
-                                "support": f"{support_v:.2f}",
-                                "resistance": f"{resistance_v:.2f}"
-                            }
-                            res_batch = ai.analyze_crypto_god_mode(c_symbol, last_p, indicators_b, "วิเคราะห์ตามกราฟเทคนิคอลล่าสุด", {"value":"50", "value_classification":"Neutral"})
-                            st.markdown(res_batch)
-                        else:
-                            st.error("AI ไม่พร้อมใช้งาน")
+                    if df_batch is not None:
+                        last_p = df_batch['Close'].iloc[-1]
+                        rsi_v = df_batch['RSI'].iloc[-1] if 'RSI' in df_batch.columns else 50
+                        
+                        with st.expander(f"💎 {c_symbol} : ฿{last_p:,.4f} | RSI: {rsi_v:.1f}", expanded=False):
+                            if ai_available:
+                                # เตรียมอินดิเคเตอร์
+                                indicators_b = {
+                                    "rsi": f"{rsi_v:.2f}",
+                                    "macd": f"{df_batch['MACD'].iloc[-1]:.6f}" if 'MACD' in df_batch.columns else "0",
+                                    "macd_signal": f"{df_batch['MACD_SIGNAL'].iloc[-1]:.6f}" if 'MACD_SIGNAL' in df_batch.columns else "0",
+                                    "adx": f"{df_batch['ADX'].iloc[-1]:.2f}" if 'ADX' in df_batch.columns else "20",
+                                    "atr": f"{df_batch['ATR'].iloc[-1]:.2f}" if 'ATR' in df_batch.columns else "0",
+                                    "support": f"{df_batch['Support_Level'].iloc[-1]:.2f}" if 'Support_Level' in df_batch.columns else f"{last_p * 0.95:.2f}",
+                                    "resistance": f"{df_batch['Resistance_Level'].iloc[-1]:.2f}" if 'Resistance_Level' in df_batch.columns else f"{last_p * 1.05:.2f}"
+                                }
+                                
+                                # สั่ง AI วิเคราะห์สด
+                                res_batch = ai.analyze_crypto_god_mode(c_symbol, last_p, indicators_b, "วิเคราะห์ตามกราฟเทคนิคอลล่าสุด", {"value":"50", "value_classification":"Neutral"})
+                                st.markdown(res_batch)
+                                
+                                # --- [จุดที่เพิ่ม] บันทึกลง Google Sheets ทันที ---
+                                dm.update_crypto_cache(c_symbol, res_batch)
+                                st.caption(f"✅ บันทึกลงระบบสำเร็จเมื่อ {datetime.datetime.now().strftime('%H:%M')} น.")
+                            else:
+                                st.error("AI ไม่พร้อมใช้งาน")
                 
                 progress_bar.progress((idx + 1) / len(coin_list))
-                time.sleep(0.5) # พักหายใจนิดนึง กัน API รวน
+                time.sleep(0.5) 
             
-            status_text.success("✅ วิเคราะห์ครบ 8 เหรียญแล้วครับท่านเดียร์!")
+            status_text.success("✅ วิเคราะห์และบันทึกข้อมูลครบทั้ง 8 เหรียญแล้วครับท่านเดียร์!")
 
 elif st.session_state['show_shop']:
     st.markdown("## 🛒 ร้านค้า (Shop Zone)")
