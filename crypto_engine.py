@@ -5,26 +5,28 @@ import pandas_ta as ta
 import feedparser
 import requests
 
-# [UPDATE] เพิ่มรายชื่อเหรียญให้ครบ 8 ตัว
+# [UPDATE] เปลี่ยนรายชื่อเหรียญเป็นคู่เงินบาท (THB)
 COIN_MAP = {
-    "BTC": "BTC-USD",
-    "ETH": "ETH-USD",
-    "BNB": "BNB-USD",
-    "SOL": "SOL-USD",
-    "XRP": "XRP-USD",
-    "DOGE": "DOGE-USD",
-    "PEPE": "PEPE-USD",
-    "SHIB": "SHIB-USD"
+    "BTC": "BTC-THB",
+    "ETH": "ETH-THB",
+    "BNB": "BNB-THB",
+    "SOL": "SOL-THB",
+    "XRP": "XRP-THB",
+    "DOGE": "DOGE-THB",
+    "PEPE": "PEPE-THB", # หมายเหตุ: บางครั้ง PEPE/SHIB ใน Yahoo Finance แบบ THB อาจหาข้อมูลยาก ถ้าไม่ขึ้นกราฟอาจต้องใช้ USD
+    "SHIB": "SHIB-THB"
 }
 
 @st.cache_data(ttl=300)
 def get_crypto_data(symbol_key, period="2y", interval="1d"):
-    symbol = COIN_MAP.get(symbol_key, "BTC-USD")
+    symbol = COIN_MAP.get(symbol_key, "BTC-THB")
     
     # [Tweak] เพิ่ม auto_adjust=True เพื่อให้ได้กราฟที่คลีนขึ้น
     df = yf.download(symbol, period=period, interval=interval, auto_adjust=True)
     
     if df.empty:
+        # Fallback: ถ้าหา THB ไม่เจอ ลองหา USD แล้วคูณอัตราแลกเปลี่ยน (แบบคร่าวๆ หรือแจ้งเตือน)
+        # แต่ในที่นี้จะ return None ไปก่อนเพื่อให้ App แจ้งว่าดึงข้อมูลไม่ได้
         return None
 
     # [Fix MultiIndex] แก้ปัญหาหัวตารางซ้อนกัน 2 ชั้น
@@ -44,11 +46,10 @@ def get_crypto_data(symbol_key, period="2y", interval="1d"):
     except: 
         df['RSI'] = 50
     
-    # คำนวณ MACD (จุดที่เคย Error)
+    # คำนวณ MACD
     try:
         macd = ta.macd(df['Close'])
         if macd is not None and not macd.empty:
-            # ดึงชื่อคอลัมน์อัตโนมัติ (กันชื่อเปลี่ยน)
             df['MACD'] = macd.iloc[:, 0] 
             df['MACD_SIGNAL'] = macd.iloc[:, 2]
         else:

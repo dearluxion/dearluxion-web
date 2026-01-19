@@ -366,16 +366,16 @@ if st.session_state['is_admin']:
     st.markdown("---")
 
 # --- 5. Feed Display ---
-# [Crypto War Room Display]
+# [Crypto War Room Display (RESTORED THAI VERSION)]
 if st.session_state.get('show_crypto', False):
     filtered = []  # รีเซต filtered สำหรับโหมด Crypto
     if not crypto_available:
         st.error("⚠️ โมดูล crypto_engine ยังไม่พร้อม กรุณาติดตั้ง")
     else:
         st.markdown("## 📈 Crypto War Room (Shadow Oracle)")
-        st.caption("พื้นที่วิเคราะห์กราฟด้วย AI ระดับ God-Tier สำหรับท่าน Dearluxion")
+        st.caption("พื้นที่วิเคราะห์กราฟด้วย AI ระดับ God-Tier สำหรับท่าน Dearluxion (หน่วย: THB)")
         
-        # [UPDATE] รายชื่อเหรียญครบ 8 ตัวตามสั่ง
+        # รายชื่อเหรียญครบ 8 ตัว
         coin_list = ["BTC", "ETH", "BNB", "SOL", "XRP", "DOGE", "PEPE", "SHIB"]
         
         col_c1, col_c2 = st.columns([2, 1])
@@ -386,18 +386,30 @@ if st.session_state.get('show_crypto', False):
                 st.session_state['trigger_analysis'] = True
                 st.session_state['analyze_all'] = False # Reset โหมดเหมา
         
-        # [NEW] ปุ่มวิเคราะห์เหมาเข่ง
+        # ปุ่มวิเคราะห์เหมาเข่ง
         if st.button("🚀 วิเคราะห์ทั้ง 8 เหรียญ โปรดของท่านเดียร์", use_container_width=True):
             st.session_state['analyze_all'] = True
             st.session_state['trigger_analysis'] = False
             st.rerun()
 
+        # Helper แปลผล Fear Greed (แปลไทย)
+        def translate_fng(classification):
+            mapping = {
+                "Extreme Fear": "กลัวสุดขีด (Extreme Fear)",
+                "Fear": "กลัว (Fear)",
+                "Neutral": "เฉยๆ (Neutral)",
+                "Greed": "โลภ (Greed)",
+                "Extreme Greed": "โลภสุดขีด (Extreme Greed)"
+            }
+            return mapping.get(classification, classification)
+
         # =========================================================
-        # CASE A: วิเคราะห์ทีละเหรียญ (Logic เดิมแต่ปรับปรุง)
+        # CASE A: วิเคราะห์ทีละเหรียญ (THAI VERSION)
         # =========================================================
         if not st.session_state.get('analyze_all'):
             # ดึงข้อมูล
             with st.spinner(f"กำลังดึงข้อมูลตลาดล่าสังหารของ {coin_select}..."):
+                # crypto_engine จะ map เป็น THB ให้อัตโนมัติในไฟล์ ce.py ที่แก้ไป
                 df = ce.get_crypto_data(coin_select)
                 news = ce.get_crypto_news(coin_select)
                 fg_index = ce.get_fear_and_greed()
@@ -408,42 +420,47 @@ if st.session_state.get('show_crypto', False):
                 price_change = df['Close'].iloc[-1] - df['Close'].iloc[-2] if len(df) > 1 else 0
                 color_price = "green" if price_change >= 0 else "red"
                 
-                # Format ราคาตามความเหมาะสม (PEPE/SHIB ทศนิยมเยอะหน่อย)
-                price_fmt = "{:,.8f}" if coin_select in ["SHIB", "PEPE", "DOGE"] else "{:,.2f}"
-                st.markdown(f"### 💎 {coin_select} Price: <span style='color:{color_price}'>${price_fmt.format(latest_price)}</span>", unsafe_allow_html=True)
+                # Format ราคา THB
+                price_fmt = "{:,.4f}" if coin_select in ["SHIB", "PEPE", "DOGE"] else "{:,.2f}"
+                st.markdown(f"### 💎 {coin_select} ราคาล่าสุด: <span style='color:{color_price}'>฿{price_fmt.format(latest_price)}</span>", unsafe_allow_html=True)
                 
-                # สร้างกราฟด้วย Plotly
+                # สร้างกราฟด้วย Plotly (แปล Label ไทย)
                 fig = go.Figure()
                 fig.add_trace(go.Candlestick(x=df.index,
                                 open=df['Open'], high=df['High'],
-                                low=df['Low'], close=df['Close'], name='Price'))
+                                low=df['Low'], close=df['Close'], name='ราคา'))
                 if 'EMA_50' in df.columns:
-                    fig.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], line=dict(color='orange', width=1), name='EMA 50'))
+                    fig.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], line=dict(color='orange', width=1), name='เส้นค่าเฉลี่ย 50'))
                 if 'EMA_200' in df.columns:
-                    fig.add_trace(go.Scatter(x=df.index, y=df['EMA_200'], line=dict(color='blue', width=1), name='EMA 200'))
+                    fig.add_trace(go.Scatter(x=df.index, y=df['EMA_200'], line=dict(color='blue', width=1), name='เส้นค่าเฉลี่ย 200'))
                 
                 fig.update_layout(template="plotly_dark", height=500, margin=dict(l=0, r=0, t=30, b=0))
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # 2. Dashboard Indicators
+                # 2. Dashboard Indicators (แปลไทย)
                 k1, k2, k3, k4 = st.columns(4)
                 rsi_val = df['RSI'].iloc[-1] if 'RSI' in df.columns else 50
                 macd_val = df['MACD'].iloc[-1] if 'MACD' in df.columns else 0
                 macd_signal = df['MACD_SIGNAL'].iloc[-1] if 'MACD_SIGNAL' in df.columns else 0
                 
-                k1.metric("RSI (14)", f"{rsi_val:.2f}", delta="Overbought" if rsi_val > 70 else "Oversold" if rsi_val < 30 else "Neutral")
+                rsi_status = "ซื้อมากเกิน (Overbought)" if rsi_val > 70 else "ขายมากเกิน (Oversold)" if rsi_val < 30 else "ปกติ (Neutral)"
+                k1.metric("RSI (14)", f"{rsi_val:.2f}", delta=rsi_status)
+                
                 k2.metric("MACD", f"{macd_val:.6f}")
-                k3.metric("Fear & Greed", f"{fg_index.get('value', 'N/A')}", f"{fg_index.get('value_classification', '')}")
+                
+                fg_val = fg_index.get('value', 'N/A')
+                fg_class = translate_fng(fg_index.get('value_classification', ''))
+                k3.metric("ดัชนีกลัว/โลภ", f"{fg_val}", fg_class)
                 
                 ema_trend = "N/A"
                 if 'EMA_200' in df.columns:
                     try:
                         c_val = float(df['Close'].iloc[-1])
                         e_val = float(df['EMA_200'].iloc[-1])
-                        ema_trend = "Bullish" if c_val > e_val else "Bearish"
+                        ema_trend = "ขาขึ้น (Bullish)" if c_val > e_val else "ขาลง (Bearish)"
                     except: pass
                 
-                k4.metric("EMA Trend", ema_trend)
+                k4.metric("แนวโน้ม EMA", ema_trend)
 
                 # 3. AI Analysis Section
                 st.markdown("---")
@@ -457,7 +474,8 @@ if st.session_state.get('show_crypto', False):
                                 "macd_signal": "Bullish" if macd_val > macd_signal else "Bearish"
                             }
                             if ai_available and crypto_available:
-                                analysis_result = ai.analyze_crypto_god_mode(coin_select, latest_price, indicators, news, fg_index)
+                                # แจ้ง AI ว่าเป็น THB
+                                analysis_result = ai.analyze_crypto_god_mode(coin_select + " (THB)", latest_price, indicators, news, fg_index)
                             else:
                                 analysis_result = "ไม่สามารถทำการวิเคราะห์ได้ เนื่องจาก API ยังไม่พร้อม"
                             
@@ -466,10 +484,10 @@ if st.session_state.get('show_crypto', False):
                 else:
                     st.info("กดปุ่ม 'วิเคราะห์เหรียญนี้' ด้านบนเพื่อดูคำทำนาย")
             else:
-                st.error("ไม่สามารถดึงข้อมูลกราฟได้")
+                st.error("ไม่สามารถดึงข้อมูลกราฟได้ (ตรวจสอบคู่เหรียญ THB)")
 
         # =========================================================
-        # CASE B: วิเคราะห์รวดเดียว 8 เหรียญ (Analyze All)
+        # CASE B: วิเคราะห์รวดเดียว 8 เหรียญ (God Mode Batch - THAI)
         # =========================================================
         else:
             st.markdown("### 🚀 รายงานสรุป 8 เหรียญโปรด (God Mode Batch)")
@@ -491,13 +509,13 @@ if st.session_state.get('show_crypto', False):
                     last_p = df_batch['Close'].iloc[-1]
                     rsi_v = df_batch['RSI'].iloc[-1] if 'RSI' in df_batch.columns else 50
                     
-                    # Expander แยกแต่ละเหรียญ
-                    with st.expander(f"💎 {c_symbol} : ${last_p:,.6f} | RSI: {rsi_v:.1f}", expanded=False):
+                    # Expander แยกแต่ละเหรียญ (แสดงเป็น ฿)
+                    with st.expander(f"💎 {c_symbol} : ฿{last_p:,.4f} | RSI: {rsi_v:.1f}", expanded=False):
                         # เรียก AI (ถ้ามี Token เหลือ)
                         if ai_available:
                             indicators_b = {"rsi": f"{rsi_v:.2f}", "macd_signal": "N/A"}
                             # ใช้ข่าว dummy เพื่อความเร็ว
-                            res_batch = ai.analyze_crypto_god_mode(c_symbol, last_p, indicators_b, "วิเคราะห์ตามกราฟเทคนิคอลล่าสุด", {"value":"50", "value_classification":"Neutral"})
+                            res_batch = ai.analyze_crypto_god_mode(c_symbol + " (THB)", last_p, indicators_b, "วิเคราะห์ตามกราฟเทคนิคอลล่าสุด", {"value":"50", "value_classification":"Neutral"})
                             st.markdown(res_batch)
                         else:
                             st.error("AI ไม่พร้อมใช้งาน")
