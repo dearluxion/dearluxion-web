@@ -266,3 +266,38 @@ def update_crypto_cache(symbol, analysis_text):
             json.dump(local_data, f, ensure_ascii=False, indent=4)
     except: 
         pass
+
+# --- [NEW] SNIPPET MANAGER (CODE PORTFOLIO) ---
+SNIPPETS_FILE = "snippets_db.json"
+
+def load_snippets():
+    sh = get_gsheet_client()
+    if sh:
+        try:
+            ws = sh.worksheet("snippets")
+            records = ws.get_all_records()
+            return records
+        except: pass
+        
+    if not os.path.exists(SNIPPETS_FILE): return []
+    try:
+        with open(SNIPPETS_FILE, "r", encoding="utf-8") as f: return json.load(f)
+    except: return []
+
+def save_snippets(data):
+    sh = get_gsheet_client()
+    if sh:
+        try:
+            try: ws = sh.worksheet("snippets")
+            except: ws = sh.add_worksheet("snippets", 100, 5)
+            
+            rows = [["id", "title", "lang", "desc", "code", "qr_link"]]
+            for s in data:
+                rows.append([s['id'], s['title'], s['lang'], s['desc'], s['code'], s.get('qr_link', '')])
+            ws.clear()
+            ws.update(rows)
+        except Exception as e: print(f"Sheet Error: {e}")
+
+    try:
+        with open(SNIPPETS_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
+    except: st.error("บันทึก Snippet ไม่สำเร็จ")

@@ -62,6 +62,7 @@ if 'num_vid_links' not in st.session_state: st.session_state['num_vid_links'] = 
 if 'discord_user' not in st.session_state: st.session_state['discord_user'] = None
 if 'show_crypto' not in st.session_state: st.session_state['show_crypto'] = False
 if 'trigger_analysis' not in st.session_state: st.session_state['trigger_analysis'] = False
+if 'show_code_zone' not in st.session_state: st.session_state['show_code_zone'] = False
 if 'filtered' not in st.session_state: st.session_state['filtered'] = []
 filtered = []  # ประกาศตัวแปร global ดักไว้เลย กันพลาด
 
@@ -161,7 +162,7 @@ if profile_data.get('billboard'):
 
 # --- 4. Admin Panel ---
 if st.session_state['is_admin']:
-    tab_post, tab_profile, tab_inbox = st.tabs(["📝 เขียน / ขายของ", "👤 แก้ไขโปรไฟล์", "📬 อ่านจดหมายลับ"])
+    tab_post, tab_profile, tab_inbox, tab_code = st.tabs(["📝 เขียน / ขายของ", "👤 แก้ไขโปรไฟล์", "📬 อ่านจดหมายลับ", "💻 ลงโค้ด"])
     
     with tab_post:
         st.info("ℹ️ **แจ้งเตือนจาก Eri:** ระบบอัปโหลดไฟล์ถูกปิดแล้วนะ ใช้ลิงก์ Google Drive หรือลิงก์เว็บแทนนะ เว็บจะได้ไม่หน่วง")
@@ -364,6 +365,47 @@ if st.session_state['is_admin']:
                 st.info(f"📅 **{m['date']}**: {m['text']}")
         else: st.info("ยังไม่มีจดหมายลับมาส่งครับ")
     st.markdown("---")
+    
+    with tab_code:
+        st.markdown("### 💻 เพิ่ม Code Snippet ใหม่")
+        with st.form("add_snippet_form"):
+            s_title = st.text_input("ชื่อโปรเจกต์/Snippets:", placeholder="เช่น Discord Bot Template")
+            s_lang = st.selectbox("ภาษา:", ["python", "javascript", "html", "css", "sql"])
+            s_desc = st.text_area("คำอธิบายสั้นๆ:", placeholder="โค้ดนี้ใช้สำหรับ...")
+            s_code = st.text_area("วาง Source Code ที่นี่:", height=200)
+            s_qr = st.text_input("ลิงก์รูป QR Code (PromptPay):", placeholder="URL รูป QR Code ของบอส (Google Drive/Web)")
+            if st.form_submit_button("💾 บันทึก Code"):
+                if s_title and s_code:
+                    snippets = dm.load_snippets()
+                    new_snippet = {
+                        "id": str(int(time.time())),
+                        "title": s_title,
+                        "lang": s_lang,
+                        "desc": s_desc,
+                        "code": s_code,
+                        "qr_link": convert_drive_link(s_qr) if s_qr else ""
+                    }
+                    snippets.append(new_snippet)
+                    dm.save_snippets(snippets)
+                    st.success("ลงโค้ดเรียบร้อย! เตรียมรับค่ากาแฟ ☕")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("ใส่ชื่อกับโค้ดก่อนสิครับบอส!")
+        st.markdown("---")
+        st.markdown("### 🗑️ ลบ Snippet")
+        snippets = dm.load_snippets()
+        if snippets:
+            for idx, s in enumerate(snippets):
+                c1, c2 = st.columns([4, 1])
+                with c1: st.markdown(f"**{idx+1}. {s['title']}** ({s['lang']})")
+                with c2:
+                    if st.button("ลบ", key=f"del_snip_{idx}"):
+                        snippets.pop(idx)
+                        dm.save_snippets(snippets)
+                        st.rerun()
+        else:
+            st.info("ยังไม่มี Snippet ครับ")
 
 # --- 5. Feed Display ---
 # [Crypto War Room Display (RESTORED THAI VERSION)]
@@ -570,6 +612,46 @@ if st.session_state.get('show_crypto', False):
                 time.sleep(0.5) 
             
             status_text.success("✅ วิเคราะห์และบันทึกข้อมูลครบทั้ง 8 เหรียญแล้วครับท่านเดียร์!")
+
+elif st.session_state.get('show_code_zone', False):
+    st.markdown("## 💻 Code Showcase & Portfolio")
+    st.caption(f"คลังแสงโค้ดของ {profile_data.get('name', 'Dearluxion')} | ก๊อปไปใช้ได้เลย (ถ้าใจดีเลี้ยงกาแฟผมได้นะ ☕)")
+    
+    with st.expander("ℹ️ อ่านก่อนนำไปใช้ (License)", expanded=False):
+        st.info("Code ทั้งหมดในนี้แจกฟรีเพื่อการศึกษาครับ! สามารถนำไปพัฒนาต่อได้เลย แต่ถ้านำไปใช้เชิงพาณิชย์ รบกวนเลี้ยงกาแฟสักแก้วจะเป็นกำลังใจมากครับ 💖")
+    
+    snippets = dm.load_snippets()
+    
+    if not snippets:
+        st.info("🚧 กำลังรวบรวมโค้ดเทพๆ มาลงครับ... (รอแป๊บ)")
+    else:
+        for s in reversed(snippets):
+            st.markdown(f"""
+            <div style="background:#161B22; padding:20px; border-radius:15px; border:1px solid #30363D; margin-bottom:20px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="color:#A370F7; margin:0;">{s['title']}</h3>
+                    <span style="background:#21262D; padding:2px 10px; border-radius:10px; font-size:12px; color:#8B949E;">{s['lang'].upper()}</span>
+                </div>
+                <p style="color:#E6EDF3; font-size:14px; margin-top:10px;">{s['desc']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.code(s['code'], language=s['lang'])
+            
+            c_donate, c_copy = st.columns([1, 3])
+            with c_donate:
+                if st.button(f"☕ เลี้ยงกาแฟ ({s['title']})", key=f"donate_{s['id']}", type="primary"):
+                    st.toast("ขอบคุณที่สนับสนุนครับ! 🙏", icon="💖")
+                    with st.expander("📸 สแกน QR Code เพื่อเลี้ยงกาแฟ", expanded=True):
+                        if s.get('qr_link'):
+                            st.image(s['qr_link'], caption="PromptPay: Chotiwut Maneekong", width=250)
+                            st.success("โอนแล้วส่งสลิปมาอวดใน Discord ได้นะครับ!")
+                        else:
+                            st.warning("บอสยังไม่ได้แปะ QR Code ครับ (โอนทิพย์ไปก่อนนะ 😅)")
+            
+            st.markdown("---")
+    
+    filtered = []  # รีเซต filtered สำหรับโหมด Code Zone
 
 elif st.session_state['show_shop']:
     st.markdown("## 🛒 ร้านค้า (Shop Zone)")

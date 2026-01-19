@@ -530,11 +530,24 @@ def render_sidebar(ai_available):
         if st.sidebar.button("🏠 กลับหน้าหลัก", key="back_from_crypto"):
             st.session_state['show_crypto'] = False
             st.rerun()
+    # [NEW] เช็คสถานะ Code Zone
+    if st.session_state.get('show_code_zone'):
+        st.sidebar.info("💻 กำลังดู Code Portfolio")
+        if st.sidebar.button("🏠 กลับหน้าหลัก", key="back_from_code"):
+            st.session_state['show_code_zone'] = False
+            st.rerun()
     else:
         selected_zone = st.sidebar.radio("หมวดหมู่:", ["🏠 รวมทุกโซน"] + sorted(list(all_hashtags)))
         # เพิ่มปุ่มเข้าห้อง Crypto ตรงนี้
         if st.sidebar.button("📈 วิเคราะตลาดcryptoเจาะลึก(Beta)", type="primary"):
             st.session_state['show_crypto'] = True
+            st.rerun()
+        
+        # [NEW] เพิ่มปุ่ม Code Showcase
+        if st.sidebar.button("💻 Code Showcase / Portfolio", help="แจกโค้ดฟรี + โดเนท"):
+            st.session_state['show_code_zone'] = True
+            st.session_state['show_crypto'] = False
+            st.session_state['show_shop'] = False
             st.rerun()
 
     st.sidebar.markdown("---")
