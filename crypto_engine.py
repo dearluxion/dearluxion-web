@@ -120,6 +120,42 @@ def get_crypto_data(symbol_key, period="2y", interval="1d"):
         df['Support_Level'] = df['Close'].min()
         df['Resistance_Level'] = df['Close'].max()
 
+    # --- [NEW V2] StochRSI (ไวรับสัญญาณสั้น 72 ชม.) ---
+    try:
+        stoch = ta.stochrsi(df['Close'], length=14, rsi_length=14, k=3, d=3)
+        df['Stoch_K'] = stoch.iloc[:, 0]
+        df['Stoch_D'] = stoch.iloc[:, 1]
+    except:
+        df['Stoch_K'] = 50
+        df['Stoch_D'] = 50
+
+    # --- [NEW V2] OBV (On-Balance Volume) - ดูไส้ในว่าเงินเข้าหรือออกจริง ---
+    if 'Volume' in df.columns:
+        df['OBV'] = ta.obv(df['Close'], df['Volume'])
+        # คำนวณ OBV Slope 5 วัน (เพื่อดูทิศทางเงิน)
+        df['OBV_Slope'] = df['OBV'].diff(5)
+    else:
+        df['OBV'] = 0
+        df['OBV_Slope'] = 0
+
+    # --- [NEW V2] Pivot Points (แนวรับต้านคณิตศาสตร์) ---
+    # ใช้ค่าของแท่งเมื่อวานมาคำนวณแนวรับวันนี้
+    try:
+        if len(df) > 0:
+            last = df.iloc[-1]
+            P = (last['High'] + last['Low'] + last['Close']) / 3
+            df['Pivot_P'] = P
+            df['Pivot_R1'] = (2 * P) - last['Low']
+            df['Pivot_S1'] = (2 * P) - last['High']
+        else:
+            df['Pivot_P'] = df['Close'].iloc[-1]
+            df['Pivot_R1'] = df['Close'].iloc[-1] * 1.05
+            df['Pivot_S1'] = df['Close'].iloc[-1] * 0.95
+    except:
+        df['Pivot_P'] = df['Close'].iloc[-1]
+        df['Pivot_R1'] = df['Close'].iloc[-1] * 1.05
+        df['Pivot_S1'] = df['Close'].iloc[-1] * 0.95
+
     return df
 
 @st.cache_data(ttl=600)

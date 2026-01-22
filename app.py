@@ -524,19 +524,24 @@ if st.session_state.get('show_crypto', False):
                             # ไม่เจอข้อมูล (หรือเป็นวันใหม่) -> เรียก AI
                             msg_loading = f"กำลังเชื่อมต่อจิตกับ Gemini 2.5 เพื่อวิเคราะห์ {coin_select} (THB)..."
                             with st.spinner(msg_loading):
-                                # [UPDATED] ส่งข้อมูล Indicators ใหม่ๆทั้งหมด
+                                # [UPDATED V2] ส่งข้อมูล Indicators ใหม่ๆทั้งหมด + Pivot Points, StochRSI, OBV
                                 indicators = {
                                     "rsi": f"{rsi_val:.2f}",
+                                    "stoch_k": f"{df['Stoch_K'].iloc[-1]:.2f}" if 'Stoch_K' in df.columns else "50",  # NEW V2
                                     "macd": f"{macd_val:.6f}",
                                     "macd_signal": f"{macd_signal:.6f}",
                                     "adx": f"{df['ADX'].iloc[-1]:.2f}" if 'ADX' in df.columns else "20",
                                     "atr": f"{df['ATR'].iloc[-1]:,.2f}" if 'ATR' in df.columns else "0",
+                                    "obv_slope": "เงินไหลเข้า (Positive)" if df['OBV_Slope'].iloc[-1] > 0 else "เงินไหลออก (Negative)" if 'OBV_Slope' in df.columns and df['OBV_Slope'].iloc[-1] < 0 else "N/A",  # NEW V2
+                                    "pivot_p": f"{df['Pivot_P'].iloc[-1]:.2f}" if 'Pivot_P' in df.columns else f"{latest_price:.2f}",  # NEW V2
+                                    "pivot_s1": f"{df['Pivot_S1'].iloc[-1]:.2f}" if 'Pivot_S1' in df.columns else f"{latest_price * 0.95:.2f}",  # NEW V2
+                                    "pivot_r1": f"{df['Pivot_R1'].iloc[-1]:.2f}" if 'Pivot_R1' in df.columns else f"{latest_price * 1.05:.2f}",  # NEW V2
                                     "support": f"{df['Support_Level'].iloc[-1]:,.2f}" if 'Support_Level' in df.columns else f"{latest_price * 0.95:,.2f}",
                                     "resistance": f"{df['Resistance_Level'].iloc[-1]:,.2f}" if 'Resistance_Level' in df.columns else f"{latest_price * 1.05:,.2f}"
                                 }
                                 
                                 if ai_available and crypto_available:
-                                    # เรียก AI ด้วยข้อมูล Quant ใหม่
+                                    # เรียก AI ด้วยข้อมูล Quant ใหม่ (V2 God Mode)
                                     analysis_result = ai.analyze_crypto_god_mode(coin_select, latest_price, indicators, news, fg_index)
                                     
                                     # บันทึกลง Cache ทันที
@@ -587,18 +592,23 @@ if st.session_state.get('show_crypto', False):
                         
                         with st.expander(f"💎 {c_symbol} : ฿{last_p:,.4f} | RSI: {rsi_v:.1f}", expanded=False):
                             if ai_available:
-                                # เตรียมอินดิเคเตอร์
+                                # เตรียมอินดิเคเตอร์ (V2 - รวมทั้ง Pivot, Stoch, OBV)
                                 indicators_b = {
                                     "rsi": f"{rsi_v:.2f}",
+                                    "stoch_k": f"{df_batch['Stoch_K'].iloc[-1]:.2f}" if 'Stoch_K' in df_batch.columns else "50",  # NEW V2
                                     "macd": f"{df_batch['MACD'].iloc[-1]:.6f}" if 'MACD' in df_batch.columns else "0",
                                     "macd_signal": f"{df_batch['MACD_SIGNAL'].iloc[-1]:.6f}" if 'MACD_SIGNAL' in df_batch.columns else "0",
                                     "adx": f"{df_batch['ADX'].iloc[-1]:.2f}" if 'ADX' in df_batch.columns else "20",
                                     "atr": f"{df_batch['ATR'].iloc[-1]:.2f}" if 'ATR' in df_batch.columns else "0",
+                                    "obv_slope": "เงินไหลเข้า (Positive)" if df_batch['OBV_Slope'].iloc[-1] > 0 else "เงินไหลออก (Negative)" if 'OBV_Slope' in df_batch.columns and df_batch['OBV_Slope'].iloc[-1] < 0 else "N/A",  # NEW V2
+                                    "pivot_p": f"{df_batch['Pivot_P'].iloc[-1]:.2f}" if 'Pivot_P' in df_batch.columns else f"{last_p:.2f}",  # NEW V2
+                                    "pivot_s1": f"{df_batch['Pivot_S1'].iloc[-1]:.2f}" if 'Pivot_S1' in df_batch.columns else f"{last_p * 0.95:.2f}",  # NEW V2
+                                    "pivot_r1": f"{df_batch['Pivot_R1'].iloc[-1]:.2f}" if 'Pivot_R1' in df_batch.columns else f"{last_p * 1.05:.2f}",  # NEW V2
                                     "support": f"{df_batch['Support_Level'].iloc[-1]:.2f}" if 'Support_Level' in df_batch.columns else f"{last_p * 0.95:.2f}",
                                     "resistance": f"{df_batch['Resistance_Level'].iloc[-1]:.2f}" if 'Resistance_Level' in df_batch.columns else f"{last_p * 1.05:.2f}"
                                 }
                                 
-                                # สั่ง AI วิเคราะห์สด
+                                # สั่ง AI วิเคราะห์สด (God Mode V2)
                                 res_batch = ai.analyze_crypto_god_mode(c_symbol, last_p, indicators_b, "วิเคราะห์ตามกราฟเทคนิคอลล่าสุด", {"value":"50", "value_classification":"Neutral"})
                                 st.markdown(res_batch)
                                 
