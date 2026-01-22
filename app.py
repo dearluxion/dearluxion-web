@@ -430,7 +430,7 @@ if st.session_state.get('show_crypto', False):
                 st.session_state['analyze_all'] = False # Reset โหมดเหมา
         
         # ปุ่มวิเคราะห์เหมาเข่ง
-        if st.button("🚀 วิเคราะห์ทั้ง 8 เหรียญ โปรดของท่านเดียร์", use_container_width=True):
+        if st.button("🚀 วิเคราะห์ทั้ง 8 เหรียญ โปรดของท่านเดียร์", use_container_width=True, key="btn_batch_top"):
             st.session_state['analyze_all'] = True
             st.session_state['trigger_analysis'] = False
             st.rerun()
@@ -602,7 +602,7 @@ if st.session_state.get('show_crypto', False):
             # =========================================================
             st.markdown("---")
             st.markdown("### 🚀 วิเคราะห์เหมาเข่ง 8 เหรียญ (Batch Mode)")
-            if st.button("🚀 วิเคราะห์ทั้ง 8 เหรียญ โปรดของท่านเดียร์", use_container_width=True):
+            if st.button("🚀 วิเคราะห์ทั้ง 8 เหรียญ โปรดของท่านเดียร์", use_container_width=True, key="btn_batch_tab"):
                 st.session_state['analyze_all'] = True
                 st.rerun()
 
