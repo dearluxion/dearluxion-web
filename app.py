@@ -541,14 +541,40 @@ if st.session_state.get('show_crypto', False):
                                 }
                                 
                                 if ai_available and crypto_available:
-                                    # เรียก AI ด้วยข้อมูล Quant ใหม่ (V2 God Mode)
-                                    analysis_result = ai.analyze_crypto_god_mode(coin_select, latest_price, indicators, news, fg_index)
+                                    # 🧠 ใช้ Reflection Mode 3-Step (Chain of Thought) แบบใหม่
+                                    # สร้าง Progress Bar จำลองการคิด
+                                    thinking_container = st.container()
+                                    with thinking_container:
+                                        thinking_bar = st.progress(0)
+                                        status_box = st.empty()
+                                        
+                                        # STEP 1: เริ่มกระบวนการ
+                                        status_box.markdown("🤔 **Phase 1:** Myla 🧚‍♀️ กำลังสแกนหาโอกาสทำกำไร...")
+                                        thinking_bar.progress(25)
+                                        time.sleep(0.5)
+                                        
+                                        # STEP 2: ส่งไปให้ Function ใหม่ทำงาน (ซึ่งข้างในมันจะยิง API 3 รอบ)
+                                        status_box.markdown("🔥 **Phase 2:** Ariel 🍸 กำลังจับผิดและประเมินความเสี่ยง (Deep Critique)...")
+                                        thinking_bar.progress(50)
+                                        
+                                        # เรียกฟังก์ชัน Reflection Mode
+                                        analysis_result = ai.analyze_crypto_reflection_mode(
+                                            coin_select, latest_price, indicators, news, fg_index
+                                        )
+                                        
+                                        status_box.markdown("✨ **Phase 3:** สรุปผลกลยุทธ์ God Mode เสร็จสิ้น!")
+                                        thinking_bar.progress(100)
+                                        time.sleep(0.5)
+                                        
+                                        # ล้าง Status Bar แล้วโชว์ผลลัพธ์
+                                        status_box.empty()
+                                        thinking_bar.empty()
                                     
                                     # บันทึกลง Cache ทันที
                                     dm.update_crypto_cache(coin_select, analysis_result)
                                     
                                     st.markdown(analysis_result)
-                                    st.caption(f"✨ วิเคราะห์สดเสร็จสิ้น (บันทึกเวลา: {datetime.datetime.now().strftime('%H:%M')} น.)")
+                                    st.caption(f"🧠 วิเคราะห์แบบ Deep Reflection (3-Step Reasoning) | เวลา: {datetime.datetime.now().strftime('%H:%M')} น.")
                                 else:
                                     st.error("ไม่สามารถทำการวิเคราะห์ได้ เนื่องจาก API ยังไม่พร้อม")
                                 
@@ -608,20 +634,20 @@ if st.session_state.get('show_crypto', False):
                                     "resistance": f"{df_batch['Resistance_Level'].iloc[-1]:.2f}" if 'Resistance_Level' in df_batch.columns else f"{last_p * 1.05:.2f}"
                                 }
                                 
-                                # สั่ง AI วิเคราะห์สด (God Mode V2)
-                                res_batch = ai.analyze_crypto_god_mode(c_symbol, last_p, indicators_b, "วิเคราะห์ตามกราฟเทคนิคอลล่าสุด", {"value":"50", "value_classification":"Neutral"})
+                                # 🧠 สั่ง AI วิเคราะห์สด (Reflection Mode 3-Step)
+                                res_batch = ai.analyze_crypto_reflection_mode(c_symbol, last_p, indicators_b, "วิเคราะห์ตามกราฟเทคนิคอลล่าสุด", {"value":"50", "value_classification":"Neutral"})
                                 st.markdown(res_batch)
                                 
                                 # --- [จุดที่เพิ่ม] บันทึกลง Google Sheets ทันที ---
                                 dm.update_crypto_cache(c_symbol, res_batch)
-                                st.caption(f"✅ บันทึกลงระบบสำเร็จเมื่อ {datetime.datetime.now().strftime('%H:%M')} น.")
+                                st.caption(f"✅ บันทึกลงระบบสำเร็จเมื่อ {datetime.datetime.now().strftime('%H:%M')} น. (Reflection Mode)")
                             else:
                                 st.error("AI ไม่พร้อมใช้งาน")
                 
                 progress_bar.progress((idx + 1) / len(coin_list))
                 time.sleep(0.5) 
             
-            status_text.success("✅ วิเคราะห์และบันทึกข้อมูลครบทั้ง 8 เหรียญแล้วครับท่านเดียร์!")
+            status_text.success("✅ วิเคราะห์และบันทึกข้อมูลครบทั้ง 8 เหรียญแล้วครับท่านเดียร์! (ใช้ระบบ 3-Step Self-Reflection)")
 
 elif st.session_state.get('show_code_zone', False):
     st.markdown("## 💻 Code Showcase & Portfolio")
