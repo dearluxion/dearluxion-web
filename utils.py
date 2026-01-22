@@ -200,3 +200,53 @@ def get_discord_user(access_token):
     r = requests.get("https://discord.com/api/users/@me", headers=headers)
     r.raise_for_status()
     return r.json()
+
+# --- [NEW] ฟังก์ชันส่งผลวิเคราะห์ Crypto God Mode เข้า Discord ---
+def send_crypto_report_to_discord(webhook_url, symbol, price, analysis_text):
+    """ส่งผลวิเคราะห์ Crypto God Mode ไปยัง Discord"""
+
+    if not webhook_url:
+        print("❌ No Crypto Webhook URL provided")
+        return
+
+    # ตัดข้อความถ้ามันยาวเกินลิมิต Discord (4096 chars)
+    if len(analysis_text) > 4000:
+        analysis_text = analysis_text[:3900] + "... (อ่านต่อในเว็บ)"
+
+    # กำหนดสีตามเนื้อหา (ถ้า Bullish สีเขียว, Bearish สีแดง, อื่นๆ สีทอง)
+    embed_color = 16766720 # สีทอง (Gold) ค่าเริ่มต้น
+    if "BULLISH" in analysis_text or "น่าเก็บ" in analysis_text:
+        embed_color = 5763719 # สีเขียว (Green)
+    elif "BEARISH" in analysis_text or "เสี่ยง" in analysis_text:
+        embed_color = 15548997 # สีแดง (Red)
+
+    embed_data = {
+        "username": "Crypto God Oracle 🔮",
+        "avatar_url": "https://cdn-icons-png.flaticon.com/512/6001/6001368.png",
+        "embeds": [{
+            "title": f"💎 God Mode Analysis: {symbol.upper()}",
+            "description": analysis_text,
+            "color": embed_color,
+            "fields": [
+                {
+                    "name": "💰 ราคาปัจจุบัน",
+                    "value": f"฿{price:,.4f} THB",
+                    "inline": True
+                },
+                {
+                    "name": "🧠 วิเคราะห์โดย",
+                    "value": "Gemini 2.5 (3-Step Reflection)",
+                    "inline": True
+                }
+            ],
+            "footer": {
+                "text": f"Small Group Crypto War Room | {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}"
+            }
+        }]
+    }
+
+    try:
+        requests.post(webhook_url, json=embed_data)
+        print(f"✅ Sent {symbol} report to Discord")
+    except Exception as e:
+        print(f"❌ Failed to send crypto report: {e}")

@@ -575,6 +575,16 @@ if st.session_state.get('show_crypto', False):
                                     
                                     st.markdown(analysis_result)
                                     st.caption(f"🧠 วิเคราะห์แบบ Deep Reflection (3-Step Reasoning) | เวลา: {datetime.datetime.now().strftime('%H:%M')} น.")
+                                    
+                                    # --- [NEW CODE] แทรกตรงนี้เพื่อส่งเข้า Discord ---
+                                    # ดึง Webhook จาก Secrets
+                                    c_webhook = st.secrets.get("general", {}).get("crypto_webhook", "")
+                                    if c_webhook:
+                                        with st.spinner("🚀 กำลังส่งสัญญาณเข้า Discord..."):
+                                            from utils import send_crypto_report_to_discord
+                                            send_crypto_report_to_discord(c_webhook, coin_select, latest_price, analysis_result)
+                                            st.toast(f"ส่งผลวิเคราะห์ {coin_select} เข้าห้อง Discord แล้ว!", icon="📢")
+                                    # -----------------------------------------------
                                 else:
                                     st.error("ไม่สามารถทำการวิเคราะห์ได้ เนื่องจาก API ยังไม่พร้อม")
                                 
@@ -641,6 +651,13 @@ if st.session_state.get('show_crypto', False):
                                 # --- [จุดที่เพิ่ม] บันทึกลง Google Sheets ทันที ---
                                 dm.update_crypto_cache(c_symbol, res_batch)
                                 st.caption(f"✅ บันทึกลงระบบสำเร็จเมื่อ {datetime.datetime.now().strftime('%H:%M')} น. (Reflection Mode)")
+                                
+                                # --- [NEW CODE] แทรกตรงนี้เพื่อส่งเข้า Discord ---
+                                c_webhook = st.secrets.get("general", {}).get("crypto_webhook", "")
+                                if c_webhook:
+                                    from utils import send_crypto_report_to_discord
+                                    send_crypto_report_to_discord(c_webhook, c_symbol, last_p, res_batch)
+                                # -----------------------------------------------
                             else:
                                 st.error("AI ไม่พร้อมใช้งาน")
                 
