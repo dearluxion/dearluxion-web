@@ -507,10 +507,34 @@ def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_te
     
     ---
     💡 *System: 3-Step Reasoning (Draft -> Critique -> Final) | Processed: {datetime.datetime.now().strftime('%H:%M:%S')} น.*
+    
+    [IMPORTANT: REQUIRED OUTPUT FORMAT FOR SYSTEM - DO NOT MODIFY]
+    JSON_DATA={{"signal": "BULLISH", "entry": {float(indicators.get('pivot_s1', 0))}, "target": {float(indicators.get('pivot_r1', 0))}, "stoploss": {float(indicators.get('support', 0))}}}
     """
     
     try:
         final_res = _safe_generate_content([prompt_final]).text
+        
+        # --- [NEW CODE] ดักจับข้อมูล JSON ท้ายข้อความ ---
+        match = re.search(r'JSON_DATA=({.*?})', final_res)
+        if match:
+            try:
+                json_str = match.group(1)
+                data = json.loads(json_str)
+                
+                # เพิ่มข้อมูลเหรียญแล้ว Save ลง Database
+                data['symbol'] = coin_name
+                
+                # Import data_manager เพื่อ Save
+                import data_manager as dm_ext
+                dm_ext.save_prediction_log(data)
+                print(f"✅ Saved Prediction Log: {coin_name}")
+                
+                # ลบบรรทัด JSON ออกจากข้อความที่จะโชว์ user เพื่อความสวยงาม
+                final_res = final_res.replace(f"JSON_DATA={json_str}", "").strip()
+            except Exception as e:
+                print(f"⚠️ Failed to parse JSON Log: {e}")
+        
         return final_res
     except Exception as e:
         return f"❌ Step 3 (Finalize) Error: {e}"

@@ -301,3 +301,78 @@ def save_snippets(data):
     try:
         with open(SNIPPETS_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=4)
     except: st.error("บันทึก Snippet ไม่สำเร็จ")
+
+# --- PREDICTION HISTORY MANAGER (BACKTEST SYSTEM) ---
+def save_prediction_log(data):
+    """บันทึกข้อมูลการทายผล (Signal, Entry, Target, SL) รอตรวจคำตอบ"""
+    sh = get_gsheet_client()
+    if sh:
+        try:
+            try: 
+                ws = sh.worksheet("prediction_logs")
+            except: 
+                ws = sh.add_worksheet("prediction_logs", 500, 12)
+                ws.append_row(["id", "date", "timestamp", "symbol", "signal", "entry", "target", "stoploss", "status", "score", "close_price", "accuracy"])
+            
+            row = [
+                str(int(time.time())),
+                datetime.datetime.now().strftime("%d/%m/%Y"),
+                str(time.time()),
+                data.get('symbol', ''),
+                data.get('signal', ''),
+                str(data.get('entry', 0)),
+                str(data.get('target', 0)),
+                str(data.get('stoploss', 0)),
+                "PENDING",
+                "",
+                "",
+                ""
+            ]
+            ws.append_row(row)
+            print(f"✅ Saved prediction log for {data.get('symbol')}")
+        except Exception as e: 
+            print(f"Save Pred Error: {e}")
+
+def get_pending_predictions():
+    """ดึงรายการที่ยังไม่ได้ตรวจ (PENDING) ของวันนี้"""
+    sh = get_gsheet_client()
+    pending_list = []
+    if sh:
+        try:
+            ws = sh.worksheet("prediction_logs")
+            records = ws.get_all_records()
+            today_str = datetime.datetime.now().strftime("%d/%m/%Y")
+            
+            for i, r in enumerate(records):
+                if r.get('status', '') == "PENDING" and r.get('date', '') == today_str:
+                    r['row_index'] = i + 2
+                    pending_list.append(r)
+        except Exception as e:
+            print(f"Get Pending Error: {e}")
+    return pending_list
+
+def update_prediction_result(row_index, status, score, close_price):
+    """อัปเดตผลการตรวจการบ้าน"""
+    sh = get_gsheet_client()
+    if sh:
+        try:
+            ws = sh.worksheet("prediction_logs")
+            ws.update_cell(row_index, 9, status)
+            ws.update_cell(row_index, 10, f"{score}%")
+            ws.update_cell(row_index, 11, f"{close_price:.2f}")
+        except Exception as e:
+            print(f"Update Result Error: {e}")
+
+def get_today_summary():
+    """ดึงสรุปผลของวันนี้เพื่อไปโชว์"""
+    sh = get_gsheet_client()
+    if sh:
+        try:
+            ws = sh.worksheet("prediction_logs")
+            records = ws.get_all_records()
+            today_str = datetime.datetime.now().strftime("%d/%m/%Y")
+            return [r for r in records if r.get('date', '') == today_str and r.get('status', '') != "PENDING"]
+        except Exception as e:
+            print(f"Get Summary Error: {e}")
+            return []
+    return []

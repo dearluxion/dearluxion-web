@@ -9,10 +9,11 @@ import plotly.graph_objects as go
 
 # --- [IMPORTED MODULES] ---
 from styles import get_css 
-from utils import convert_drive_link, convert_drive_video_link, make_clickable, send_post_to_discord, exchange_code_for_token, get_discord_user
+from utils import convert_drive_link, convert_drive_video_link, make_clickable, send_post_to_discord, exchange_code_for_token, get_discord_user, send_crypto_report_to_discord
 import data_manager as dm
 import sidebar_manager as sm
 import ai_manager as ai
+import prediction_engine as pe
 try:
     import crypto_engine as ce
     crypto_available = True
@@ -446,9 +447,11 @@ if st.session_state.get('show_crypto', False):
             return mapping.get(classification, classification)
 
         # =========================================================
-        # CASE A: วิเคราะห์ทีละเหรียญ (THAI VERSION)
+        # TABS: Analysis & Backtest
         # =========================================================
-        if not st.session_state.get('analyze_all'):
+        tab_analysis, tab_backtest = st.tabs(["📊 วิเคราะห์ตลาด", "⚖️ ตรวจการบ้าน (Backtest)"])
+        
+        with tab_analysis:
             # ดึงข้อมูล
             with st.spinner(f"กำลังดึงข้อมูลตลาดล่าสังหารของ {coin_select}..."):
                 # crypto_engine จะ map เป็น THB ให้อัตโนมัติในไฟล์ ce.py ที่แก้ไป
@@ -594,10 +597,47 @@ if st.session_state.get('show_crypto', False):
             else:
                 st.error("ไม่สามารถดึงข้อมูลกราฟได้ (ตรวจสอบคู่เหรียญ THB)")
 
+            # =========================================================
+            # CASE B: วิเคราะห์รวดเดียว 8 เหรียญ (God Mode Batch - THAI)
+            # =========================================================
+            st.markdown("---")
+            st.markdown("### 🚀 วิเคราะห์เหมาเข่ง 8 เหรียญ (Batch Mode)")
+            if st.button("🚀 วิเคราะห์ทั้ง 8 เหรียญ โปรดของท่านเดียร์", use_container_width=True):
+                st.session_state['analyze_all'] = True
+                st.rerun()
+
         # =========================================================
-        # CASE B: วิเคราะห์รวดเดียว 8 เหรียญ (God Mode Batch - THAI)
+        # BACKTEST TAB
         # =========================================================
-        else:
+        with tab_backtest:
+            st.markdown("### ⚖️ ความแม่นยำของ AI (Reality Check)")
+            st.caption("ระบบจะเปรียบเทียบสิ่งที่ AI ทำนายไว้ กับราคาจริง ณ เวลา 21:00 น. ของทุกวัน")
+            
+            history = dm.get_today_summary()
+            if history:
+                for h in history:
+                    try:
+                        score = int(str(h.get('score', '0')).replace("%", "").strip())
+                    except:
+                        score = 0
+                    color = "green" if score >= 80 else "orange" if score >= 40 else "red"
+                    st.markdown(f"""<div style="background:#161B22; padding:15px; border-radius:10px; margin-bottom:10px; border-left: 5px solid {color};"><div style="display:flex; justify-content:space-between;"><h4 style="margin:0;">{h.get('symbol', 'N/A')} ({h.get('signal', 'N/A')})</h4><span style="color:{color}; font-weight:bold;">{h.get('status', 'PENDING')} ({h.get('score', '0')})</span></div><small>Entry: {h.get('entry', 'N/A')} | Target: {h.get('target', 'N/A')} | Close: {h.get('close_price', 'N/A')}</small></div>""", unsafe_allow_html=True)
+            else:
+                st.info("ยังไม่มีผลสรุปของวันนี้ (รอตรวจตอน 21:00 น.)")
+
+            st.markdown("---")
+            if st.button("🔄 รันระบบตรวจการบ้าน (Daily Check)", type="primary", use_container_width=True):
+                with st.spinner("👨‍⚖️ AI Judge กำลังตรวจข้อสอบ..."):
+                    wh_url = st.secrets.get("general", {}).get("crypto_webhook", "")
+                    res = pe.check_accuracy_and_broadcast(wh_url)
+                    st.success(res)
+                    time.sleep(2)
+                    st.rerun()
+
+        # =========================================================
+        # CASE B Background: วิเคราะห์รวดเดียว (Batch Mode)
+        # =========================================================
+        if st.session_state.get('analyze_all'):
             st.markdown("### 🚀 รายงานสรุป 8 เหรียญโปรด (God Mode Batch)")
             if st.button("❌ ปิดโหมดวิเคราะห์รวม"):
                 st.session_state['analyze_all'] = False
@@ -887,5 +927,22 @@ else:
     # เพิ่มเงื่อนไขว่าต้องไม่ใช่หน้า Crypto ด้วย (not st.session_state['show_crypto'])
     if not st.session_state['show_shop'] and not st.session_state['show_crypto']: 
         st.info("ยังไม่มีโพสต์ครับ")
+
+# =========================================================
+# AUTO CHECK BACKTEST (Lazy Trigger at 21:00+)
+# =========================================================
+now_th = datetime.datetime.now()
+if now_th.hour >= 21:  # เทศเวลา 21:00 น.
+    if 'auto_checked' not in st.session_state:
+        pending = dm.get_pending_predictions()
+        if pending:
+            wh_url = st.secrets.get("general", {}).get("crypto_webhook", "")
+            if wh_url:
+                try:
+                    res = pe.check_accuracy_and_broadcast(wh_url)
+                    st.toast("✅ ระบบทำการสรุปผล Daily Recap อัตโนมัติแล้ว!", icon="⚖️")
+                except Exception as e:
+                    print(f"Auto Check Error: {e}")
+        st.session_state['auto_checked'] = True
 
 st.markdown("<br><center><small style='color:#A370F7'>Small Group by Dearluxion © 2025</small></center>", unsafe_allow_html=True)
