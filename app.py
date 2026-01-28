@@ -65,6 +65,8 @@ if 'show_crypto' not in st.session_state: st.session_state['show_crypto'] = Fals
 if 'trigger_analysis' not in st.session_state: st.session_state['trigger_analysis'] = False
 if 'show_code_zone' not in st.session_state: st.session_state['show_code_zone'] = False
 if 'filtered' not in st.session_state: st.session_state['filtered'] = []
+if 'realtime_analysis' not in st.session_state: st.session_state['realtime_analysis'] = False
+if 'analyze_all' not in st.session_state: st.session_state['analyze_all'] = False
 filtered = []  # ประกาศตัวแปร global ดักไว้เลย กันพลาด
 
 # --- Login Discord Logic (Auto Admin Check) ---
@@ -410,79 +412,393 @@ if st.session_state['is_admin']:
 
 # --- 5. Feed Display ---
 # [Crypto War Room Display (RESTORED THAI VERSION)]
-if st.session_state['show_crypto']:
-    st.title("📈 Crypto War Room (God Mode Analysis)")
-    
-    # [NEW] Cache สำหรับบันทึกผลวิเคราะห์ (เหมือนบันทึก show ในเว็บ)
-    if 'crypto_analysis_cache' not in st.session_state:
-        st.session_state['crypto_analysis_cache'] = {}
-    
-    # เลือกเหรียญ
-    symbol = st.selectbox("เลือกเหรียญ:", list(ce.COIN_MAP.keys()))
-    
-    # [NEW] Button Refresh สำหรับ Admin เท่านั้น (กดเพื่อ real-time)
-    if st.session_state['is_admin']:
-        if st.button("🔄 Refresh Real-Time Analysis (Force Update)"):
-            # Clear cache yfinance และ rerun
-            ce.get_crypto_data.clear()  # Clear cache ใน crypto_engine
-            ce.get_crypto_news.clear()
-            st.session_state['crypto_analysis_cache'].pop(symbol, None)  # Clear cache ผลวิเคราะห์
-            st.rerun()
-    
-    # ดึง data (ตอนนี้เป็น USD)
-    df = ce.get_crypto_data(symbol)
-    if df is None:
-        st.error(f"ไม่พบข้อมูลสำหรับ {symbol}")
+if st.session_state.get('show_crypto', False):
+    filtered = []  # รีเซต filtered สำหรับโหมด Crypto
+    if not crypto_available:
+        st.error("⚠️ โมดูล crypto_engine ยังไม่พร้อม กรุณาติดตั้ง")
     else:
-        last_row = df.iloc[-1]
-        price = last_row['Close']  # เป็น USD
+        st.markdown("## 📈 Crypto War Room (Shadow Oracle)")
+        st.caption("พื้นที่วิเคราะห์กราฟด้วย AI ระดับ God-Tier สำหรับท่าน Dearluxion (หน่วย: THB)")
         
-        # สรุป indicators (ปรับให้แสดงเป็น $)
-        indicators = {
-            'rsi': last_row.get('RSI', 50),
-            'ema_50': last_row.get('EMA_50', 0),
-            'ema_200': last_row.get('EMA_200', 0),
-            'macd': last_row.get('MACD', 0),
-            'macd_signal': last_row.get('MACD_SIGNAL', 0),
-            'adx': last_row.get('ADX', 20),
-            'atr': last_row.get('ATR', 0),
-            'support': last_row.get('Support_Level', 0),
-            'resistance': last_row.get('Resistance_Level', 0),
-            'stoch_k': last_row.get('Stoch_K', 50),
-            'stoch_d': last_row.get('Stoch_D', 50),
-            'obv_slope': last_row.get('OBV_Slope', 0),
-            'pivot_p': last_row.get('Pivot_P', 0),
-            'pivot_s1': last_row.get('Pivot_S1', 0),
-            'pivot_r1': last_row.get('Pivot_R1', 0)
-        }
+        # รายชื่อเหรียญครบ 8 ตัว
+        coin_list = ["BTC", "ETH", "BNB", "SOL", "XRP", "DOGE", "PEPE", "SHIB"]
         
-        fear_greed = ce.get_fear_and_greed()
-        news_text = ce.get_crypto_news(symbol)
+        col_c1, col_c2 = st.columns([2, 1])
+        with col_c1:
+            coin_select = st.selectbox("เลือกสินทรัพย์ประหาร:", coin_list)
+        with col_c2:
+            if st.button("วิเคราะห์เหรียญนี้", type="primary", use_container_width=True):
+                st.session_state['trigger_analysis'] = True
+                st.session_state['analyze_all'] = False # Reset โหมดเหมา
         
-        # วิเคราะห์ด้วย AI (ถ้ายังไม่มี cache วิเคราะห์ใหม่)
-        if symbol not in st.session_state['crypto_analysis_cache']:
-            if ai_available:
-                analysis_text = ai.analyze_crypto(symbol, price, indicators, fear_greed, news_text)
-                st.session_state['crypto_analysis_cache'][symbol] = analysis_text
+        # ปุ่มวิเคราะห์เหมาเข่ง
+        if st.button("🚀 วิเคราะห์ทั้ง 8 เหรียญ โปรดของท่านเดียร์", use_container_width=True, key="btn_batch_top"):
+            st.session_state['analyze_all'] = True
+            st.session_state['trigger_analysis'] = False
+            st.rerun()
+        
+        # ========== ✅ ปุ่มวิเคราะห์แบบเรียลไทม์ (Admin Only) ==========
+        st.markdown("---")
+        if st.session_state.get('is_admin'):
+            col_rt1, col_rt2 = st.columns([1, 1])
+            with col_rt1:
+                if st.button("🔍 วิเคราะห์เรียลไทม์", type="primary", use_container_width=True, key="btn_realtime_analysis"):
+                    st.session_state['realtime_analysis'] = not st.session_state.get('realtime_analysis', False)
+                    st.rerun()
+            
+            with col_rt2:
+                if st.button("⏹️ หยุด Real-Time", type="secondary", use_container_width=True, key="btn_stop_realtime"):
+                    st.session_state['realtime_analysis'] = False
+                    st.rerun()
+            
+            # 📦 สร้างพื้นที่แสดงผล (ที่เดิม - ไม่เคลื่อนไหว)
+            realtime_output = st.empty()
+            
+            # Logic วิเคราะห์ Real-Time
+            if st.session_state.get('realtime_analysis'):
+                try:
+                    with realtime_output.container():
+                        st.markdown(f"### 🔴 Live Analysis: {coin_select}")
+                        
+                        # ดึงข้อมูลแบบเรียลไทม์
+                        with st.spinner(f"⏱️ กำลังดึงข้อมูล Real-Time ของ {coin_select}..."):
+                            live_df = ce.get_crypto_data(coin_select, period="1d", interval="1h")
+                            live_news = ce.get_crypto_news(coin_select)
+                            live_fg = ce.get_fear_and_greed()
+                        
+                        if live_df is not None:
+                            # ข้อมูลล่าสุด
+                            latest = live_df.iloc[-1]
+                            live_price = latest['Close']
+                            live_rsi = latest['RSI'] if 'RSI' in live_df.columns else 50
+                            live_macd = latest['MACD'] if 'MACD' in live_df.columns else 0
+                            
+                            # Format ราคา THB ให้ถูกต้อง
+                            price_fmt = "{:,.4f}" if coin_select in ["SHIB", "PEPE", "DOGE"] else "{:,.2f}"
+                            
+                            # Helper แปลผล Fear/Greed (Local)
+                            def translate_fng_local(classification):
+                                mapping = {
+                                    "Extreme Fear": "กลัวสุดขีด (Extreme Fear)",
+                                    "Fear": "กลัว (Fear)",
+                                    "Neutral": "เฉยๆ (Neutral)",
+                                    "Greed": "โลภ (Greed)",
+                                    "Extreme Greed": "โลภสุดขีด (Extreme Greed)"
+                                }
+                                return mapping.get(classification, classification)
+                            
+                            # Indicators Status
+                            rsi_signal = "🔴 ซื้อมากเกิน" if live_rsi > 70 else "🟢 ขายมากเกิน" if live_rsi < 30 else "🟡 ปกติ"
+                            macd_signal = "🚀 Bullish" if live_macd > 0 else "📉 Bearish"
+                            fng_text = translate_fng_local(live_fg.get('value_classification', 'Neutral'))
+                            
+                            # UI Live Display
+                            rt_col1, rt_col2, rt_col3, rt_col4 = st.columns(4)
+                            
+                            with rt_col1:
+                                st.metric("💰 ราคาปัจจุบัน", f"฿{price_fmt.format(live_price)}")
+                            
+                            with rt_col2:
+                                st.metric("📊 RSI(14)", f"{live_rsi:.2f}", delta=rsi_signal)
+                            
+                            with rt_col3:
+                                st.metric("⚡ MACD", f"{live_macd:.6f}", delta=macd_signal)
+                            
+                            with rt_col4:
+                                st.metric("😨 Fear/Greed", f"{live_fg.get('value', 'N/A')}", delta=fng_text)
+                            
+                            # Summary
+                            st.markdown(f"""
+                            ---
+                            📍 **สรุปข้อมูล Real-Time ({coin_select})**
+                            
+                            • **ราคา:** ฿{price_fmt.format(live_price)}
+                            • **RSI:** {live_rsi:.2f} {rsi_signal}
+                            • **MACD:** {live_macd:.6f} {macd_signal}
+                            • **ความรู้สึกตลาด:** {fng_text}
+                            • **ข่าวล่าสุด:** {len(live_news)} รายการ
+                            
+                            ⏰ อัปเดต: {datetime.datetime.now().strftime("%H:%M:%S")}
+                            """)
+                        else:
+                            st.error("❌ ไม่สามารถดึงข้อมูลได้ กรุณาลองใหม่")
                 
-                # ส่งไป Discord ถ้ามี webhook
-                wh_url = st.secrets.get("general", {}).get("crypto_webhook", "")
-                if wh_url:
-                    send_crypto_report_to_discord(wh_url, symbol, price, analysis_text)
-            else:
-                analysis_text = "AI ไม่พร้อมใช้งานค่ะ"
-                st.session_state['crypto_analysis_cache'][symbol] = analysis_text
+                except Exception as e:
+                    with realtime_output.container():
+                        st.error(f"⚠️ Error: {str(e)}")
         else:
-            analysis_text = st.session_state['crypto_analysis_cache'][symbol]
+            st.info("🔒 ปุ่มวิเคราะห์แบบเรียลไทม์สำหรับแอดมินเท่านั้น")
+
+        # =========================================================
+        # TABS: Analysis & Backtest
+        # =========================================================
+        # Helper แปลผล Fear Greed (แปลไทย) - สำหรับ Tab Analysis
+        def translate_fng(classification):
+            mapping = {
+                "Extreme Fear": "กลัวสุดขีด (Extreme Fear)",
+                "Fear": "กลัว (Fear)",
+                "Neutral": "เฉยๆ (Neutral)",
+                "Greed": "โลภ (Greed)",
+                "Extreme Greed": "โลภสุดขีด (Extreme Greed)"
+            }
+            return mapping.get(classification, classification)
         
-        # โชว์ผล (ปรับหน่วยเป็น $)
-        st.markdown(f"### 💰 ราคาปัจจุบัน: ${price:,.4f} USD")
-        st.markdown(analysis_text)
+        tab_analysis, tab_backtest = st.tabs(["📊 วิเคราะห์ตลาด", "⚖️ ตรวจการบ้าน (Backtest)"])
         
-        # [ถ้ามี] โชว์กราฟ (ถ้าพี่จ๋ามี code โชว์กราฟเดิม เช่น plotly graph_objects, เพิ่มตรงนี้ได้ค่ะ แต่ปรับแกนราคาเป็น USD นะคะ)
-        # ตัวอย่าง: fig = go.Figure()  # สร้างกราฟจาก df
-        # fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close']))
-        # st.plotly_chart(fig)
+        with tab_analysis:
+            # ดึงข้อมูล
+            with st.spinner(f"กำลังดึงข้อมูลตลาดล่าสังหารของ {coin_select}..."):
+                # crypto_engine จะ map เป็น THB ให้อัตโนมัติในไฟล์ ce.py ที่แก้ไป
+                df = ce.get_crypto_data(coin_select)
+                news = ce.get_crypto_news(coin_select)
+                fg_index = ce.get_fear_and_greed()
+            
+            if df is not None:
+                # 1. แสดงกราฟ Interactive
+                latest_price = df['Close'].iloc[-1]
+                price_change = df['Close'].iloc[-1] - df['Close'].iloc[-2] if len(df) > 1 else 0
+                color_price = "green" if price_change >= 0 else "red"
+                
+                # Format ราคา THB
+                price_fmt = "{:,.4f}" if coin_select in ["SHIB", "PEPE", "DOGE"] else "{:,.2f}"
+                st.markdown(f"### 💎 {coin_select} ราคาล่าสุด: <span style='color:{color_price}'>฿{price_fmt.format(latest_price)}</span>", unsafe_allow_html=True)
+                
+                # สร้างกราฟด้วย Plotly (แปล Label ไทย)
+                fig = go.Figure()
+                fig.add_trace(go.Candlestick(x=df.index,
+                                open=df['Open'], high=df['High'],
+                                low=df['Low'], close=df['Close'], name='ราคา'))
+                if 'EMA_50' in df.columns:
+                    fig.add_trace(go.Scatter(x=df.index, y=df['EMA_50'], line=dict(color='orange', width=1), name='เส้นค่าเฉลี่ย 50'))
+                if 'EMA_200' in df.columns:
+                    fig.add_trace(go.Scatter(x=df.index, y=df['EMA_200'], line=dict(color='blue', width=1), name='เส้นค่าเฉลี่ย 200'))
+                
+                fig.update_layout(template="plotly_dark", height=500, margin=dict(l=0, r=0, t=30, b=0))
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # 2. Dashboard Indicators (แปลไทย)
+                k1, k2, k3, k4 = st.columns(4)
+                rsi_val = df['RSI'].iloc[-1] if 'RSI' in df.columns else 50
+                macd_val = df['MACD'].iloc[-1] if 'MACD' in df.columns else 0
+                macd_signal = df['MACD_SIGNAL'].iloc[-1] if 'MACD_SIGNAL' in df.columns else 0
+                
+                rsi_status = "ซื้อมากเกิน (Overbought)" if rsi_val > 70 else "ขายมากเกิน (Oversold)" if rsi_val < 30 else "ปกติ (Neutral)"
+                k1.metric("RSI (14)", f"{rsi_val:.2f}", delta=rsi_status)
+                
+                k2.metric("MACD", f"{macd_val:.6f}")
+                
+                fg_val = fg_index.get('value', 'N/A')
+                fg_class = translate_fng(fg_index.get('value_classification', ''))
+                k3.metric("ดัชนีกลัว/โลภ", f"{fg_val}", fg_class)
+                
+                ema_trend = "N/A"
+                if 'EMA_200' in df.columns:
+                    try:
+                        c_val = float(df['Close'].iloc[-1])
+                        e_val = float(df['EMA_200'].iloc[-1])
+                        ema_trend = "ขาขึ้น (Bullish)" if c_val > e_val else "ขาลง (Bearish)"
+                    except: pass
+                
+                k4.metric("แนวโน้ม EMA", ema_trend)
+
+                # 3. AI Analysis Section (MODIFIED - WITH CACHE CHECK)
+                st.markdown("---")
+                if st.session_state.get('trigger_analysis'):
+                    st.markdown(f"### 🧠 ข้อมูลจากนักวิเคราะห์ (AI) - {coin_select}")
+                    
+                    with st.chat_message("ai", avatar="👁️"):
+                        # 1. เช็ค Cache ก่อน
+                        cached_data = dm.get_crypto_cache(coin_select)
+                        
+                        if cached_data:
+                            # เจอข้อมูลของวันนี้ -> แสดงเลย ไม่ต้องโหลด
+                            st.success(f"⚡ โหลดข้อมูลวิเคราะห์ประจำวันสำเร็จ (อัปเดตเมื่อ: {cached_data['updated_at']} น.)")
+                            st.markdown(cached_data['analysis'])
+                            st.caption("ℹ️ ข้อมูลนี้ถูกวิเคราะห์ไว้แล้ววันนี้เพื่อประหยัดทรัพยากร (Cache Hit)")
+                            st.session_state['trigger_analysis'] = False # ปิด Trigger
+                            
+                        else:
+                            # ไม่เจอข้อมูล (หรือเป็นวันใหม่) -> เรียก AI
+                            msg_loading = f"กำลังเชื่อมต่อจิตกับ Gemini 2.5 เพื่อวิเคราะห์ {coin_select} (THB)..."
+                            with st.spinner(msg_loading):
+                                # [UPDATED V2] ส่งข้อมูล Indicators ใหม่ๆทั้งหมด + Pivot Points, StochRSI, OBV
+                                indicators = {
+                                    "rsi": f"{rsi_val:.2f}",
+                                    "stoch_k": f"{df['Stoch_K'].iloc[-1]:.2f}" if 'Stoch_K' in df.columns else "50",  # NEW V2
+                                    "macd": f"{macd_val:.6f}",
+                                    "macd_signal": f"{macd_signal:.6f}",
+                                    "adx": f"{df['ADX'].iloc[-1]:.2f}" if 'ADX' in df.columns else "20",
+                                    "atr": f"{df['ATR'].iloc[-1]:,.2f}" if 'ATR' in df.columns else "0",
+                                    "obv_slope": "เงินไหลเข้า (Positive)" if df['OBV_Slope'].iloc[-1] > 0 else "เงินไหลออก (Negative)" if 'OBV_Slope' in df.columns and df['OBV_Slope'].iloc[-1] < 0 else "N/A",  # NEW V2
+                                    "pivot_p": f"{df['Pivot_P'].iloc[-1]:.2f}" if 'Pivot_P' in df.columns else f"{latest_price:.2f}",  # NEW V2
+                                    "pivot_s1": f"{df['Pivot_S1'].iloc[-1]:.2f}" if 'Pivot_S1' in df.columns else f"{latest_price * 0.95:.2f}",  # NEW V2
+                                    "pivot_r1": f"{df['Pivot_R1'].iloc[-1]:.2f}" if 'Pivot_R1' in df.columns else f"{latest_price * 1.05:.2f}",  # NEW V2
+                                    "support": f"{df['Support_Level'].iloc[-1]:,.2f}" if 'Support_Level' in df.columns else f"{latest_price * 0.95:,.2f}",
+                                    "resistance": f"{df['Resistance_Level'].iloc[-1]:,.2f}" if 'Resistance_Level' in df.columns else f"{latest_price * 1.05:,.2f}"
+                                }
+                                
+                                if ai_available and crypto_available:
+                                    # 🧠 ใช้ Reflection Mode 3-Step (Chain of Thought) แบบใหม่
+                                    # สร้าง Progress Bar จำลองการคิด
+                                    thinking_container = st.container()
+                                    with thinking_container:
+                                        thinking_bar = st.progress(0)
+                                        status_box = st.empty()
+                                        
+                                        # STEP 1: เริ่มกระบวนการ
+                                        status_box.markdown("🤔 **Phase 1:** Myla 🧚‍♀️ กำลังสแกนหาโอกาสทำกำไร...")
+                                        thinking_bar.progress(25)
+                                        time.sleep(0.5)
+                                        
+                                        # STEP 2: ส่งไปให้ Function ใหม่ทำงาน (ซึ่งข้างในมันจะยิง API 3 รอบ)
+                                        status_box.markdown("🔥 **Phase 2:** Ariel 🍸 กำลังจับผิดและประเมินความเสี่ยง (Deep Critique)...")
+                                        thinking_bar.progress(50)
+                                        
+                                        # เรียกฟังก์ชัน Reflection Mode
+                                        analysis_result = ai.analyze_crypto_reflection_mode(
+                                            coin_select, latest_price, indicators, news, fg_index
+                                        )
+                                        
+                                        status_box.markdown("✨ **Phase 3:** สรุปผลกลยุทธ์ God Mode เสร็จสิ้น!")
+                                        thinking_bar.progress(100)
+                                        time.sleep(0.5)
+                                        
+                                        # ล้าง Status Bar แล้วโชว์ผลลัพธ์
+                                        status_box.empty()
+                                        thinking_bar.empty()
+                                    
+                                    # บันทึกลง Cache ทันที
+                                    dm.update_crypto_cache(coin_select, analysis_result)
+                                    
+                                    st.markdown(analysis_result)
+                                    st.caption(f"🧠 วิเคราะห์แบบ Deep Reflection (3-Step Reasoning) | เวลา: {datetime.datetime.now().strftime('%H:%M')} น.")
+                                    
+                                    # --- [NEW CODE] แทรกตรงนี้เพื่อส่งเข้า Discord ---
+                                    # ดึง Webhook จาก Secrets
+                                    c_webhook = st.secrets.get("general", {}).get("crypto_webhook", "")
+                                    if c_webhook:
+                                        with st.spinner("🚀 กำลังส่งสัญญาณเข้า Discord..."):
+                                            from utils import send_crypto_report_to_discord
+                                            send_crypto_report_to_discord(c_webhook, coin_select, latest_price, analysis_result)
+                                            st.toast(f"ส่งผลวิเคราะห์ {coin_select} เข้าห้อง Discord แล้ว!", icon="📢")
+                                    # -----------------------------------------------
+                                else:
+                                    st.error("ไม่สามารถทำการวิเคราะห์ได้ เนื่องจาก API ยังไม่พร้อม")
+                                
+                                st.session_state['trigger_analysis'] = False 
+                else:
+                    st.info("กดปุ่ม 'เรียกดูข้อมูล (God Mode)' ด้านบนเพื่อดูคำทำนาย")
+            else:
+                st.error("ไม่สามารถดึงข้อมูลกราฟได้ (ตรวจสอบคู่เหรียญ THB)")
+
+            # =========================================================
+            # CASE B: วิเคราะห์รวดเดียว 8 เหรียญ (God Mode Batch - THAI)
+            # =========================================================
+            st.markdown("---")
+            st.markdown("### 🚀 วิเคราะห์เหมาเข่ง 8 เหรียญ (Batch Mode)")
+            if st.button("🚀 วิเคราะห์ทั้ง 8 เหรียญ โปรดของท่านเดียร์", use_container_width=True, key="btn_batch_tab"):
+                st.session_state['analyze_all'] = True
+                st.rerun()
+
+        # =========================================================
+        # BACKTEST TAB
+        # =========================================================
+        with tab_backtest:
+            st.markdown("### ⚖️ ความแม่นยำของ AI (Reality Check)")
+            st.caption("ระบบจะเปรียบเทียบสิ่งที่ AI ทำนายไว้ กับราคาจริง ณ เวลา 21:00 น. ของทุกวัน")
+            
+            history = dm.get_today_summary()
+            if history:
+                for h in history:
+                    try:
+                        score = int(str(h.get('score', '0')).replace("%", "").strip())
+                    except:
+                        score = 0
+                    color = "green" if score >= 80 else "orange" if score >= 40 else "red"
+                    st.markdown(f"""<div style="background:#161B22; padding:15px; border-radius:10px; margin-bottom:10px; border-left: 5px solid {color};"><div style="display:flex; justify-content:space-between;"><h4 style="margin:0;">{h.get('symbol', 'N/A')} ({h.get('signal', 'N/A')})</h4><span style="color:{color}; font-weight:bold;">{h.get('status', 'PENDING')} ({h.get('score', '0')})</span></div><small>Entry: {h.get('entry', 'N/A')} | Target: {h.get('target', 'N/A')} | Close: {h.get('close_price', 'N/A')}</small></div>""", unsafe_allow_html=True)
+            else:
+                st.info("ยังไม่มีผลสรุปของวันนี้ (รอตรวจตอน 21:00 น.)")
+
+            st.markdown("---")
+            if st.button("🔄 รันระบบตรวจการบ้าน (Daily Check)", type="primary", use_container_width=True):
+                with st.spinner("👨‍⚖️ AI Judge กำลังตรวจข้อสอบ..."):
+                    wh_url = st.secrets.get("general", {}).get("crypto_webhook", "")
+                    res = pe.check_accuracy_and_broadcast(wh_url)
+                    st.success(res)
+                    time.sleep(2)
+                    st.rerun()
+
+        # =========================================================
+        # CASE B Background: วิเคราะห์รวดเดียว (Batch Mode)
+        # =========================================================
+        if st.session_state.get('analyze_all'):
+            st.markdown("### 🚀 รายงานสรุป 8 เหรียญโปรด (God Mode Batch)")
+            if st.button("❌ ปิดโหมดวิเคราะห์รวม"):
+                st.session_state['analyze_all'] = False
+                st.rerun()
+
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # วนลูปวิเคราะห์ทีละตัว
+            for idx, c_symbol in enumerate(coin_list):
+                status_text.text(f"กำลังเจาะระบบวิเคราะห์ {c_symbol} ({idx+1}/{len(coin_list)})...")
+                
+                # 1. เช็คก่อนว่าวันนี้วิเคราะห์ไปหรือยัง (ประหยัด API บอส)
+                cached_data = dm.get_crypto_cache(c_symbol)
+                
+                if cached_data:
+                    # ถ้ามีใน Cache แล้ว ให้ดึงมาโชว์เลย
+                    with st.expander(f"💎 {c_symbol} (จากฐานข้อมูลเดิมวันนี้)", expanded=False):
+                        st.success(f"⚡ ใช้ข้อมูลเดิม (อัปเดตเมื่อ: {cached_data['updated_at']} น.)")
+                        st.markdown(cached_data['analysis'])
+                else:
+                    # 2. ถ้ายังไม่มี ให้ดึงข้อมูลกราฟและสั่ง AI วิเคราะห์ใหม่
+                    df_batch = ce.get_crypto_data(c_symbol)
+                    
+                    if df_batch is not None:
+                        last_p = df_batch['Close'].iloc[-1]
+                        rsi_v = df_batch['RSI'].iloc[-1] if 'RSI' in df_batch.columns else 50
+                        
+                        with st.expander(f"💎 {c_symbol} : ฿{last_p:,.4f} | RSI: {rsi_v:.1f}", expanded=False):
+                            if ai_available:
+                                # เตรียมอินดิเคเตอร์ (V2 - รวมทั้ง Pivot, Stoch, OBV)
+                                indicators_b = {
+                                    "rsi": f"{rsi_v:.2f}",
+                                    "stoch_k": f"{df_batch['Stoch_K'].iloc[-1]:.2f}" if 'Stoch_K' in df_batch.columns else "50",  # NEW V2
+                                    "macd": f"{df_batch['MACD'].iloc[-1]:.6f}" if 'MACD' in df_batch.columns else "0",
+                                    "macd_signal": f"{df_batch['MACD_SIGNAL'].iloc[-1]:.6f}" if 'MACD_SIGNAL' in df_batch.columns else "0",
+                                    "adx": f"{df_batch['ADX'].iloc[-1]:.2f}" if 'ADX' in df_batch.columns else "20",
+                                    "atr": f"{df_batch['ATR'].iloc[-1]:.2f}" if 'ATR' in df_batch.columns else "0",
+                                    "obv_slope": "เงินไหลเข้า (Positive)" if df_batch['OBV_Slope'].iloc[-1] > 0 else "เงินไหลออก (Negative)" if 'OBV_Slope' in df_batch.columns and df_batch['OBV_Slope'].iloc[-1] < 0 else "N/A",  # NEW V2
+                                    "pivot_p": f"{df_batch['Pivot_P'].iloc[-1]:.2f}" if 'Pivot_P' in df_batch.columns else f"{last_p:.2f}",  # NEW V2
+                                    "pivot_s1": f"{df_batch['Pivot_S1'].iloc[-1]:.2f}" if 'Pivot_S1' in df_batch.columns else f"{last_p * 0.95:.2f}",  # NEW V2
+                                    "pivot_r1": f"{df_batch['Pivot_R1'].iloc[-1]:.2f}" if 'Pivot_R1' in df_batch.columns else f"{last_p * 1.05:.2f}",  # NEW V2
+                                    "support": f"{df_batch['Support_Level'].iloc[-1]:.2f}" if 'Support_Level' in df_batch.columns else f"{last_p * 0.95:.2f}",
+                                    "resistance": f"{df_batch['Resistance_Level'].iloc[-1]:.2f}" if 'Resistance_Level' in df_batch.columns else f"{last_p * 1.05:.2f}"
+                                }
+                                
+                                # 🧠 สั่ง AI วิเคราะห์สด (Reflection Mode 3-Step)
+                                res_batch = ai.analyze_crypto_reflection_mode(c_symbol, last_p, indicators_b, "วิเคราะห์ตามกราฟเทคนิคอลล่าสุด", {"value":"50", "value_classification":"Neutral"})
+                                st.markdown(res_batch)
+                                
+                                # --- [จุดที่เพิ่ม] บันทึกลง Google Sheets ทันที ---
+                                dm.update_crypto_cache(c_symbol, res_batch)
+                                st.caption(f"✅ บันทึกลงระบบสำเร็จเมื่อ {datetime.datetime.now().strftime('%H:%M')} น. (Reflection Mode)")
+                                
+                                # --- [NEW CODE] แทรกตรงนี้เพื่อส่งเข้า Discord ---
+                                c_webhook = st.secrets.get("general", {}).get("crypto_webhook", "")
+                                if c_webhook:
+                                    from utils import send_crypto_report_to_discord
+                                    send_crypto_report_to_discord(c_webhook, c_symbol, last_p, res_batch)
+                                # -----------------------------------------------
+                            else:
+                                st.error("AI ไม่พร้อมใช้งาน")
+                
+                progress_bar.progress((idx + 1) / len(coin_list))
+                time.sleep(0.5) 
+            
+            status_text.success("✅ วิเคราะห์และบันทึกข้อมูลครบทั้ง 8 เหรียญแล้วครับท่านเดียร์! (ใช้ระบบ 3-Step Self-Reflection)")
 
 elif st.session_state.get('show_code_zone', False):
     st.markdown("## 💻 Code Showcase & Portfolio")
