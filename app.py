@@ -69,6 +69,7 @@ if 'realtime_analysis' not in st.session_state: st.session_state['realtime_analy
 if 'analyze_all' not in st.session_state: st.session_state['analyze_all'] = False
 if 'realtime_all_request' not in st.session_state: st.session_state['realtime_all_request'] = False
 if 'realtime_all_result' not in st.session_state: st.session_state['realtime_all_result'] = None
+if 'realtime_all_summary' not in st.session_state: st.session_state['realtime_all_summary'] = None
 
 filtered = []  # ประกาศตัวแปร global ดักไว้เลย กันพลาด
 
@@ -569,6 +570,88 @@ if st.session_state.get('show_crypto', False):
                     st.markdown(f"### ✅ ผล Real-Time (ครั้งเดียว) — อัปเดตเมื่อ {rt_pack.get('generated_at','')}")
                     if rt_pack.get('error'):
                         st.error(f"⚠️ Error: {rt_pack['error']}")
+
+
+                    # =========================
+                    # 🧾 Summary (หลังวิเคราะห์ครบ 8 เหรียญ)
+                    # =========================
+                    def _rt_status_key(ind: dict):
+                        """คัดกรองสถานะแบบเร็ว (ไม่เรียก AI ซ้ำ)"""
+                        try:
+                            rsi = float(ind.get("rsi", 50))
+                        except:
+                            rsi = 50.0
+                        try:
+                            macd = float(ind.get("macd", 0))
+                        except:
+                            macd = 0.0
+                        try:
+                            sig = float(ind.get("macd_signal", 0))
+                        except:
+                            sig = 0.0
+                        try:
+                            adx = float(ind.get("adx", 20))
+                        except:
+                            adx = 20.0
+                        obv = str(ind.get("obv_slope", "")).lower()
+
+                        # Trap: ราคาดูดีแต่เงินไหลออก
+                        if ("ไหลออก" in obv) and (rsi >= 55):
+                            return "TRAP"
+
+                        # Very bullish: oversold + เริ่มกลับตัว + มี trend
+                        if (rsi <= 35) and (macd > sig) and (adx >= 20):
+                            return "VERY_BULLISH"
+
+                        # Bullish: momentum ดี
+                        if (macd > sig) and (rsi >= 45) and (adx >= 18):
+                            return "BULLISH"
+
+                        # Bearish: momentum เสีย หรือ overbought + อ่อนแรง
+                        if (macd < sig) and (adx >= 18):
+                            return "BEARISH"
+                        if (rsi >= 70) and (macd <= sig):
+                            return "BEARISH"
+
+                        return "NEUTRAL"
+
+                    _rt_status_map = {
+                        "BEARISH": {"icon": "🔴", "title": "ยังไม่ควรซื้อ", "action": "รอให้มีสัญญาณกลับตัว/ยืนแนวรับก่อน"},
+                        "NEUTRAL": {"icon": "🟡", "title": "ยังไม่ใช่ตอนนี้", "action": "รอดูทิศทางให้ชัดก่อนค่อยเข้า"},
+                        "BULLISH": {"icon": "🟢", "title": "เริ่มน่าสนใจ", "action": "ทยอยสะสม + ตั้ง Stop Loss"},
+                        "VERY_BULLISH": {"icon": "🔥", "title": "น่าเก็บมาก", "action": "เข้าเป็นไม้ ห้าม All-in"},
+                        "TRAP": {"icon": "❌", "title": "อย่าเข้า", "action": "เสี่ยงโดนทุบ/กับดักราคา ไม่ควร FOMO"},
+                    }
+
+                    c_s1, c_s2 = st.columns([2, 1])
+                    with c_s1:
+                        if st.button("🧾 สรุปคำแนะนำ 8 เหรียญ (จากรอบนี้)", use_container_width=True, key="btn_rt_summary"):
+                            lines = []
+                            for it in rt_pack.get('results', []):
+                                if it.get('error'):
+                                    continue
+                                s = it.get('symbol')
+                                p = float(it.get('latest_price', 0) or 0)
+                                ind = it.get('indicators', {}) or {}
+                                key = _rt_status_key(ind)
+                                meta = _rt_status_map.get(key, _rt_status_map["NEUTRAL"])
+
+                                pf = "{:,.4f}" if s in ["SHIB", "PEPE", "DOGE"] else "{:,.2f}"
+                                lines.append(f"{meta['icon']} **{s}**: **{meta['title']}** ตอนราคา **฿{pf.format(p)}** — {meta['action']}")
+                            st.session_state['realtime_all_summary'] = {
+                                "generated_at": rt_pack.get('generated_at', ''),
+                                "lines": lines
+                            }
+
+                    with c_s2:
+                        if st.button("🧹 ล้างสรุป", use_container_width=True, key="btn_rt_summary_clear"):
+                            st.session_state['realtime_all_summary'] = None
+
+                    summ_pack = st.session_state.get('realtime_all_summary')
+                    if summ_pack and summ_pack.get('lines'):
+                        st.markdown(f"#### 🧾 สรุป (อัปเดตเมื่อ {summ_pack.get('generated_at','')})")
+                        for ln in summ_pack['lines']:
+                            st.markdown(ln)
 
                     for item in rt_pack.get('results', []):
                         sym = item.get('symbol')
