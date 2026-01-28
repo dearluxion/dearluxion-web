@@ -510,18 +510,18 @@ if st.session_state.get('show_crypto', False):
                         resistance = float(latest.get('Resistance_Level', latest_price * 1.05)) if 'Resistance_Level' in live_df.columns else latest_price * 1.05
 
                         indicators = {
-                            "rsi": f"{rsi_val:.2f}",
-                            "stoch_k": f"{stoch_k:.2f}",
-                            "macd": f"{macd_val:.6f}",
-                            "macd_signal": f"{macd_signal:.6f}",
-                            "adx": f"{adx_val:.2f}",
-                            "atr": f"{atr_val:,.2f}",
+                            "rsi": rsi_val,
+                            "stoch_k": stoch_k,
+                            "macd": macd_val,
+                            "macd_signal": macd_signal,
+                            "adx": adx_val,
+                            "atr": atr_val,
                             "obv_slope": obv_slope,
-                            "pivot_p": f"{pivot_p:.2f}",
-                            "pivot_s1": f"{pivot_s1:.2f}",
-                            "pivot_r1": f"{pivot_r1:.2f}",
-                            "support": f"{support:,.2f}",
-                            "resistance": f"{resistance:,.2f}"
+                            "pivot_p": pivot_p,
+                            "pivot_s1": pivot_s1,
+                            "pivot_r1": pivot_r1,
+                            "support": support,
+                            "resistance": resistance
                         }
 
                         analysis_result = None
