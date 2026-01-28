@@ -58,6 +58,21 @@ MARKET_STATUS_TH = {
     }
 }
 
+def safe_float(x, default=0.0):
+    """แปลงค่าเป็น float แบบทนทานต่อเลขที่มี comma เช่น '2,762,445.08'"""
+    try:
+        if x is None:
+            return float(default)
+        if isinstance(x, (int, float)):
+            return float(x)
+        if isinstance(x, str):
+            x = x.replace(',', '').strip()
+            if x == '':
+                return float(default)
+        return float(x)
+    except Exception:
+        return float(default)
+
 def get_market_status_th(status_key: str):
     """
     รับค่า: BEARISH / NEUTRAL / BULLISH / VERY_BULLISH / TRAP
@@ -321,19 +336,19 @@ def analyze_crypto_god_mode(coin_name, current_price, indicators, news_text, fea
     if not is_ready: return "⚠️ ระบบ AI ยังไม่พร้อม (กรุณาใส่ API Key)"
     
     # --- 1. ดึงข้อมูลเชิงลึก (ใช้ Logic แบบ V2 เพื่อความแม่นยำ) ---
-    rsi = float(indicators.get('rsi', 50))
-    stoch_k = float(indicators.get('stoch_k', 50))
+    rsi = safe_float(indicators.get('rsi', 50))
+    stoch_k = safe_float(indicators.get('stoch_k', 50))
     obv_status = str(indicators.get('obv_slope', 'N/A')) # ดูเงินไหลเข้าออก
     
-    macd = float(indicators.get('macd', 0))
-    macd_signal = float(indicators.get('macd_signal', 0))
-    adx = float(indicators.get('adx', 20)) # ดูความแรงของเทรนด์
-    atr = float(indicators.get('atr', 0))
+    macd = safe_float(indicators.get('macd', 0))
+    macd_signal = safe_float(indicators.get('macd_signal', 0))
+    adx = safe_float(indicators.get('adx', 20)) # ดูความแรงของเทรนด์
+    atr = safe_float(indicators.get('atr', 0))
     
     # Pivot Points (จุดรับ-ต้าน จิตวิทยา)
-    pivot_p = float(indicators.get('pivot_p', 0))
-    pivot_s1 = float(indicators.get('pivot_s1', 0))
-    pivot_r1 = float(indicators.get('pivot_r1', 0))
+    pivot_p = safe_float(indicators.get('pivot_p', 0))
+    pivot_s1 = safe_float(indicators.get('pivot_s1', 0))
+    pivot_r1 = safe_float(indicators.get('pivot_r1', 0))
     
     # --- 2. ตรวจจับสัญญาณลวง (Trap Detection) ---
     trap_warning = ""
@@ -509,7 +524,7 @@ def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_te
     💡 *System: 3-Step Reasoning (Draft -> Critique -> Final) | Processed: {datetime.datetime.now().strftime('%H:%M:%S')} น.*
     
     [IMPORTANT: REQUIRED OUTPUT FORMAT FOR SYSTEM - DO NOT MODIFY]
-    JSON_DATA={{"signal": "BULLISH", "entry": {float(indicators.get('pivot_s1', 0))}, "target": {float(indicators.get('pivot_r1', 0))}, "stoploss": {float(indicators.get('support', 0))}}}
+    JSON_DATA={{"signal": "BULLISH", "entry": {safe_float(indicators.get('pivot_s1', 0))}, "target": {safe_float(indicators.get('pivot_r1', 0))}, "stoploss": {safe_float(indicators.get('support', 0))}}}
     """
     
     try:
