@@ -18,21 +18,7 @@ COIN_MAP = {
     "SHIB": "SHIB-USD"
 }
 
-@st.cache_data(ttl=300)
-def get_exchange_rate():
-    try:
-        # ดึงค่าเงินบาทล่าสุดจาก Yahoo Finance
-        ticker = yf.Ticker("USDTHB=X")
-        # ดึงย้อนหลัง 1 วัน เอาตัวล่าสุด
-        df = ticker.history(period="1d")
-        if not df.empty:
-            rate = df['Close'].iloc[-1]
-            return float(rate)
-        return 34.0 # ค่าสำรองกันตาย
-    except:
-        return 34.0
-
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def get_crypto_data(symbol_key, period="2y", interval="1d"):
     # 1. ดึงข้อมูล Crypto เป็น USD
     symbol = COIN_MAP.get(symbol_key, "BTC-USD")
@@ -51,17 +37,9 @@ def get_crypto_data(symbol_key, period="2y", interval="1d"):
     if 'Close' not in df.columns:
         return None
 
-    # 2. [NEW] แปลงเป็นเงินบาท (THB)
-    # ดึงเรทเงินบาท
-    thb_rate = get_exchange_rate()
-    
-    # คูณค่าเงินเข้าไปในคอลัมน์ราคาต่างๆ
-    cols_to_convert = ['Open', 'High', 'Low', 'Close']
-    for c in cols_to_convert:
-        if c in df.columns:
-            df[c] = df[c] * thb_rate
+    # 2. ใช้ราคา USD โดยตรง (ไม่แปลงสกุลเงิน)
 
-    # 3. คำนวณอินดิเคเตอร์ (คำนวณจากราคาไทยที่แปลงแล้ว)
+    # 3. คำนวณอินดิเคเตอร์ (คำนวณจากราคา USD)
     # RSI
     try:
         df['RSI'] = ta.rsi(df['Close'], length=14)
