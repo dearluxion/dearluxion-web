@@ -5,6 +5,170 @@ import urllib.parse
 import datetime
 import json
 
+# =========================================================
+# Google Sheets (Crypto Analysis Logger)
+# =========================================================
+
+@st.cache_resource(show_spinner=False)
+def _get_gspread_client():
+    """สร้าง gspread client จาก service account ใน st.secrets
+
+    รองรับหลายรูปแบบ key เพื่อให้เข้ากับโปรเจกต์เดิมได้ง่าย:
+    - st.secrets["google_service_account"]
+    - st.secrets["gcp_service_account"]
+    - st.secrets["service_account"]
+    - st.secrets["gspread"]["service_account"]
+    (และรองรับกรณีเก็บเป็น JSON string)
+    """
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+
+        sa_info = (
+            st.secrets.get("google_service_account")
+            or st.secrets.get("gcp_service_account")
+            or st.secrets.get("service_account")
+            or st.secrets.get("gspread", {}).get("service_account")
+        )
+
+        if not sa_info:
+            return None
+
+        # รองรับกรณีเก็บเป็น JSON string
+        if isinstance(sa_info, str):
+            sa_info = json.loads(sa_info)
+
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        creds = Credentials.from_service_account_info(dict(sa_info), scopes=scopes)
+        return gspread.authorize(creds)
+    except Exception as e:
+        print(f"❌ Google Sheets client init failed: {e}")
+        return None
+
+
+def _get_crypto_sheet_config():
+    """ดึง config ของชีทจาก secrets แบบยืดหยุ่น"""
+    cfg = st.secrets.get("google_sheets", {})
+
+    sheet_id = (
+        cfg.get("crypto_analysis_sheet_id")
+        or cfg.get("crypto_sheet_id")
+        or st.secrets.get("crypto_analysis_sheet_id")
+        or st.secrets.get("crypto_sheet_id")
+    )
+    worksheet_name = cfg.get("crypto_analysis_worksheet", "Crypto_Analysis_Log")
+
+    return sheet_id, worksheet_name
+
+
+def append_crypto_analysis_to_gsheet(
+    *,
+    mode: str,
+    symbol: str,
+    price: float,
+    analysis_text: str,
+    indicators: dict | None = None,
+    news_count: int | None = None,
+    fg: dict | None = None,
+    generated_at: str | None = None,
+):
+    """บันทึกผลวิเคราะห์ลง Google Sheets (append row)
+
+    - ถ้า secrets/credentials ไม่ครบ จะ "เงียบ" และ return False
+    - กันลิมิต cell 50k chars ของ Google Sheets โดยตัดข้อความ
+    """
+
+    client = _get_gspread_client()
+    sheet_id, worksheet_name = _get_crypto_sheet_config()
+
+    if not client or not sheet_id:
+        return False
+
+    try:
+        sh = client.open_by_key(sheet_id)
+        ws = sh.worksheet(worksheet_name)
+    except Exception as e:
+        print(f"❌ Open worksheet failed: {e}")
+        return False
+
+    try:
+        # Header (สร้างอัตโนมัติถ้ายังไม่มี)
+        headers = [
+            "timestamp",
+            "mode",
+            "symbol",
+            "price_thb",
+            "rsi",
+            "stoch_k",
+            "macd",
+            "macd_signal",
+            "adx",
+            "atr",
+            "obv_slope",
+            "pivot_p",
+            "pivot_s1",
+            "pivot_r1",
+            "support",
+            "resistance",
+            "news_count",
+            "fg_value",
+            "fg_classification",
+            "analysis",
+        ]
+
+        try:
+            first_row = ws.row_values(1)
+        except Exception:
+            first_row = []
+
+        if not first_row:
+            ws.append_row(headers, value_input_option="RAW")
+
+        ind = indicators or {}
+        fg_val = None
+        fg_cls = None
+        if isinstance(fg, dict):
+            fg_val = fg.get("value")
+            fg_cls = fg.get("value_classification")
+
+        ts = generated_at or datetime.datetime.now().isoformat(timespec="seconds")
+
+        # กันลิมิต cell 50k
+        if analysis_text and len(analysis_text) > 49000:
+            analysis_text = analysis_text[:48900] + "\n... (ตัดข้อความเพราะยาวเกิน Google Sheets)"
+
+        row = [
+            ts,
+            mode,
+            str(symbol).upper(),
+            float(price) if price is not None else "",
+            ind.get("rsi", ""),
+            ind.get("stoch_k", ""),
+            ind.get("macd", ""),
+            ind.get("macd_signal", ""),
+            ind.get("adx", ""),
+            ind.get("atr", ""),
+            ind.get("obv_slope", ""),
+            ind.get("pivot_p", ""),
+            ind.get("pivot_s1", ""),
+            ind.get("pivot_r1", ""),
+            ind.get("support", ""),
+            ind.get("resistance", ""),
+            int(news_count) if news_count is not None else "",
+            fg_val if fg_val is not None else "",
+            fg_cls if fg_cls is not None else "",
+            analysis_text or "",
+        ]
+
+        ws.append_row(row, value_input_option="USER_ENTERED")
+        return True
+    except Exception as e:
+        print(f"❌ Append crypto analysis failed: {e}")
+        return False
+
 # --- ฟังก์ชันแปลงลิงก์ Google Drive (รูป) ---
 # [UPDATE] ใช้สำหรับแสดงผลบนเว็บ (ชัดสุด)
 def convert_drive_link(link):

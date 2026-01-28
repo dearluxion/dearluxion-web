@@ -9,7 +9,16 @@ import plotly.graph_objects as go
 
 # --- [IMPORTED MODULES] ---
 from styles import get_css 
-from utils import convert_drive_link, convert_drive_video_link, make_clickable, send_post_to_discord, exchange_code_for_token, get_discord_user, send_crypto_report_to_discord
+from utils import (
+    convert_drive_link,
+    convert_drive_video_link,
+    make_clickable,
+    send_post_to_discord,
+    exchange_code_for_token,
+    get_discord_user,
+    send_crypto_report_to_discord,
+    append_crypto_analysis_to_gsheet,
+)
 import data_manager as dm
 import sidebar_manager as sm
 import ai_manager as ai
@@ -533,6 +542,36 @@ if st.session_state.get('show_crypto', False):
                         else:
                             analysis_result = "⚠️ ระบบ AI/crypto ยังไม่พร้อม จึงสรุปได้แค่ข้อมูลตลาดเบื้องต้น"
 
+                        # --- [NEW] ทำให้ผล Real-Time โชว์ในจุดเดียวกับปุ่มวิเคราะห์ธรรมดา ---
+                        # 1) บันทึกเข้า Cache (เหมือนปุ่มวิเคราะห์ปกติ)
+                        try:
+                            dm.update_crypto_cache(c_symbol, analysis_result)
+                        except Exception as _e:
+                            print(f"❌ Cache update (realtime) failed: {_e}")
+
+                        # 2) Log เข้า Google Sheets
+                        try:
+                            append_crypto_analysis_to_gsheet(
+                                mode="realtime_once",
+                                symbol=c_symbol,
+                                price=latest_price,
+                                analysis_text=analysis_result,
+                                indicators=indicators,
+                                news_count=len(live_news) if live_news else 0,
+                                fg=live_fg,
+                                generated_at=datetime.datetime.now().isoformat(timespec="seconds"),
+                            )
+                        except Exception as _e:
+                            print(f"❌ Sheets log (realtime) failed: {_e}")
+
+                        # 3) ส่งเข้า Discord (ทุกระบบ)
+                        try:
+                            c_webhook = st.secrets.get("general", {}).get("crypto_webhook", "")
+                            if c_webhook:
+                                send_crypto_report_to_discord(c_webhook, c_symbol, latest_price, analysis_result)
+                        except Exception as _e:
+                            print(f"❌ Discord send (realtime) failed: {_e}")
+
                         results.append({
                             "symbol": c_symbol,
                             "error": None,
@@ -822,6 +861,21 @@ if st.session_state.get('show_crypto', False):
                                     
                                     # บันทึกลง Cache ทันที
                                     dm.update_crypto_cache(coin_select, analysis_result)
+
+                                    # --- [NEW] Log ลง Google Sheets ---
+                                    try:
+                                        append_crypto_analysis_to_gsheet(
+                                            mode="single",
+                                            symbol=coin_select,
+                                            price=latest_price,
+                                            analysis_text=analysis_result,
+                                            indicators=indicators,
+                                            news_count=len(news) if news else 0,
+                                            fg=fg_index,
+                                            generated_at=datetime.datetime.now().isoformat(timespec="seconds"),
+                                        )
+                                    except Exception as _e:
+                                        print(f"❌ Sheets log (single) failed: {_e}")
                                     
                                     st.markdown(analysis_result)
                                     st.caption(f"🧠 วิเคราะห์แบบ Deep Reflection (3-Step Reasoning) | เวลา: {datetime.datetime.now().strftime('%H:%M')} น.")
@@ -937,6 +991,21 @@ if st.session_state.get('show_crypto', False):
                                 
                                 # --- [จุดที่เพิ่ม] บันทึกลง Google Sheets ทันที ---
                                 dm.update_crypto_cache(c_symbol, res_batch)
+
+                                # --- [NEW] Log ลง Google Sheets (Batch Mode) ---
+                                try:
+                                    append_crypto_analysis_to_gsheet(
+                                        mode="batch",
+                                        symbol=c_symbol,
+                                        price=last_p,
+                                        analysis_text=res_batch,
+                                        indicators=indicators_b,
+                                        news_count=None,
+                                        fg={"value":"50", "value_classification":"Neutral"},
+                                        generated_at=datetime.datetime.now().isoformat(timespec="seconds"),
+                                    )
+                                except Exception as _e:
+                                    print(f"❌ Sheets log (batch) failed: {_e}")
                                 st.caption(f"✅ บันทึกลงระบบสำเร็จเมื่อ {datetime.datetime.now().strftime('%H:%M')} น. (Reflection Mode)")
                                 
                                 # --- [NEW CODE] แทรกตรงนี้เพื่อส่งเข้า Discord ---
