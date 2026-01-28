@@ -67,6 +67,9 @@ if 'show_code_zone' not in st.session_state: st.session_state['show_code_zone'] 
 if 'filtered' not in st.session_state: st.session_state['filtered'] = []
 if 'realtime_analysis' not in st.session_state: st.session_state['realtime_analysis'] = False
 if 'analyze_all' not in st.session_state: st.session_state['analyze_all'] = False
+if 'realtime_all_request' not in st.session_state: st.session_state['realtime_all_request'] = False
+if 'realtime_all_result' not in st.session_state: st.session_state['realtime_all_result'] = None
+
 filtered = []  # ประกาศตัวแปร global ดักไว้เลย กันพลาด
 
 # --- Login Discord Logic (Auto Admin Check) ---
@@ -437,97 +440,164 @@ if st.session_state.get('show_crypto', False):
             st.session_state['trigger_analysis'] = False
             st.rerun()
         
-        # ========== ✅ ปุ่มวิเคราะห์แบบเรียลไทม์ (Admin Only) ==========
+        # ========== ✅ วิเคราะห์ Real-Time แบบ “ครั้งเดียว” (Admin Only) ==========
         st.markdown("---")
         if st.session_state.get('is_admin'):
-            col_rt1, col_rt2 = st.columns([1, 1])
-            with col_rt1:
-                if st.button("🔍 วิเคราะห์เรียลไทม์", type="primary", use_container_width=True, key="btn_realtime_analysis"):
-                    st.session_state['realtime_analysis'] = not st.session_state.get('realtime_analysis', False)
+            # ปุ่มเดียว: กดแล้ว “ดึงข้อมูลสด + วิเคราะห์ครบ 8 เหรียญ” 1 รอบ แล้วเก็บผลไว้โชว์แบบนิ่งๆ
+            c_rt1, c_rt2 = st.columns([2, 1])
+            with c_rt1:
+                if st.button("🔴 Real-Time (ครั้งเดียว) วิเคราะห์ 8 เหรียญ", type="primary", use_container_width=True, key="btn_realtime_all_once"):
+                    st.session_state['realtime_all_request'] = True
                     st.rerun()
-            
-            with col_rt2:
-                if st.button("⏹️ หยุด Real-Time", type="secondary", use_container_width=True, key="btn_stop_realtime"):
-                    st.session_state['realtime_analysis'] = False
+
+            with c_rt2:
+                if st.button("🧹 ล้างผล Real-Time", use_container_width=True, key="btn_clear_realtime_all"):
+                    st.session_state['realtime_all_result'] = None
+                    st.session_state['realtime_all_request'] = False
                     st.rerun()
-            
-            # 📦 สร้างพื้นที่แสดงผล (ที่เดิม - ไม่เคลื่อนไหว)
-            realtime_output = st.empty()
-            
-            # Logic วิเคราะห์ Real-Time
-            if st.session_state.get('realtime_analysis'):
+
+            realtime_all_output = st.container()
+
+            # ---- Run (only when requested) ----
+            if st.session_state.get('realtime_all_request'):
                 try:
-                    with realtime_output.container():
-                        st.markdown(f"### 🔴 Live Analysis: {coin_select}")
-                        
-                        # ดึงข้อมูลแบบเรียลไทม์
-                        with st.spinner(f"⏱️ กำลังดึงข้อมูล Real-Time ของ {coin_select}..."):
-                            live_df = ce.get_crypto_data(coin_select, period="1d", interval="1h")
-                            live_news = ce.get_crypto_news(coin_select)
-                            live_fg = ce.get_fear_and_greed()
-                        
-                        if live_df is not None:
-                            # ข้อมูลล่าสุด
-                            latest = live_df.iloc[-1]
-                            live_price = latest['Close']
-                            live_rsi = latest['RSI'] if 'RSI' in live_df.columns else 50
-                            live_macd = latest['MACD'] if 'MACD' in live_df.columns else 0
-                            
-                            # Format ราคา THB ให้ถูกต้อง
-                            price_fmt = "{:,.4f}" if coin_select in ["SHIB", "PEPE", "DOGE"] else "{:,.2f}"
-                            
-                            # Helper แปลผล Fear/Greed (Local)
-                            def translate_fng_local(classification):
-                                mapping = {
-                                    "Extreme Fear": "กลัวสุดขีด (Extreme Fear)",
-                                    "Fear": "กลัว (Fear)",
-                                    "Neutral": "เฉยๆ (Neutral)",
-                                    "Greed": "โลภ (Greed)",
-                                    "Extreme Greed": "โลภสุดขีด (Extreme Greed)"
-                                }
-                                return mapping.get(classification, classification)
-                            
-                            # Indicators Status
-                            rsi_signal = "🔴 ซื้อมากเกิน" if live_rsi > 70 else "🟢 ขายมากเกิน" if live_rsi < 30 else "🟡 ปกติ"
-                            macd_signal = "🚀 Bullish" if live_macd > 0 else "📉 Bearish"
-                            fng_text = translate_fng_local(live_fg.get('value_classification', 'Neutral'))
-                            
-                            # UI Live Display
-                            rt_col1, rt_col2, rt_col3, rt_col4 = st.columns(4)
-                            
-                            with rt_col1:
-                                st.metric("💰 ราคาปัจจุบัน", f"฿{price_fmt.format(live_price)}")
-                            
-                            with rt_col2:
-                                st.metric("📊 RSI(14)", f"{live_rsi:.2f}", delta=rsi_signal)
-                            
-                            with rt_col3:
-                                st.metric("⚡ MACD", f"{live_macd:.6f}", delta=macd_signal)
-                            
-                            with rt_col4:
-                                st.metric("😨 Fear/Greed", f"{live_fg.get('value', 'N/A')}", delta=fng_text)
-                            
-                            # Summary
-                            st.markdown(f"""
-                            ---
-                            📍 **สรุปข้อมูล Real-Time ({coin_select})**
-                            
-                            • **ราคา:** ฿{price_fmt.format(live_price)}
-                            • **RSI:** {live_rsi:.2f} {rsi_signal}
-                            • **MACD:** {live_macd:.6f} {macd_signal}
-                            • **ความรู้สึกตลาด:** {fng_text}
-                            • **ข่าวล่าสุด:** {len(live_news)} รายการ
-                            
-                            ⏰ อัปเดต: {datetime.datetime.now().strftime("%H:%M:%S")}
-                            """)
+                    results = []
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+
+                    for idx, c_symbol in enumerate(coin_list):
+                        status_text.text(f"⏱️ กำลังดึงข้อมูล Real-Time + วิเคราะห์ {c_symbol} ({idx+1}/{len(coin_list)})...")
+
+                        # ดึงข้อมูลแบบเรียลไทม์ (กรอบสั้น) + ข่าว + Fear/Greed
+                        live_df = ce.get_crypto_data(c_symbol, period="1d", interval="1h")
+                        live_news = ce.get_crypto_news(c_symbol)
+                        live_fg = ce.get_fear_and_greed()
+
+                        if live_df is None or len(live_df) == 0:
+                            results.append({
+                                "symbol": c_symbol,
+                                "error": "❌ ไม่สามารถดึงข้อมูลกราฟ Real-Time ได้",
+                                "analysis": None,
+                                "latest_price": None,
+                                "indicators": {}
+                            })
+                            progress_bar.progress((idx + 1) / len(coin_list))
+                            continue
+
+                        latest = live_df.iloc[-1]
+                        latest_price = float(latest.get('Close', 0))
+
+                        # ดึงค่าที่มีอยู่ (ถ้าไม่มีให้ใส่ค่าเริ่มต้น)
+                        rsi_val = float(latest.get('RSI', 50)) if 'RSI' in live_df.columns else 50.0
+                        macd_val = float(latest.get('MACD', 0)) if 'MACD' in live_df.columns else 0.0
+                        macd_signal = float(latest.get('MACD_SIGNAL', 0)) if 'MACD_SIGNAL' in live_df.columns else 0.0
+                        adx_val = float(latest.get('ADX', 20)) if 'ADX' in live_df.columns else 20.0
+                        atr_val = float(latest.get('ATR', 0)) if 'ATR' in live_df.columns else 0.0
+                        stoch_k = float(latest.get('Stoch_K', 50)) if 'Stoch_K' in live_df.columns else 50.0
+
+                        obv_slope = "N/A"
+                        if 'OBV_Slope' in live_df.columns:
+                            try:
+                                obv_slope = "เงินไหลเข้า (Positive)" if float(latest.get('OBV_Slope', 0)) > 0 else "เงินไหลออก (Negative)"
+                            except:
+                                obv_slope = "N/A"
+
+                        # Pivot / Support / Resistance ถ้ามี
+                        pivot_p = float(latest.get('Pivot_P', latest_price)) if 'Pivot_P' in live_df.columns else latest_price
+                        pivot_s1 = float(latest.get('Pivot_S1', latest_price * 0.95)) if 'Pivot_S1' in live_df.columns else latest_price * 0.95
+                        pivot_r1 = float(latest.get('Pivot_R1', latest_price * 1.05)) if 'Pivot_R1' in live_df.columns else latest_price * 1.05
+                        support = float(latest.get('Support_Level', latest_price * 0.95)) if 'Support_Level' in live_df.columns else latest_price * 0.95
+                        resistance = float(latest.get('Resistance_Level', latest_price * 1.05)) if 'Resistance_Level' in live_df.columns else latest_price * 1.05
+
+                        indicators = {
+                            "rsi": f"{rsi_val:.2f}",
+                            "stoch_k": f"{stoch_k:.2f}",
+                            "macd": f"{macd_val:.6f}",
+                            "macd_signal": f"{macd_signal:.6f}",
+                            "adx": f"{adx_val:.2f}",
+                            "atr": f"{atr_val:,.2f}",
+                            "obv_slope": obv_slope,
+                            "pivot_p": f"{pivot_p:.2f}",
+                            "pivot_s1": f"{pivot_s1:.2f}",
+                            "pivot_r1": f"{pivot_r1:.2f}",
+                            "support": f"{support:,.2f}",
+                            "resistance": f"{resistance:,.2f}"
+                        }
+
+                        analysis_result = None
+                        if ai_available and crypto_available:
+                            analysis_result = ai.analyze_crypto_reflection_mode(
+                                c_symbol, latest_price, indicators, live_news, live_fg
+                            )
                         else:
-                            st.error("❌ ไม่สามารถดึงข้อมูลได้ กรุณาลองใหม่")
-                
+                            analysis_result = "⚠️ ระบบ AI/crypto ยังไม่พร้อม จึงสรุปได้แค่ข้อมูลตลาดเบื้องต้น"
+
+                        results.append({
+                            "symbol": c_symbol,
+                            "error": None,
+                            "analysis": analysis_result,
+                            "latest_price": latest_price,
+                            "indicators": indicators,
+                            "news_count": len(live_news) if live_news else 0,
+                            "fg": live_fg
+                        })
+
+                        progress_bar.progress((idx + 1) / len(coin_list))
+
+                    status_text.empty()
+                    progress_bar.empty()
+
+                    # เก็บผลไว้โชว์แบบนิ่งๆ จนกว่าจะกดใหม่/ล้าง
+                    st.session_state['realtime_all_result'] = {
+                        "generated_at": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                        "results": results
+                    }
                 except Exception as e:
-                    with realtime_output.container():
-                        st.error(f"⚠️ Error: {str(e)}")
+                    st.session_state['realtime_all_result'] = {
+                        "generated_at": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                        "results": [],
+                        "error": str(e)
+                    }
+                finally:
+                    st.session_state['realtime_all_request'] = False
+                    st.rerun()
+
+            # ---- Display (static) ----
+            with realtime_all_output:
+                rt_pack = st.session_state.get('realtime_all_result')
+                if rt_pack:
+                    st.markdown(f"### ✅ ผล Real-Time (ครั้งเดียว) — อัปเดตเมื่อ {rt_pack.get('generated_at','')}")
+                    if rt_pack.get('error'):
+                        st.error(f"⚠️ Error: {rt_pack['error']}")
+
+                    for item in rt_pack.get('results', []):
+                        sym = item.get('symbol')
+                        if item.get('error'):
+                            with st.expander(f"💎 {sym} (Real-Time)", expanded=False):
+                                st.error(item['error'])
+                            continue
+
+                        latest_price = item.get('latest_price', 0)
+                        price_fmt = "{:,.4f}" if sym in ["SHIB", "PEPE", "DOGE"] else "{:,.2f}"
+
+                        with st.expander(f"🔴 {sym} Real-Time | ฿{price_fmt.format(latest_price)}", expanded=False):
+                            # Quick metrics
+                            k1, k2, k3, k4 = st.columns(4)
+                            try:
+                                k1.metric("💰 ราคา", f"฿{price_fmt.format(latest_price)}")
+                                k2.metric("📊 RSI", item['indicators'].get("rsi", "N/A"))
+                                k3.metric("⚡ MACD", item['indicators'].get("macd", "N/A"))
+                                fg_val = item.get("fg", {}).get("value", "N/A")
+                                fg_cls = item.get("fg", {}).get("value_classification", "N/A")
+                                k4.metric("😨 Fear/Greed", str(fg_val), str(fg_cls))
+                            except:
+                                pass
+
+                            st.caption(f"📰 ข่าวล่าสุด: {item.get('news_count', 0)} รายการ")
+                            st.markdown(item.get('analysis', ''))
+
         else:
-            st.info("🔒 ปุ่มวิเคราะห์แบบเรียลไทม์สำหรับแอดมินเท่านั้น")
+            st.info("🔒 ปุ่ม Real-Time (ครั้งเดียว) สำหรับแอดมินเท่านั้น")
 
         # =========================================================
         # TABS: Analysis & Backtest
