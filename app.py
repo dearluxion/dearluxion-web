@@ -846,10 +846,32 @@ if st.session_state.get('show_crypto', False):
                                         status_box.markdown("🔥 **Phase 2:** Ariel 🍸 กำลังจับผิดและประเมินความเสี่ยง (Deep Critique)...")
                                         thinking_bar.progress(50)
                                         
-                                        # เรียกฟังก์ชัน Reflection Mode
-                                        analysis_result = ai.analyze_crypto_reflection_mode(
-                                            coin_select, latest_price, indicators, news, fg_index
+                                        # --- [NEW] Toggle: โชว์การถกเถียงของ AI (Analyst vs Critic) ---
+                                        show_debate = st.checkbox(
+                                            "🧩 โชว์ตอน AI เถียงกัน (Analyst 🧚‍♀️ vs Critic 🍸)",
+                                            value=st.session_state.get('show_crypto_debate', False),
+                                            key="show_crypto_debate",
+                                            help="ถ้าเปิด จะโชว์ Draft (Myla) + Critique (Ariel) ก่อนสรุป Final",
                                         )
+
+                                        # เรียกฟังก์ชัน Reflection Mode (3-Step)
+                                        debate_pack = ai.analyze_crypto_reflection_mode(
+                                            coin_select,
+                                            latest_price,
+                                            indicators,
+                                            news,
+                                            fg_index,
+                                            return_steps=bool(show_debate),
+                                        )
+
+                                        # Normalize output
+                                        if isinstance(debate_pack, dict):
+                                            analysis_result = debate_pack.get("final") or debate_pack.get("error") or ""
+                                            # เก็บไว้โชว์ (เฉพาะหน้าเว็บ) — ไม่ส่งไป Google Sheets / Discord
+                                            st.session_state['crypto_debate_pack'] = debate_pack
+                                        else:
+                                            analysis_result = debate_pack
+                                            st.session_state['crypto_debate_pack'] = None
                                         
                                         status_box.markdown("✨ **Phase 3:** สรุปผลกลยุทธ์ God Mode เสร็จสิ้น!")
                                         thinking_bar.progress(100)
@@ -878,6 +900,15 @@ if st.session_state.get('show_crypto', False):
                                         print(f"❌ Sheets log (single) failed: {_e}")
                                     
                                     st.markdown(analysis_result)
+
+                                    # --- [NEW] Display Debate Pack (ถ้าเปิด) ---
+                                    dp = st.session_state.get('crypto_debate_pack')
+                                    if isinstance(dp, dict) and dp.get('draft') and dp.get('critique'):
+                                        st.markdown("---")
+                                        with st.expander("🧠 Myla (Analyst Draft) — แนวคิดฝั่งหาโอกาส", expanded=False):
+                                            st.markdown(dp.get('draft', ''))
+                                        with st.expander("⚠️ Ariel (Critic / Risk) — ฝั่งจับผิดความเสี่ยง", expanded=False):
+                                            st.markdown(dp.get('critique', ''))
                                     st.caption(f"🧠 วิเคราะห์แบบ Deep Reflection (3-Step Reasoning) | เวลา: {datetime.datetime.now().strftime('%H:%M')} น.")
                                     
                                     # --- [NEW CODE] แทรกตรงนี้เพื่อส่งเข้า Discord ---

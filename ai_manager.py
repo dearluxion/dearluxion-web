@@ -413,7 +413,7 @@ def analyze_crypto_god_mode(coin_name, current_price, indicators, news_text, fea
 
 
 # 6. Crypto God Mode V5 (Self-Reflection / Chain of Thought 3-Step) 🧠✨
-def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_text, fear_greed):
+def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_text, fear_greed, return_steps: bool = False):
     """
     🔥 ADVANCED MODE: Self-Reflection 3-Step (Chain of Thought)
     
@@ -458,6 +458,8 @@ def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_te
     try:
         draft_analysis = _safe_generate_content([prompt_draft]).text
     except Exception as e:
+        if return_steps:
+            return {"error": f"❌ Step 1 (Analyst) Error: {e}"}
         return f"❌ Step 1 (Analyst) Error: {e}"
 
     # --- STEP 2: The Critic (Ariel) - จับผิดและหาความเสี่ยง ---
@@ -482,6 +484,8 @@ def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_te
     try:
         critique_result = _safe_generate_content([prompt_critique]).text
     except Exception as e:
+        if return_steps:
+            return {"error": f"❌ Step 2 (Critic) Error: {e}"}
         return f"❌ Step 2 (Critic) Error: {e}"
 
     # --- STEP 3: The Synthesis (Final Report) - สรุปผลแบบมืออาชีพ ---
@@ -550,6 +554,15 @@ def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_te
             except Exception as e:
                 print(f"⚠️ Failed to parse JSON Log: {e}")
         
+        if return_steps:
+            return {
+                "final": final_res,
+                "draft": draft_analysis,
+                "critique": critique_result,
+                "technical": technical_context,
+            }
         return final_res
     except Exception as e:
+        if return_steps:
+            return {"error": f"❌ Step 3 (Finalize) Error: {e}"}
         return f"❌ Step 3 (Finalize) Error: {e}"
