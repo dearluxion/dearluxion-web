@@ -332,7 +332,7 @@ def get_battle_result(topic):
 
 # 5. Crypto God Mode V4 (Professional Human Analyst - Hybrid)
 # ผสมความเก๋าเกมของ V2 เข้ากับภาษาที่อ่านง่ายแบบ V3
-def analyze_crypto_god_mode(coin_name, current_price, indicators, news_text, fear_greed):
+def analyze_crypto_god_mode(coin_name, current_price, indicators, news_text, fear_greed, memory_context: str = ""):
     if not is_ready: return "⚠️ ระบบ AI ยังไม่พร้อม (กรุณาใส่ API Key)"
     
     # --- 1. ดึงข้อมูลเชิงลึก (ใช้ Logic แบบ V2 เพื่อความแม่นยำ) ---
@@ -372,6 +372,9 @@ def analyze_crypto_god_mode(coin_name, current_price, indicators, news_text, fea
     
     [ข่าวสารประกอบการตัดสินใจ - Market News]
     {news_text}
+
+    [Personal Memory / Lessons Learned]
+    {memory_context if memory_context else 'No prior memory.'}
     
     [คำสั่งการเขียนตอบ]
     1. **พาดหัว:** ฟันธงสั้นๆ ว่า "น่าสนใจ", "ให้ระวัง", หรือ "รอก่อน" พร้อม Icon
@@ -413,7 +416,7 @@ def analyze_crypto_god_mode(coin_name, current_price, indicators, news_text, fea
 
 
 # 6. Crypto God Mode V5 (Self-Reflection / Chain of Thought 3-Step) 🧠✨
-def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_text, fear_greed, return_steps: bool = False):
+def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_text, fear_greed, return_steps: bool = False, memory_context: str = ""):
     """
     🔥 ADVANCED MODE: Self-Reflection 3-Step (Chain of Thought)
     
@@ -440,6 +443,9 @@ def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_te
     - Support Level (30d): {indicators.get('support')}
     - Resistance Level (30d): {indicators.get('resistance')}
     - Fear & Greed Index: {fear_greed.get('value')} ({fear_greed.get('value_classification')})
+
+    [Personal Memory / Lessons Learned]
+    {memory_context if memory_context else 'No prior memory.'}
     """
 
     # --- STEP 1: The Analyst (Myla) - หาโอกาสทำกำไร ---
@@ -454,6 +460,7 @@ def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_te
     
     คำสั่ง: เขียนวิเคราะห์สั้นๆ เน้นหาเหตุผลว่า "ทำไมถึงน่าสนใจ" หรือ "แนวโน้มเป็นอย่างไร" 
     (ไม่ต้องจัดสวยงาม แค่ Draft เพื่อให้ขั้นต่อไปตรวจสอบ)
+    **ข้อกำชับจากความจำ:** ถ้า memory ระบุว่ามี 'กับดัก' ที่เคยพลาด ให้ระบุคำเตือนและอย่าเชียร์ซื้อแบบมั่นใจเกินจริง
     """
     try:
         draft_analysis = _safe_generate_content([prompt_draft]).text
@@ -463,7 +470,7 @@ def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_te
     # --- STEP 2: The Critic (Ariel) - จับผิดและหาความเสี่ยง ---
     prompt_critique = f"""
     Role: คุณคือ Risk Manager (ผู้จัดการความเสี่ยง) ที่เข้มงวดมาก ปากจัด ขี้ระแวง (Persona: Ariel) 
-    Task: ตรวจสอบบทวิเคราะห์ของ Trader ด้านล่างนี้ เทียบกับข้อมูล Technical จริง หาจุดโหว่
+    Task: ตรวจสอบบทวิเคราะห์ของ Trader ด้านล่างนี้ เทียบกับข้อมูล Technical จริง + ความจำ (Memory) หาจุดโหว่
     
     [ข้อมูล Technical จริง]
     {technical_context}
@@ -476,6 +483,7 @@ def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_te
     2. ⚠️ ความเสี่ยงที่แท้จริงคืออะไร? (Trap Possibility, False Break, ข่าวร้าย, Stop Loss ที่แคบเกินไป)
     3. 🎯 วิจารณ์จุด Stop Loss/Entry/Target ว่าสมเหตุสมผลทางคณิตศาสตร์หรือไม่
     4. 📊 มี Divergence ไหม? (ราคาขึ้นแต่ Indicator ลง หรือในทางกลับกัน)
+    5. 🧠 เทียบกับ Memory: มีรูปแบบที่เคยพลาดซ้ำไหม? ถ้ามีให้เน้นย้ำเตือน
     
     Output: สรุปสั้นๆ ว่า "ของเทรดเดอร์นี้จะได้ผลไหม" กับ "ความเสี่ยงที่มองข้าม"
     """
@@ -498,6 +506,9 @@ def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_te
     [มุมมองความเสี่ยง + ข้อช้อย (Cons & Warning) - จาก Critic]
     {critique_result}
     
+    [Personal Memory / Lessons Learned]
+    {memory_context if memory_context else 'No prior memory.'}
+
     [คำสั่งการเขียน - Markdown Format]
     
     ## 🧠 God Mode Analysis: {coin_name} (Self-Reflected 3-Step)

@@ -4,6 +4,7 @@ import streamlit as st
 import urllib.parse
 import datetime
 import json
+import collections
 
 # =========================================================
 # Google Sheets (Crypto Analysis Logger)
@@ -62,6 +63,267 @@ def _get_crypto_sheet_config():
     worksheet_name = cfg.get("crypto_analysis_worksheet", "Crypto_Analysis_Log")
 
     return sheet_id, worksheet_name
+
+# =========================================================
+# Google Sheets (Crypto Memory / Lessons Learned)
+# =========================================================
+
+def _get_crypto_memory_sheet_config():
+    """ดึง config ของชีท Memory จาก secrets แบบยืดหยุ่น
+
+    Priorities:
+    1) [google_sheets].crypto_memory_sheet_id / crypto_memory_worksheet
+    2) reuse crypto analysis logger sheet id (crypto_analysis_sheet_id)
+    3) fallback to homework sheet id (homework_sheet_id) if user uses that
+    """
+    cfg = st.secrets.get("google_sheets", {})
+
+    sheet_id = (
+        cfg.get("crypto_memory_sheet_id")
+        or cfg.get("crypto_learning_sheet_id")
+        or cfg.get("crypto_analysis_sheet_id")
+        or cfg.get("homework_sheet_id")
+        or st.secrets.get("crypto_memory_sheet_id")
+        or st.secrets.get("crypto_learning_sheet_id")
+        or st.secrets.get("crypto_analysis_sheet_id")
+        or st.secrets.get("homework_sheet_id")
+    )
+    worksheet_name = cfg.get("crypto_memory_worksheet") or cfg.get("crypto_learning_worksheet") or "Crypto_Memory"
+    return sheet_id, worksheet_name
+
+
+def append_crypto_memory_to_gsheet(
+    *,
+    symbol: str,
+    outcome: str,
+    self_score: int | float,
+    mistakes: str,
+    fix_plan: str,
+    tags: str = "",
+    mode: str = "daily_check",
+    signal: str | None = None,
+    status: str | None = None,
+    score_pct: int | float | None = None,
+    entry: str | float | None = None,
+    target: str | float | None = None,
+    close_price: str | float | None = None,
+    logged_at: str | None = None,
+):
+    """บันทึก 'บทเรียนจากความผิดพลาด' (หรือความสำเร็จ) ลง Google Sheets
+
+    - outcome: WIN / LOSE / DRAW / PENDING
+    - self_score: 0-100 (ผู้ใช้ให้คะแนนตัวเอง)
+    """
+    client = _get_gspread_client()
+    sheet_id, worksheet_name = _get_crypto_memory_sheet_config()
+
+    if not client or not sheet_id:
+        return False
+
+    try:
+        sh = client.open_by_key(sheet_id)
+        ws = sh.worksheet(worksheet_name)
+    except Exception:
+        # ถ้า worksheet ยังไม่มี: สร้างใหม่อัตโนมัติ
+        try:
+            sh = client.open_by_key(sheet_id)
+            ws = sh.add_worksheet(title=worksheet_name, rows=1000, cols=30)
+        except Exception as e:
+            print(f"❌ Open/Create memory worksheet failed: {e}")
+            return False
+
+    headers = [
+        "timestamp",
+        "year",
+        "symbol",
+        "mode",
+        "signal",
+        "status",
+        "score_pct",
+        "outcome",
+        "self_score",
+        "entry",
+        "target",
+        "close_price",
+        "mistakes",
+        "fix_plan",
+        "tags",
+    ]
+
+    try:
+        first_row = ws.row_values(1)
+    except Exception:
+        first_row = []
+
+    if not first_row:
+        ws.append_row(headers, value_input_option="RAW")
+
+    ts = logged_at or datetime.datetime.now().isoformat(timespec="seconds")
+    year = ts[:4]
+
+    # กันลิมิต cell 50k
+    def _clip(s, n=20000):
+        if s is None:
+            return ""
+        s = str(s)
+        return s if len(s) <= n else s[: n - 40] + "\n... (ตัดข้อความเพราะยาวเกิน)"
+
+    row = [
+        ts,
+        year,
+        str(symbol).upper(),
+        mode,
+        signal or "",
+        status or "",
+        float(score_pct) if score_pct is not None and str(score_pct).strip() != "" else "",
+        str(outcome).upper(),
+        float(self_score) if self_score is not None and str(self_score).strip() != "" else "",
+        entry if entry is not None else "",
+        target if target is not None else "",
+        close_price if close_price is not None else "",
+        _clip(mistakes, 20000),
+        _clip(fix_plan, 20000),
+        _clip(tags, 3000),
+    ]
+
+    try:
+        ws.append_row(row, value_input_option="RAW")
+        return True
+    except Exception as e:
+        print(f"❌ Append memory row failed: {e}")
+        return False
+
+
+@st.cache_data(show_spinner=False, ttl=60)
+def fetch_crypto_memory_rows(year: str | None = None, symbol: str | None = None, limit: int = 400):
+    """อ่านบทเรียนจาก Google Sheets แล้วกรองตามปี/เหรียญ (คืน list[dict])"""
+    client = _get_gspread_client()
+    sheet_id, worksheet_name = _get_crypto_memory_sheet_config()
+
+    if not client or not sheet_id:
+        return []
+
+    try:
+        sh = client.open_by_key(sheet_id)
+        ws = sh.worksheet(worksheet_name)
+        rows = ws.get_all_records()  # list[dict]
+    except Exception as e:
+        # ถ้ายังไม่มี worksheet ให้ถือว่าไม่มีข้อมูล
+        print(f"❌ Read memory worksheet failed: {e}")
+        return []
+
+    def _match(row):
+        if year and str(row.get("year", "")).strip() != str(year):
+            return False
+        if symbol and str(row.get("symbol", "")).upper().strip() != str(symbol).upper().strip():
+            return False
+        return True
+
+    filtered = [r for r in rows if _match(r)]
+
+    # เรียงใหม่สุดก่อน
+    def _ts_key(r):
+        return str(r.get("timestamp", ""))
+
+    filtered.sort(key=_ts_key, reverse=True)
+    return filtered[: max(1, int(limit))]
+
+
+def summarize_crypto_memory(rows: list[dict]):
+    """สรุปสถิติจาก rows"""
+    attempts = len(rows)
+    wins = sum(1 for r in rows if str(r.get("outcome", "")).upper() == "WIN")
+    losses = sum(1 for r in rows if str(r.get("outcome", "")).upper() == "LOSE")
+    draws = sum(1 for r in rows if str(r.get("outcome", "")).upper() in ("DRAW", "TIE"))
+    winrate = (wins / attempts * 100.0) if attempts else 0.0
+
+    # avg self score
+    scores = []
+    for r in rows:
+        v = r.get("self_score", "")
+        try:
+            if v != "" and v is not None:
+                scores.append(float(str(v).replace("%", "").strip()))
+        except Exception:
+            pass
+    avg_self_score = (sum(scores) / len(scores)) if scores else 0.0
+
+    # Top mistakes (simple frequency by first 120 chars / or tags)
+    mistake_counter = collections.Counter()
+    tag_counter = collections.Counter()
+    for r in rows:
+        ms = str(r.get("mistakes", "")).strip()
+        if ms:
+            key = ms.split("\n")[0][:120].strip()
+            if key:
+                mistake_counter[key] += 1
+        tags = str(r.get("tags", "")).strip()
+        if tags:
+            # split by comma
+            for t in re.split(r"[,\n]+", tags):
+                t = t.strip()
+                if t:
+                    tag_counter[t] += 1
+
+    top_mistakes = mistake_counter.most_common(5)
+    top_tags = tag_counter.most_common(8)
+
+    return {
+        "attempts": attempts,
+        "wins": wins,
+        "losses": losses,
+        "draws": draws,
+        "winrate": winrate,
+        "avg_self_score": avg_self_score,
+        "top_mistakes": top_mistakes,
+        "top_tags": top_tags,
+    }
+
+
+def build_crypto_memory_context(symbol: str, year: str | None = None, max_rows: int = 120):
+    """สร้าง context สั้นๆ ให้ AI ใช้ 'จำ' ความผิดพลาดตัวเอง
+
+    - เน้น: winrate + top mistakes + top tags
+    - จำกัดความยาวเพื่อไม่กินโทเคน
+    """
+    if not symbol:
+        return ""
+
+    if not year:
+        year = str(datetime.datetime.now().year)
+
+    rows = fetch_crypto_memory_rows(year=year, symbol=symbol, limit=max_rows)
+    if not rows:
+        return f"[Memory] ยังไม่มีบทเรียนย้อนหลังของ {symbol} ในปี {year}"
+
+    stats = summarize_crypto_memory(rows)
+
+    # ทำ bullet ของ mistake
+    mis_lines = []
+    for m, c in stats["top_mistakes"]:
+        mis_lines.append(f"- ({c}x) {m}")
+
+    tag_lines = []
+    for t, c in stats["top_tags"]:
+        tag_lines.append(f"- ({c}x) {t}")
+
+    ctx = f"""
+[Personal Memory: Lessons Learned | {symbol} | {year}]
+- Attempts: {stats['attempts']}, Wins: {stats['wins']}, Losses: {stats['losses']}, Winrate: {stats['winrate']:.1f}%
+- Avg Self Score: {stats['avg_self_score']:.1f}/100
+
+[Most common mistakes]
+{chr(10).join(mis_lines) if mis_lines else "- (none logged)"}
+
+[Common tags / contexts]
+{chr(10).join(tag_lines) if tag_lines else "- (none logged)"}
+
+Instruction: ถ้ารูปแบบตลาดวันนี้ "คล้าย" กับ mistakes/tags ด้านบน ให้ลด Confidence, เพิ่มคำเตือน, และแนะนำรอ Confirm มากขึ้น
+""".strip()
+
+    # clip to ~1800 chars
+    return ctx if len(ctx) <= 1800 else ctx[:1750] + "\n...(memory truncated)"
+
 
 
 def append_crypto_analysis_to_gsheet(
