@@ -584,3 +584,169 @@ def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_te
         return final_res
     except Exception as e:
         return f"❌ Step 3 (Finalize) Error: {e}"
+
+def analyze_crypto_reflection_stream(
+    coin_name,
+    current_price,
+    indicators,
+    news_text,
+    fear_greed,
+    memory_context: str = "",
+):
+    """
+    🧵 STREAM MODE: ส่ง Event ออกมาเรื่อย ๆ เพื่อให้หน้าเว็บโชว์ "AI คุยกันเอง" ระหว่างรอโหลดได้
+
+    Yields dict:
+    - {"type":"status","phase":1|2|3,"text":str}
+    - {"type":"message","speaker":"Analyst|Critic|Final","text":str}
+    - {"type":"memory","text":str}
+    - {"type":"error","text":str}
+    - {"type":"done","meta":dict}
+    """
+
+    if not is_ready:
+        yield {"type": "error", "text": "⚠️ ระบบ AI ยังไม่พร้อม (กรุณาใส่ API Key)"}
+        return
+
+    technical_context = f"""
+[Technical Data for {coin_name}]
+- Current Price: {current_price:,.2f} THB
+- RSI (14): {indicators.get('rsi')}
+- Stoch RSI: {indicators.get('stoch_k')}
+- MACD: {indicators.get('macd')} | Signal: {indicators.get('macd_signal')}
+- ADX (Trend Strength): {indicators.get('adx')}
+- ATR (Volatility): {indicators.get('atr')}
+- OBV Slope (Money Flow): {indicators.get('obv_slope')}
+- Pivot Points: P={indicators.get('pivot_p')}, S1={indicators.get('pivot_s1')}, R1={indicators.get('pivot_r1')}
+- Support Level (30d): {indicators.get('support')}
+- Resistance Level (30d): {indicators.get('resistance')}
+- Fear & Greed Index: {fear_greed.get('value')} ({fear_greed.get('value_classification')})
+
+[Personal Memory / Lessons Learned]
+{memory_context if memory_context else 'No prior memory.'}
+"""
+
+    # ให้ UI โชว์ memory ก่อนเริ่ม (เพื่อเห็น "การเรียนรู้จากความผิดพลาด")
+    if memory_context:
+        yield {"type": "memory", "text": memory_context}
+
+    # --- STEP 1: Analyst ---
+    yield {"type": "status", "phase": 1, "text": f"🤔 Phase 1: Myla 🧚‍♀️ กำลังสแกนหาโอกาส (Analyst) — {coin_name}"}
+    prompt_draft = f"""
+Role: คุณคือ Trader สาย Technical (เน้นหาจังหวะเข้าทำกำไร) โดยเป็นคนร่าเริงและให้กำลังใจเสมอ
+Task: วิเคราะห์กราฟ {coin_name} จากข้อมูลด้านล่าง เพื่อหาจุดเข้าซื้อ (Buy Signal) และแนวโน้มขาขึ้น
+
+{technical_context}
+
+[News Context]
+{news_text}
+
+คำสั่ง: เขียนวิเคราะห์สั้นๆ เน้นหาเหตุผลว่า "ทำไมถึงน่าสนใจ" หรือ "แนวโน้มเป็นอย่างไร"
+(ไม่ต้องจัดสวยงาม แค่ Draft เพื่อให้ขั้นต่อไปตรวจสอบ)
+**ข้อกำชับจากความจำ:** ถ้า memory ระบุว่ามี 'กับดัก' ที่เคยพลาด ให้ระบุคำเตือนและอย่าเชียร์ซื้อแบบมั่นใจเกินจริง
+"""
+    try:
+        draft_analysis = _safe_generate_content([prompt_draft]).text
+    except Exception as e:
+        yield {"type": "error", "text": f"❌ Step 1 (Analyst) Error: {e}"}
+        return
+
+    yield {"type": "message", "speaker": "Analyst", "text": draft_analysis}
+
+    # --- STEP 2: Critic ---
+    yield {"type": "status", "phase": 2, "text": f"🔥 Phase 2: Ariel 🍸 กำลังจับผิด/หาความเสี่ยง (Critic) — {coin_name}"}
+    prompt_critique = f"""
+Role: คุณคือ Risk Manager (ผู้จัดการความเสี่ยง) ที่เข้มงวดมาก ปากจัด ขี้ระแวง (Persona: Ariel)
+Task: ตรวจสอบบทวิเคราะห์ของ Trader ด้านล่างนี้ เทียบกับข้อมูล Technical จริง + ความจำ (Memory) หาจุดโหว่
+
+[ข้อมูล Technical จริง]
+{technical_context}
+
+[บทวิเคราะห์ที่ต้องตรวจสอบ (Draft from Analyst)]
+"{draft_analysis}"
+
+คำสั่ง:
+1. 🔍 จับผิด! มีอะไรที่บทวิเคราะห์นี้มองข้ามไหม? (เช่น RSI Overbought แต่เชียร์ซื้อ?, OBV ไหลออกแต่ราคาขึ้น?)
+2. ⚠️ ความเสี่ยงที่แท้จริงคืออะไร? (Trap Possibility, False Break, ข่าวร้าย, Stop Loss ที่แคบเกินไป)
+3. 🎯 วิจารณ์จุด Stop Loss/Entry/Target ว่าสมเหตุสมผลทางคณิตศาสตร์หรือไม่
+4. 📊 มี Divergence ไหม? (ราคาขึ้นแต่ Indicator ลง หรือในทางกลับกัน)
+5. 🧠 เทียบกับ Memory: มีรูปแบบที่เคยพลาดซ้ำไหม? ถ้ามีให้เน้นย้ำเตือน
+
+Output: สรุปสั้นๆ ว่า "ของเทรดเดอร์นี้จะได้ผลไหม" กับ "ความเสี่ยงที่มองข้าม"
+"""
+    try:
+        critique_result = _safe_generate_content([prompt_critique]).text
+    except Exception as e:
+        yield {"type": "error", "text": f"❌ Step 2 (Critic) Error: {e}"}
+        return
+
+    yield {"type": "message", "speaker": "Critic", "text": critique_result}
+
+    # --- STEP 3: Final ---
+    yield {"type": "status", "phase": 3, "text": f"✨ Phase 3: God Mode 🧬 กำลังสังเคราะห์คำตอบสุดท้าย (Finalize) — {coin_name}"}
+    prompt_final = f"""
+Role: คุณคือ "Professional Crypto Analyst" ระดับกองทุน (God Mode) ที่เขียนรายงานระดับสถาบัน
+Task: เขียน "Final Trade Setup" ภาษาไทยที่สมบูรณ์แบบ โดยชั่งน้ำหนักจาก ข้อมูลดิบ + มุมมองขาขึ้น + มุมมองความเสี่ยง
+
+[ข้อมูล Technical ดิบ]
+{technical_context}
+
+[มุมมองโอกาส (Pros) - จาก Analyst]
+{draft_analysis}
+
+[มุมมองความเสี่ยง + ข้อช้อย (Cons & Warning) - จาก Critic]
+{critique_result}
+
+[Personal Memory / Lessons Learned]
+{memory_context if memory_context else 'No prior memory.'}
+
+[คำสั่งการเขียน - Markdown Format]
+
+## 🧠 God Mode Analysis: {coin_name} (Self-Reflected 3-Step)
+**สถานะตลาด:** [BULLISH 🔥 / BEARISH 🔴 / NEUTRAL 🟡 / CAUTION ⚠️]
+
+### ⚖️ การประเมินสถานการณ์ (Fact-Based)
+(สรุปสถานการณ์ตลาดโดยรวม อธิบายว่าทำไม AI ถึงมองแบบนั้น โดยอ้างอิง Indicators อย่างชัดเจน)
+
+### ⚔️ การปะทะกันของข้อมูล (Intelligence Fusion)
+* **✅ สัญญาณบวก:** (ดึงจุดเด่นจากมุมมองโอกาส)
+* **❌ สัญญาณเตือน:** (ดึงจุดน่ากลัวจากมุมมองความเสี่ยง)
+* **🎲 Divergence ที่มูลค่า:** (ถ้ามี)
+
+### 🎯 กลยุทธ์การเทรด (Action Plan)
+* **ไม้แรก (Entry):** {indicators.get('pivot_s1')} THB (ปรับจูนตามความเสี่ยง)
+* **เป้าทำกำไร (TP):** {indicators.get('pivot_r1')} THB
+* **จุดยอมแพ้ (SL):** (คำนวณให้ห่างจาก ATR {indicators.get('atr')} เล็กน้อยเพื่อกันโดนกิน Stop Loss ฟรี)
+* **Risk/Reward:** (ระบุอัตราส่วน Risk:Reward)
+
+### 📋 สรุป & Confidence Level
+(ระบุความมั่นใจของการวิเคราะห์ในเปอร์เซ็นต์ เช่น "80% Confidence" ตามปริมาณความตกลงของทั้งสองมุมมอง)
+
+---
+💡 *System: 3-Step Reasoning (Draft -> Critique -> Final) | Processed: {datetime.datetime.now().strftime('%H:%M:%S')} น.*
+
+[IMPORTANT: REQUIRED OUTPUT FORMAT FOR SYSTEM - DO NOT MODIFY]
+JSON_DATA={{"signal": "BULLISH", "entry": {safe_float(indicators.get('pivot_s1', 0))}, "target": {safe_float(indicators.get('pivot_r1', 0))}, "stoploss": {safe_float(indicators.get('support', 0))}}}
+"""
+    try:
+        final_res = _safe_generate_content([prompt_final]).text
+
+        # ดักจับ JSON log เหมือนตัวหลัก
+        match = re.search(r'JSON_DATA=({.*?})', final_res)
+        if match:
+            try:
+                json_str = match.group(1)
+                data = json.loads(json_str)
+                data['symbol'] = coin_name
+                import data_manager as dm_ext
+                dm_ext.save_prediction_log(data)
+                final_res = final_res.replace(f"JSON_DATA={json_str}", "").strip()
+            except Exception as _e:
+                print(f"⚠️ Failed to parse JSON Log (stream): {_e}")
+
+        yield {"type": "message", "speaker": "Final", "text": final_res}
+        yield {"type": "done", "meta": {"coin": coin_name, "generated_at": datetime.datetime.now().isoformat(timespec="seconds")}}
+        return
+    except Exception as e:
+        yield {"type": "error", "text": f"❌ Step 3 (Finalize) Error: {e}"}
+        return

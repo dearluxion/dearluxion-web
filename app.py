@@ -18,6 +18,8 @@ from utils import (
     get_discord_user,
     send_crypto_report_to_discord,
     append_crypto_analysis_to_gsheet,
+    append_crypto_memory_to_gsheet,
+    build_crypto_memory_context,
 )
 import data_manager as dm
 import sidebar_manager as sm
@@ -535,9 +537,50 @@ if st.session_state.get('show_crypto', False):
 
                         analysis_result = None
                         if ai_available and crypto_available:
-                            analysis_pack = ai.analyze_crypto_reflection_mode(
-                                c_symbol, latest_price, indicators, live_news, live_fg, return_steps=True
-                            )
+                            # 🧠 โหลด Memory และสตรีมให้เห็น AI คุยกันเองระหว่างรอ (แบบย่อ)
+                            memory_ctx = ""
+                            try:
+                                memory_ctx = build_crypto_memory_context(c_symbol)
+                            except Exception:
+                                memory_ctx = ""
+
+                            if hasattr(ai, "analyze_crypto_reflection_stream"):
+                                collector = {"analyst": "", "critic": "", "final": ""}
+                                mini_box = st.empty()
+
+                                for ev in ai.analyze_crypto_reflection_stream(
+                                    c_symbol, latest_price, indicators, live_news, live_fg, memory_context=memory_ctx
+                                ):
+                                    et = (ev or {}).get("type")
+                                    if et == "status":
+                                        mini_box.markdown(f"🗣️ {ev.get('text','')}")
+                                    elif et == "message":
+                                        sp = ev.get("speaker", "")
+                                        tx = (ev.get("text","") or "").strip()
+                                        if sp == "Analyst":
+                                            collector["analyst"] = tx
+                                            mini_box.markdown(f"🧚‍♀️ **Analyst:** {tx[:220]}{'...' if len(tx)>220 else ''}")
+                                        elif sp == "Critic":
+                                            collector["critic"] = tx
+                                            mini_box.markdown(f"🍸 **Critic:** {tx[:220]}{'...' if len(tx)>220 else ''}")
+                                        elif sp == "Final":
+                                            collector["final"] = tx
+                                            mini_box.markdown(f"🧬 **Final:** {tx[:220]}{'...' if len(tx)>220 else ''}")
+                                    elif et == "error":
+                                        mini_box.error(ev.get("text",""))
+
+                                mini_box.empty()
+
+                                analysis_pack = {
+                                    "final": collector.get("final",""),
+                                    "analyst": collector.get("analyst",""),
+                                    "critic": collector.get("critic",""),
+                                    "meta": {"coin": c_symbol, "generated_at": datetime.datetime.now().isoformat(timespec="seconds")},
+                                }
+                            else:
+                                analysis_pack = ai.analyze_crypto_reflection_mode(
+                                    c_symbol, latest_price, indicators, live_news, live_fg, return_steps=True, memory_context=memory_ctx
+                                )
                             if isinstance(analysis_pack, dict):
                                 analysis_result = analysis_pack.get('final', '')
                                 debate_pack = {'analyst': analysis_pack.get('analyst', ''), 'critic': analysis_pack.get('critic', '')}
@@ -863,11 +906,68 @@ if st.session_state.get('show_crypto', False):
                                         status_box.markdown("🔥 **Phase 2:** Ariel 🍸 กำลังจับผิดและประเมินความเสี่ยง (Deep Critique)...")
                                         thinking_bar.progress(50)
                                         
-                                        # เรียกฟังก์ชัน Reflection Mode
-                                        analysis_result = ai.analyze_crypto_reflection_mode(
-                                            coin_select, latest_price, indicators, news, fg_index
-                                        )
-                                        
+                                        # 🧠 โหลด Memory (บทเรียนจากความผิดพลาด) แล้วสตรีมให้เห็น AI คุยกันเองขณะรอ
+                                        memory_ctx = ""
+                                        try:
+                                            memory_ctx = build_crypto_memory_context(coin_select)
+                                        except Exception as _e:
+                                            memory_ctx = f"[Memory] โหลดบทเรียนไม่สำเร็จ: {_e}"
+
+                                        analysis_pack = None
+                                        dialogue_live = st.container()
+
+                                        if hasattr(ai, "analyze_crypto_reflection_stream"):
+                                            collector = {"analyst": "", "critic": "", "final": ""}
+                                            if memory_ctx:
+                                                with dialogue_live.chat_message("assistant", avatar="🧠"):
+                                                    st.markdown("### 🧠 Memory ที่ระบบจำได้ (บทเรียนเก่า)")
+                                                    st.code(memory_ctx)
+
+                                            for ev in ai.analyze_crypto_reflection_stream(
+                                                coin_select, latest_price, indicators, news, fg_index, memory_context=memory_ctx
+                                            ):
+                                                et = (ev or {}).get("type")
+                                                if et == "status":
+                                                    status_box.markdown(ev.get("text", ""))
+                                                    ph = int(ev.get("phase", 0) or 0)
+                                                    thinking_bar.progress(25 if ph == 1 else 55 if ph == 2 else 85)
+                                                elif et == "memory":
+                                                    with dialogue_live.chat_message("assistant", avatar="🧠"):
+                                                        st.code(ev.get("text", ""))
+                                                elif et == "message":
+                                                    sp = ev.get("speaker", "")
+                                                    tx = ev.get("text", "")
+                                                    if sp == "Analyst":
+                                                        collector["analyst"] = tx
+                                                        with dialogue_live.chat_message("assistant", avatar="🧚‍♀️"):
+                                                            st.markdown("### 🧚‍♀️ Analyst (Myla) — Draft")
+                                                            st.markdown(tx)
+                                                    elif sp == "Critic":
+                                                        collector["critic"] = tx
+                                                        with dialogue_live.chat_message("assistant", avatar="🍸"):
+                                                            st.markdown("### 🍸 Critic (Ariel) — Risk Check")
+                                                            st.markdown(tx)
+                                                    elif sp == "Final":
+                                                        collector["final"] = tx
+                                                        with dialogue_live.chat_message("assistant", avatar="🧬"):
+                                                            st.markdown("### 🧬 God Mode — Final")
+                                                            st.markdown(tx)
+                                                elif et == "error":
+                                                    raise Exception(ev.get("text", "Unknown stream error"))
+
+                                            analysis_pack = {
+                                                "final": collector.get("final", ""),
+                                                "analyst": collector.get("analyst", ""),
+                                                "critic": collector.get("critic", ""),
+                                                "meta": {"coin": coin_select, "generated_at": datetime.datetime.now().isoformat(timespec="seconds")},
+                                            }
+                                        else:
+                                            analysis_pack = ai.analyze_crypto_reflection_mode(
+                                                coin_select, latest_price, indicators, news, fg_index, return_steps=True, memory_context=memory_ctx
+                                            )
+
+                                        analysis_result = analysis_pack.get("final", "") if isinstance(analysis_pack, dict) else str(analysis_pack)
+
                                         status_box.markdown("✨ **Phase 3:** สรุปผลกลยุทธ์ God Mode เสร็จสิ้น!")
                                         thinking_bar.progress(100)
                                         time.sleep(0.5)
@@ -894,8 +994,51 @@ if st.session_state.get('show_crypto', False):
                                     except Exception as _e:
                                         print(f"❌ Sheets log (single) failed: {_e}")
                                     
-                                    st.markdown(analysis_result)
+                                    # ✅ แสดงผลแบบแท็บ (Final / Analyst / Critic)
+                                    if isinstance(analysis_pack, dict) and (analysis_pack.get("analyst") or analysis_pack.get("critic")):
+                                        t_final, t_analyst, t_critic = st.tabs(["🧠 Final", "🧚‍♀️ Analyst", "🍸 Critic"])
+                                        with t_final:
+                                            st.markdown(analysis_pack.get("final", ""))
+                                        with t_analyst:
+                                            st.markdown(analysis_pack.get("analyst", ""))
+                                        with t_critic:
+                                            st.markdown(analysis_pack.get("critic", ""))
+                                    else:
+                                        st.markdown(analysis_result)
+
                                     st.caption(f"🧠 วิเคราะห์แบบ Deep Reflection (3-Step Reasoning) | เวลา: {datetime.datetime.now().strftime('%H:%M')} น.")
+
+                                    # 🧠 บันทึกบทเรียนให้ระบบจำ (Memory) — เพื่อให้รอบหน้ามีคำเตือนที่ฉลาดขึ้น
+                                    with st.expander("🧠 บันทึกบทเรียนให้ระบบจำ (หลังเทรดจริง)", expanded=False):
+                                        with st.form(f"mem_form_{coin_select}"):
+                                            outcome = st.selectbox("ผลลัพธ์รอบนี้", ["WIN", "LOSE", "DRAW"], index=1)
+                                            self_score = st.slider("ให้คะแนนตัวเอง (0-100)", 0, 100, 70)
+                                            mistakes = st.text_area(
+                                                "ผิดพลาด/บทเรียน (Mistakes)",
+                                                placeholder="เช่น FOMO ตอน RSI สูง / SL แคบเกิน / เข้าไม้ใหญ่เกิน / ไม่รอ Confirm",
+                                                height=110
+                                            )
+                                            fix_plan = st.text_area(
+                                                "แผนแก้ (Fix Plan) — รอบหน้าจะทำยังไงไม่ให้พลาดซ้ำ",
+                                                placeholder="เช่น รอแท่งยืนยัน 1 แท่ง, แบ่งไม้ 3 ไม้, ใช้ ATR คำนวณ SL, ห้ามไล่ราคา",
+                                                height=110
+                                            )
+                                            tags = st.text_input("Tags (คั่นด้วย comma)", placeholder="FOMO,RSI,OBV,news,breakout")
+                                            if st.form_submit_button("💾 บันทึก Memory"):
+                                                try:
+                                                    append_crypto_memory_to_gsheet(
+                                                        symbol=coin_select,
+                                                        outcome=outcome,
+                                                        self_score=float(self_score),
+                                                        mistakes=mistakes.strip(),
+                                                        fix_plan=fix_plan.strip(),
+                                                        tags=tags.strip(),
+                                                        mode="manual",
+                                                        logged_at=datetime.datetime.now().isoformat(timespec="seconds"),
+                                                    )
+                                                    st.toast("✅ บันทึกบทเรียนแล้ว! รอบหน้าระบบจะเอาไปเตือนตัวเองก่อนเชียร์ 😎", icon="🧠")
+                                                except Exception as _e:
+                                                    st.error(f"บันทึก Memory ไม่สำเร็จ: {_e}")
                                     
                                     # --- [NEW CODE] แทรกตรงนี้เพื่อส่งเข้า Discord ---
                                     # ดึง Webhook จาก Secrets
