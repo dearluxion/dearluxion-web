@@ -458,8 +458,6 @@ def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_te
     try:
         draft_analysis = _safe_generate_content([prompt_draft]).text
     except Exception as e:
-        if return_steps:
-            return {"error": f"❌ Step 1 (Analyst) Error: {e}"}
         return f"❌ Step 1 (Analyst) Error: {e}"
 
     # --- STEP 2: The Critic (Ariel) - จับผิดและหาความเสี่ยง ---
@@ -484,8 +482,6 @@ def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_te
     try:
         critique_result = _safe_generate_content([prompt_critique]).text
     except Exception as e:
-        if return_steps:
-            return {"error": f"❌ Step 2 (Critic) Error: {e}"}
         return f"❌ Step 2 (Critic) Error: {e}"
 
     # --- STEP 3: The Synthesis (Final Report) - สรุปผลแบบมืออาชีพ ---
@@ -555,14 +551,25 @@ def analyze_crypto_reflection_mode(coin_name, current_price, indicators, news_te
                 print(f"⚠️ Failed to parse JSON Log: {e}")
         
         if return_steps:
+        
             return {
+        
                 "final": final_res,
-                "draft": draft_analysis,
-                "critique": critique_result,
-                "technical": technical_context,
+        
+                "analyst": draft_analysis,
+        
+                "critic": critique_result,
+        
+                "meta": {
+        
+                    "coin": coin_name,
+        
+                    "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        
+                }
+        
             }
+        
         return final_res
     except Exception as e:
-        if return_steps:
-            return {"error": f"❌ Step 3 (Finalize) Error: {e}"}
         return f"❌ Step 3 (Finalize) Error: {e}"

@@ -1,0 +1,16 @@
+Shadow Oracle Patch: AI Debate (Analyst vs Critic)
+
+สิ่งที่เพิ่ม
+- ai_manager.analyze_crypto_reflection_mode(..., return_steps=True) จะคืน dict:
+  { final, draft, critique, technical }
+- หน้า Crypto (Tab "📊 วิเคราะห์ตลาด"): เพิ่ม Checkbox "🧩 โชว์ตอน AI เถียงกัน (Analyst 🧚‍♀️ vs Critic 🍸)"
+  - ถ้าเปิด: ระบบจะแสดง Draft (Myla) + Critique (Ariel) ใน expander ใต้ผล Final
+  - Google Sheets / Discord / Cache จะบันทึกเฉพาะ Final เพื่อไม่ให้ข้อความยาวเกิน
+
+ไฟล์ที่ถูกแก้
+- ai_manager.py
+- app.py
+
+วิธีรัน
+- ติดตั้ง dependencies: pip install -r requirements.txt
+- รันเว็บ: streamlit run app.py
