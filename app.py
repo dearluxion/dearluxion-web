@@ -18,11 +18,6 @@ from utils import (
     get_discord_user,
     send_crypto_report_to_discord,
     append_crypto_analysis_to_gsheet,
-    # --- Crypto Memory (Lessons Learned) ---
-    append_crypto_memory_to_gsheet,
-    fetch_crypto_memory_rows,
-    summarize_crypto_memory,
-    build_crypto_memory_context,
 )
 import data_manager as dm
 import sidebar_manager as sm
@@ -500,29 +495,28 @@ if st.session_state.get('show_crypto', False):
                             continue
 
                         latest = live_df.iloc[-1]
-                        latest_price = float(latest.get('Close', 0))
+                        # ใช้ safe_float กันค่า None (บางเหรียญ/บางช่วงข้อมูลจะว่าง)
+                        latest_price = ai.safe_float(latest.get('Close', 0), 0.0)
 
-                        # ดึงค่าที่มีอยู่ (ถ้าไม่มีให้ใส่ค่าเริ่มต้น)
-                        rsi_val = float(latest.get('RSI', 50)) if 'RSI' in live_df.columns else 50.0
-                        macd_val = float(latest.get('MACD', 0)) if 'MACD' in live_df.columns else 0.0
-                        macd_signal = float(latest.get('MACD_SIGNAL', 0)) if 'MACD_SIGNAL' in live_df.columns else 0.0
-                        adx_val = float(latest.get('ADX', 20)) if 'ADX' in live_df.columns else 20.0
-                        atr_val = float(latest.get('ATR', 0)) if 'ATR' in live_df.columns else 0.0
-                        stoch_k = float(latest.get('Stoch_K', 50)) if 'Stoch_K' in live_df.columns else 50.0
+                        # ดึงค่าที่มีอยู่ (ถ้าไม่มีให้ใส่ค่าเริ่มต้น) — ใช้ safe_float เพื่อกัน None
+                        rsi_val = ai.safe_float(latest.get('RSI', 50), 50.0) if 'RSI' in live_df.columns else 50.0
+                        macd_val = ai.safe_float(latest.get('MACD', 0), 0.0) if 'MACD' in live_df.columns else 0.0
+                        macd_signal = ai.safe_float(latest.get('MACD_SIGNAL', 0), 0.0) if 'MACD_SIGNAL' in live_df.columns else 0.0
+                        adx_val = ai.safe_float(latest.get('ADX', 20), 20.0) if 'ADX' in live_df.columns else 20.0
+                        atr_val = ai.safe_float(latest.get('ATR', 0), 0.0) if 'ATR' in live_df.columns else 0.0
+                        stoch_k = ai.safe_float(latest.get('Stoch_K', 50), 50.0) if 'Stoch_K' in live_df.columns else 50.0
 
                         obv_slope = "N/A"
                         if 'OBV_Slope' in live_df.columns:
-                            try:
-                                obv_slope = "เงินไหลเข้า (Positive)" if float(latest.get('OBV_Slope', 0)) > 0 else "เงินไหลออก (Negative)"
-                            except:
-                                obv_slope = "N/A"
+                            v_obv = ai.safe_float(latest.get('OBV_Slope', 0), 0.0)
+                            obv_slope = "เงินไหลเข้า (Positive)" if v_obv > 0 else "เงินไหลออก (Negative)"
 
-                        # Pivot / Support / Resistance ถ้ามี
-                        pivot_p = float(latest.get('Pivot_P', latest_price)) if 'Pivot_P' in live_df.columns else latest_price
-                        pivot_s1 = float(latest.get('Pivot_S1', latest_price * 0.95)) if 'Pivot_S1' in live_df.columns else latest_price * 0.95
-                        pivot_r1 = float(latest.get('Pivot_R1', latest_price * 1.05)) if 'Pivot_R1' in live_df.columns else latest_price * 1.05
-                        support = float(latest.get('Support_Level', latest_price * 0.95)) if 'Support_Level' in live_df.columns else latest_price * 0.95
-                        resistance = float(latest.get('Resistance_Level', latest_price * 1.05)) if 'Resistance_Level' in live_df.columns else latest_price * 1.05
+                        # Pivot / Support / Resistance ถ้ามี — ใช้ safe_float กัน None
+                        pivot_p = ai.safe_float(latest.get('Pivot_P', latest_price), latest_price) if 'Pivot_P' in live_df.columns else latest_price
+                        pivot_s1 = ai.safe_float(latest.get('Pivot_S1', latest_price * 0.95), latest_price * 0.95) if 'Pivot_S1' in live_df.columns else latest_price * 0.95
+                        pivot_r1 = ai.safe_float(latest.get('Pivot_R1', latest_price * 1.05), latest_price * 1.05) if 'Pivot_R1' in live_df.columns else latest_price * 1.05
+                        support = ai.safe_float(latest.get('Support_Level', latest_price * 0.95), latest_price * 0.95) if 'Support_Level' in live_df.columns else latest_price * 0.95
+                        resistance = ai.safe_float(latest.get('Resistance_Level', latest_price * 1.05), latest_price * 1.05) if 'Resistance_Level' in live_df.columns else latest_price * 1.05
 
                         indicators = {
                             "rsi": rsi_val,
@@ -541,9 +535,8 @@ if st.session_state.get('show_crypto', False):
 
                         analysis_result = None
                         if ai_available and crypto_available:
-                            memory_ctx = build_crypto_memory_context(c_symbol)
                             analysis_pack = ai.analyze_crypto_reflection_mode(
-                                c_symbol, latest_price, indicators, live_news, live_fg, return_steps=True, memory_context=memory_ctx
+                                c_symbol, latest_price, indicators, live_news, live_fg, return_steps=True
                             )
                             if isinstance(analysis_pack, dict):
                                 analysis_result = analysis_pack.get('final', '')
@@ -871,9 +864,8 @@ if st.session_state.get('show_crypto', False):
                                         thinking_bar.progress(50)
                                         
                                         # เรียกฟังก์ชัน Reflection Mode
-                                        memory_ctx = build_crypto_memory_context(coin_select)
                                         analysis_result = ai.analyze_crypto_reflection_mode(
-                                            coin_select, latest_price, indicators, news, fg_index, memory_context=memory_ctx
+                                            coin_select, latest_price, indicators, news, fg_index
                                         )
                                         
                                         status_box.markdown("✨ **Phase 3:** สรุปผลกลยุทธ์ God Mode เสร็จสิ้น!")
@@ -960,103 +952,6 @@ if st.session_state.get('show_crypto', False):
                     time.sleep(2)
                     st.rerun()
 
-            # =========================================================
-            # 🧠 Crypto Memory (Lessons Learned) — สอน AI จากความผิดพลาด
-            # =========================================================
-            st.markdown("---")
-            st.markdown("### 🧠 Memory Coach (เรียนรู้จากความผิดพลาด)")
-            year_now = str(datetime.datetime.now().year)
-
-            # สรุปรวมทั้งปี
-            mem_rows_all = fetch_crypto_memory_rows(year=year_now, symbol=None, limit=400)
-            mem_stats_all = summarize_crypto_memory(mem_rows_all) if mem_rows_all else {
-                "attempts": 0, "wins": 0, "losses": 0, "draws": 0, "winrate": 0.0, "avg_self_score": 0.0, "top_mistakes": [], "top_tags": []
-            }
-
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("📌 Attempts (ปีนี้)", mem_stats_all["attempts"])
-            m2.metric("🏆 Wins", mem_stats_all["wins"])
-            m3.metric("📈 Winrate", f"{mem_stats_all['winrate']:.1f}%")
-            m4.metric("🧪 Avg Self Score", f"{mem_stats_all['avg_self_score']:.1f}/100")
-
-            with st.expander("🔍 ดู Top Mistakes / Tags (ปีนี้)", expanded=False):
-                if mem_stats_all["top_mistakes"]:
-                    st.markdown("**Top Mistakes:**")
-                    for t, c in mem_stats_all["top_mistakes"]:
-                        st.write(f"- ({c}x) {t}")
-                else:
-                    st.info("ยังไม่มีการบันทึก mistakes")
-
-                if mem_stats_all["top_tags"]:
-                    st.markdown("**Top Tags / Context:**")
-                    for t, c in mem_stats_all["top_tags"]:
-                        st.write(f"- ({c}x) {t}")
-                else:
-                    st.info("ยังไม่มีการบันทึก tags")
-
-            # --- บันทึกบทเรียนจากผลตรวจการบ้านวันนี้ ---
-            st.markdown("#### 📝 บันทึกบทเรียนจากผลตรวจการบ้าน (วันนี้)")
-            if history:
-                for idx, h in enumerate(history):
-                    sym = str(h.get("symbol", "N/A")).upper()
-                    sig = str(h.get("signal", "")).upper()
-                    stat = str(h.get("status", "")).upper()
-                    raw_score = str(h.get("score", "0")).replace("%", "").strip()
-                    try:
-                        score_i = int(float(raw_score))
-                    except:
-                        score_i = 0
-
-                    # เดา outcome เบื้องต้น
-                    if score_i >= 80:
-                        default_outcome = "WIN"
-                    elif score_i <= 40:
-                        default_outcome = "LOSE"
-                    else:
-                        default_outcome = "DRAW"
-
-                    with st.expander(f"🧩 {sym} | {stat} | Score {score_i}%", expanded=False):
-                        with st.form(key=f"mem_form_{sym}_{idx}"):
-                            outcome = st.selectbox("Outcome", ["WIN", "LOSE", "DRAW", "PENDING"], index=["WIN","LOSE","DRAW","PENDING"].index(default_outcome))
-                            self_score = st.slider("ให้คะแนนตัวเอง (0-100)", 0, 100, int(score_i))
-                            mistakes = st.text_area("พลาดอะไร? (Mistakes)", placeholder="เช่น FOMO / เข้าเร็วเกินไป / Fake breakout / ข่าวแรง / ไม่รอ confirm ...")
-                            fix_plan = st.text_area("จะแก้ยังไงรอบหน้า? (Fix Plan)", placeholder="เช่น รอแท่งปิด, เพิ่มเงื่อนไข OBV, ลดไม้แรก, ตั้ง SL ตาม ATR ...")
-                            tags = st.text_input("Tags/Context (คั่นด้วย , )", placeholder="เช่น fake_breakout, news, overbought, low_volume, CPI")
-                            submitted = st.form_submit_button("💾 บันทึกลง Memory (Google Sheets)")
-                            if submitted:
-                                ok = append_crypto_memory_to_gsheet(
-                                    symbol=sym,
-                                    outcome=outcome,
-                                    self_score=self_score,
-                                    mistakes=mistakes,
-                                    fix_plan=fix_plan,
-                                    tags=tags,
-                                    mode="daily_check",
-                                    signal=sig,
-                                    status=stat,
-                                    score_pct=score_i,
-                                    entry=h.get("entry", ""),
-                                    target=h.get("target", ""),
-                                    close_price=h.get("close_price", ""),
-                                )
-                                if ok:
-                                    st.success("✅ บันทึกบทเรียนแล้ว — รอบหน้า AI จะระวังจุดพลาดนี้ให้มากขึ้นครับ")
-                                    # เคลียร์ cache เพื่อให้สรุปอัปเดตทันที
-                                    try:
-                                        fetch_crypto_memory_rows.clear()
-                                    except Exception:
-                                        pass
-                                else:
-                                    st.error("❌ บันทึกไม่สำเร็จ (ตรวจ secrets/สิทธิ์ Google Sheets)")
-
-            else:
-                st.info("วันนี้ยังไม่มีผลตรวจการบ้านให้บันทึก (ลองรัน Daily Check ก่อน)")
-
-            # --- ตัวอย่าง Memory Context ที่ AI จะนำไปใช้ ---
-            st.markdown("#### 🧠 ตัวอย่าง Memory ที่ถูกฉีดเข้า AI วิเคราะห์")
-            pick_sym = st.selectbox("เลือกเหรียญเพื่อดู Memory Context", coin_list, key="mem_pick_sym")
-            st.code(build_crypto_memory_context(pick_sym), language="text")
-
         # =========================================================
         # CASE B Background: วิเคราะห์รวดเดียว (Batch Mode)
         # =========================================================
@@ -1108,8 +1003,7 @@ if st.session_state.get('show_crypto', False):
                                 }
                                 
                                 # 🧠 สั่ง AI วิเคราะห์สด (Reflection Mode 3-Step)
-                                memory_ctx = build_crypto_memory_context(c_symbol)
-                                res_batch = ai.analyze_crypto_reflection_mode(c_symbol, last_p, indicators_b, "วิเคราะห์ตามกราฟเทคนิคอลล่าสุด", {"value":"50", "value_classification":"Neutral"}, memory_context=memory_ctx)
+                                res_batch = ai.analyze_crypto_reflection_mode(c_symbol, last_p, indicators_b, "วิเคราะห์ตามกราฟเทคนิคอลล่าสุด", {"value":"50", "value_classification":"Neutral"})
                                 st.markdown(res_batch)
                                 
                                 # --- [จุดที่เพิ่ม] บันทึกลง Google Sheets ทันที ---
