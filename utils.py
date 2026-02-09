@@ -431,32 +431,63 @@ def append_crypto_analysis_to_gsheet(
         print(f"❌ Append crypto analysis failed: {e}")
         return False
 
+# --- ฟังก์ชันช่วยแกะ File ID จากลิงก์ Google Drive/Googleusercontent ---
+def _extract_drive_file_id(link: str):
+    if not link:
+        return None
+
+    # 1) lh3 (Discord-friendly / direct)
+    m = re.search(r"lh3\.googleusercontent\.com/d/([a-zA-Z0-9_-]+)", link)
+    if m:
+        return m.group(1)
+
+    # 2) รูปแบบ /file/d/<id>/...
+    m = re.search(r"/d/([a-zA-Z0-9_-]+)", link)
+    if m:
+        return m.group(1)
+
+    # 3) รูปแบบ ?id=<id> (เช่น open?id=..., uc?id=..., thumbnail?id=...)
+    m = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", link)
+    if m:
+        return m.group(1)
+
+    return None
+
+
 # --- ฟังก์ชันแปลงลิงก์ Google Drive (รูป) ---
-# [UPDATE] ใช้สำหรับแสดงผลบนเว็บ (ชัดสุด)
+# [UPDATE] ใช้สำหรับแสดงผลบนเว็บ/Streamlit และให้ Discord ฝังรูปได้ง่ายขึ้น
 def convert_drive_link(link):
-    if "drive.google.com" in link:
+    if not link:
+        return link
+
+    if ("drive.google.com" in link) or ("lh3.googleusercontent.com" in link):
         if "/folders/" in link:
             return "ERROR: นี่คือลิงก์โฟลเดอร์ครับ! ใช้ได้แค่ลิงก์ไฟล์ (คลิกขวาที่รูป > Share > Copy Link)"
-        
-        match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
-        if match:
-            file_id = match.group(1)
-            # สูตรใหม่: ใช้ thumbnail endpoint + sz=s4000 
-            return f'https://drive.google.com/thumbnail?id={file_id}&sz=s4000'
-            
-    return link 
+
+        file_id = _extract_drive_file_id(link)
+        if file_id:
+            # สูตรที่เสถียรกว่า thumbnail: uc?export=view (เหมาะกับ st.image และส่วนใหญ่ของ embed)
+            return f"https://drive.google.com/uc?export=view&id={file_id}"
+
+    return link
+
 
 # --- ฟังก์ชันแปลงลิงก์ Google Drive (วิดีโอ) ---
 def convert_drive_video_link(link):
+    if not link:
+        return link
+
     if "drive.google.com" in link:
         if "/folders/" in link:
             return "ERROR: ลิงก์โฟลเดอร์ใช้ไม่ได้ครับ ต้องเป็นลิงก์ไฟล์วิดีโอ"
-        match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
-        if match:
-            file_id = match.group(1)
+
+        file_id = _extract_drive_file_id(link)
+        if file_id:
             # แปลงเป็นลิงก์ Preview เพื่อใช้กับ Iframe บนหน้าเว็บ
-            return f'https://drive.google.com/file/d/{file_id}/preview'
+            return f"https://drive.google.com/file/d/{file_id}/preview"
+
     return link
+
 
 # --- ฟังก์ชันแปลงข้อความ URL ให้เป็นลิงก์กดได้ ---
 def make_clickable(text):
@@ -465,11 +496,9 @@ def make_clickable(text):
 
 # --- [NEW] Helper: แปลงลิงก์ Drive เป็นแบบที่ Discord ชอบ (เพื่อให้ GIF ขยับ) ---
 def get_discord_friendly_image(url):
-    # ถ้าเป็นลิงก์ thumbnail ที่เราแปลงมาแล้ว ให้ดึง ID ออกมาทำเป็น lh3 link
-    match = re.search(r'id=([a-zA-Z0-9_-]+)', url)
-    if match:
-        file_id = match.group(1)
-        # lh3 link รองรับ GIF บน Discord ได้ดีกว่า thumbnail?id=...
+    file_id = _extract_drive_file_id(url)
+    if file_id:
+        # lh3 link รองรับ GIF/Embed บน Discord ได้ดีกว่า thumbnail/uc
         return f"https://lh3.googleusercontent.com/d/{file_id}"
     return url
 
