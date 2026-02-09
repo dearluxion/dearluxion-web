@@ -285,27 +285,32 @@ if st.session_state['is_admin']:
                     
                     if react_emoji and react_emoji in valid_emojis:
                         # บวกยอด Reaction
-                        newif post.get('images'):
-                raw_imgs = [img for img in post['images'] if isinstance(img, str) and img.startswith("http")]
-                # กันโพสต์เก่า/ลิงก์ดิบ: แปลง Drive link ตอน "แสดงผล" อีกชั้น
-                valid_imgs = []
-                for img in raw_imgs:
-                    conv = convert_drive_link(img)
-                    if isinstance(conv, str) and conv.startswith("ERROR:"):
-                        continue
-                    valid_imgs.append(conv)
+                        new_post['reactions'][react_emoji] += 1
+                        
+                        # ถือว่ากด Heart คือกด Like ด้วย (Optional)
+                        if react_emoji == '😻': 
+                            new_post['likes'] += 1
 
-                if valid_imgs:
-                    if len(valid_imgs) == 1:
-                        st.image(valid_imgs[0], use_container_width=True)
-                    else:
-                        img_cols = st.columns(3)
-                        for idx, img in enumerate(valid_imgs):
-                            with img_cols[idx % 3]:
-                                st.image(img, use_container_width=True)
-            elif post.get('image') and os.path.exists(post['image']): 
-                st.image(post['image'], use_container_width=True)
-           else: st.warning("พิมพ์อะไรหน่อยสิครับ")
+                # --- 5. บันทึกลง Database ---
+                current = dm.load_data()
+                current.append(new_post)
+                dm.save_data(current)
+                
+                # [NEW] Logic การส่ง Webhook ตาม Checkbox
+                if send_webhook:
+                    try:
+                        send_post_to_discord(new_post)
+                        st.toast("ส่งเข้า Discord เรียบร้อย!", icon="📢")
+                    except: pass
+                else:
+                    st.toast("บันทึกโพสต์แล้ว (ไม่ได้ส่งเข้า Discord)", icon="🤫")
+
+                # สรุปผล
+                st.success(f"เรียบร้อย! มีคนมาเม้นตั้ง {len(ai_engagements)} คนแน่ะ (Myla & Ariel มาครบ!)")
+                st.session_state['num_img_links'] = 1
+                st.session_state['num_vid_links'] = 1
+                time.sleep(2); st.rerun()
+            else: st.warning("พิมพ์อะไรหน่อยสิครับ")
 
     with tab_profile:
         st.markdown("### 📢 จัดการป้ายไฟ")
@@ -1265,7 +1270,7 @@ if filtered:
                         st.rerun()
 
             if post.get('images'):
-                valid_imgs = [img for img in post['images'] if img.startswith("http")]
+                valid_imgs = [convert_drive_link(img) for img in post['images'] if isinstance(img, str) and img.startswith("http")]
                 if valid_imgs:
                     if len(valid_imgs) == 1: st.image(valid_imgs[0], use_container_width=True)
                     else:
@@ -1351,12 +1356,8 @@ if filtered:
                             if is_admin_comment:
                                 st.markdown(f"""<div class='admin-comment-box'><b>👑 {c['user']} (Owner):</b> {c['text']}</div>""", unsafe_allow_html=True)
                                 if c.get('image'):
-                                    if isinstance(c['image'], str) and c['image'].startswith("http"):
-                                        conv_img = convert_drive_link(c['image'])
-                                        if isinstance(conv_img, str) and not conv_img.startswith("ERROR:"):
-                                            st.image(conv_img, width=200)
-                                    elif os.path.exists(c['image']):
-                                        st.image(c['image'], width=200)
+                                    if c['image'].startswith("http"): st.image(convert_drive_link(c['image']), width=200)
+                                    elif os.path.exists(c['image']): st.image(c['image'], width=200)
                             else:
                                 st.markdown(f"<div class='comment-box'><b>{c['user']}:</b> {c['text']}</div>", unsafe_allow_html=True)
                             

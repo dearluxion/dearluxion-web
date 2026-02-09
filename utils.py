@@ -431,46 +431,44 @@ def append_crypto_analysis_to_gsheet(
         print(f"❌ Append crypto analysis failed: {e}")
         return False
 
-# --- ฟังก์ชันช่วยแกะ File ID จากลิงก์ Google Drive/Googleusercontent ---
 def _extract_drive_file_id(link: str):
-    if not link:
+    """ดึง file_id จากลิงก์ Google Drive หลายรูปแบบ (view/open/uc/thumbnail)"""
+    if not link or not isinstance(link, str):
         return None
 
-    # 1) lh3 (Discord-friendly / direct)
-    m = re.search(r"lh3\.googleusercontent\.com/d/([a-zA-Z0-9_-]+)", link)
-    if m:
-        return m.group(1)
-
-    # 2) รูปแบบ /file/d/<id>/...
-    m = re.search(r"/d/([a-zA-Z0-9_-]+)", link)
-    if m:
-        return m.group(1)
-
-    # 3) รูปแบบ ?id=<id> (เช่น open?id=..., uc?id=..., thumbnail?id=...)
-    m = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", link)
-    if m:
-        return m.group(1)
+    # 1) รูปแบบยอดฮิตของ Drive
+    patterns = [
+        r"/file/d/([a-zA-Z0-9_-]+)",
+        r"/d/([a-zA-Z0-9_-]+)",
+        r"[?&]id=([a-zA-Z0-9_-]+)",
+        r"thumbnail\?id=([a-zA-Z0-9_-]+)",
+        r"lh3\.googleusercontent\.com/d/([a-zA-Z0-9_-]+)",
+    ]
+    for p in patterns:
+        m = re.search(p, link)
+        if m:
+            return m.group(1)
 
     return None
 
-
 # --- ฟังก์ชันแปลงลิงก์ Google Drive (รูป) ---
-# [UPDATE] ใช้สำหรับแสดงผลบนเว็บ/Streamlit และให้ Discord ฝังรูปได้ง่ายขึ้น
+# [FIX] รองรับลิงก์หลายแบบ + ใช้ googleusercontent (เสถียรกว่า thumbnail)
 def convert_drive_link(link):
     if not link:
         return link
 
-    if ("drive.google.com" in link) or ("lh3.googleusercontent.com" in link):
-        if "/folders/" in link:
-            return "ERROR: นี่คือลิงก์โฟลเดอร์ครับ! ใช้ได้แค่ลิงก์ไฟล์ (คลิกขวาที่รูป > Share > Copy Link)"
+    # กันกรณีแปะลิงก์โฟลเดอร์มา
+    if "drive.google.com" in link and "/folders/" in link:
+        return "ERROR: นี่คือลิงก์โฟลเดอร์ครับ! ใช้ได้แค่ลิงก์ไฟล์ (คลิกขวาที่รูป > Share > Copy Link)"
 
+    # ถ้าเป็น Drive / googleusercontent ให้พยายามแปลง
+    if "drive.google.com" in link or "googleusercontent.com" in link:
         file_id = _extract_drive_file_id(link)
         if file_id:
-            # สูตรที่เสถียรกว่า thumbnail: uc?export=view (เหมาะกับ st.image และส่วนใหญ่ของ embed)
-            return f"https://drive.google.com/uc?export=view&id={file_id}"
+            # สูตรที่เสถียรกว่า: ใช้ googleusercontent (Discord/Streamlit ชอบ, รองรับ GIF)
+            return f"https://lh3.googleusercontent.com/d/{file_id}"
 
     return link
-
 
 # --- ฟังก์ชันแปลงลิงก์ Google Drive (วิดีโอ) ---
 def convert_drive_video_link(link):
@@ -489,16 +487,17 @@ def convert_drive_video_link(link):
     return link
 
 
-# --- ฟังก์ชันแปลงข้อความ URL ให้เป็นลิงก์กดได้ ---
 def make_clickable(text):
     url_pattern = r'(https?://[^\s]+)'
     return re.sub(url_pattern, r'<a href="\1" target="_blank" style="color:#A370F7; text-decoration:underline; font-weight:bold;">\1</a>', text)
 
 # --- [NEW] Helper: แปลงลิงก์ Drive เป็นแบบที่ Discord ชอบ (เพื่อให้ GIF ขยับ) ---
 def get_discord_friendly_image(url):
-    file_id = _extract_drive_file_id(url)
-    if file_id:
-        # lh3 link รองรับ GIF/Embed บน Discord ได้ดีกว่า thumbnail/uc
+    # ถ้าเป็นลิงก์ thumbnail ที่เราแปลงมาแล้ว ให้ดึง ID ออกมาทำเป็น lh3 link
+    match = re.search(r'id=([a-zA-Z0-9_-]+)', url)
+    if match:
+        file_id = match.group(1)
+        # lh3 link รองรับ GIF บน Discord ได้ดีกว่า thumbnail?id=...
         return f"https://lh3.googleusercontent.com/d/{file_id}"
     return url
 
