@@ -7,6 +7,9 @@ import datetime
 import time
 from PIL import Image
 import io
+import mimetypes
+import tempfile
+import os
 from youtube_transcript_api import YouTubeTranscriptApi
 
 # --- Global Variables ---
@@ -245,28 +248,132 @@ def get_youtube_data(url):
 # ==========================================
 
 # 1. Crowd Simulation
-def generate_post_engagement(post_content, image_url=None, youtube_url=None):
+def _extract_drive_file_id(link: str):
+    if not link or not isinstance(link, str):
+        return None
+    patterns = [
+        r"/file/d/([a-zA-Z0-9_-]+)",
+        r"/d/([a-zA-Z0-9_-]+)",
+        r"[?&]id=([a-zA-Z0-9_-]+)",
+        r"thumbnail\?id=([a-zA-Z0-9_-]+)",
+        r"lh3\.googleusercontent\.com/d/([a-zA-Z0-9_-]+)",
+    ]
+    for p in patterns:
+        mm = re.search(p, link)
+        if mm:
+            return mm.group(1)
+    return None
+
+
+def _drive_uc_download_url(file_id: str):
+    # ใช้สูตร download ตรง ๆ (เหมาะกับ video/gif/image)
+    return f"https://drive.google.com/uc?export=download&id={file_id}"
+
+
+def _download_url(url: str, timeout: int = 20):
+    """ดาวน์โหลดไฟล์จาก URL แล้วคืน (bytes, content_type)"""
+    headers = {"User-Agent": "Mozilla/5.0 (MylaAI; vision-loader)"}
+    r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+    r.raise_for_status()
+    ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    return r.content, ctype
+
+
+def _load_media_for_ai(url: str):
+    """แปลง URL ให้กลายเป็น input สำหรับ Gemini:
+    - image/* -> PIL.Image
+    - image/gif -> PIL.Image (ดึงเฟรมแรก) + ลดความเสี่ยง decode error
+    - video/* -> genai.upload_file(temp_path) (ถ้ารองรับ)
+    คืนค่า: (media_input, media_kind) หรือ (None, None)
+    """
+    if not url or not isinstance(url, str):
+        return None, None
+
+    # 0) แปลง Google Drive ให้เป็น direct download ถ้าทำได้
+    if "drive.google.com" in url or "googleusercontent.com" in url:
+        fid = _extract_drive_file_id(url)
+        if fid:
+            url = _drive_uc_download_url(fid)
+
+    # 1) ดาวน์โหลด
+    data, ctype = _download_url(url)
+
+    # 2) ถ้าเป็นรูป
+    if ctype.startswith("image/"):
+        try:
+            img = Image.open(io.BytesIO(data))
+            # GIF: เอาเฟรมแรก + แปลงเป็น RGB เพื่อกันบางรุ่นพัง
+            if ctype == "image/gif":
+                try:
+                    img.seek(0)
+                except Exception:
+                    pass
+                img = img.convert("RGB")
+            return img, "image"
+        except Exception as e:
+            print(f"⚠️ Failed to decode image: {e}")
+            return None, None
+
+    # 3) ถ้าเป็นวิดีโอ/อื่น ๆ ที่เป็นไฟล์
+    if ctype.startswith("video/") or ctype in ("application/octet-stream", "application/mp4", "video/mp4"):
+        try:
+            # genai.upload_file ต้องการ path -> เขียน temp
+            suffix = mimetypes.guess_extension(ctype) or ".mp4"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tf:
+                tf.write(data)
+                tmp_path = tf.name
+            try:
+                uploaded = genai.upload_file(tmp_path, mime_type=ctype or None)
+            finally:
+                # ลบไฟล์ temp (ถ้า Windows อาจลบไม่ได้ทันที แต่ server เป็น linux)
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+            return uploaded, "video"
+        except Exception as e:
+            print(f"⚠️ Failed to upload video for AI: {e}")
+            return None, None
+
+    return None, None
+
+
+def generate_post_engagement(post_content, image_url=None, youtube_url=None, num_bots: int | None = None, media_url: str | None = None):
+    """สร้างคอมเมนต์หน้าม้า (เลือกจำนวนได้) + ให้ AI เห็น media ได้ (รูป/GIF/วิดีโอ/Drive)
+
+    Priority ของ media:
+    1) media_url (ถ้าส่งมา)
+    2) image_url
+    3) YouTube thumbnail (ถ้ามี yt)
+    """
     if not is_ready:
         return [{"user": "🧚‍♀️ Myla (Offline)", "text": "ระบบพักผ่อน... แต่รักบอสนะ!", "reaction": "😻"}]
-    
-    num_bots = random.randint(8, 35)
-    
+
+    if num_bots is None:
+        num_bots = random.randint(8, 35)
+    else:
+        try:
+            num_bots = max(1, min(80, int(num_bots)))
+        except Exception:
+            num_bots = random.randint(8, 35)
+
     yt_context = ""
     if youtube_url:
         print(f"🎥 Analyzing YouTube: {youtube_url}")
         yt_thumb, yt_text = get_youtube_data(youtube_url)
         if yt_thumb:
             yt_context = f"\n[ข้อมูลเชิงลึกจาก YouTube Transcript]\n{yt_text}"
-            if not image_url: 
+            # ถ้าไม่มีรูป ให้ใช้ thumbnail เป็น fallback
+            if not image_url and not media_url:
                 image_url = yt_thumb
 
     prompt_text = f"""
     Role: คุณคือ Simulator จำลองสังคม Community ใน Discord ของกลุ่มวัยรุ่น/Gamer ในปี 2026
     Task: สร้างรายการคอมเมนต์จำลองจำนวน {num_bots} รายการ สำหรับโพสต์นี้
-    
+
     Post Content (จากแอดมิน): "{post_content}"
     {yt_context}
-    
+
     คำสั่งพิเศษ:
     1. **Username:** ชื่อคนคอมเมนต์ต้องดูเป็น User Discord/Gamer Tag (ห้ามใช้ชื่อจริง-นามสกุลจริง)
     2. **Addressing:** เรียกเจ้าของโพสต์ว่า "แอด", "พี่เดียร์", "บอส", "เดียโบล" คละกันไป
@@ -274,24 +381,28 @@ def generate_post_engagement(post_content, image_url=None, youtube_url=None):
        - "🧚‍♀️ Myla": เรียก "ท่านเดียร์/บอส" นิสัยขี้อ้อน
        - "🍸 Ariel": เรียก "เดียร์/นาย" นิสัยเย็นชา ปากแซ่บ
        - "Members": สายปั่น, สายมีม, สายสาระ
-    
+
     Response Format (JSON Array):
     [
         {{ "user": "Name", "text": "Comment", "reaction": "Emoji [😻, 🙀, 😿, 😾, 🧠] or null" }}
     ]
     """
-    
+
     inputs = [prompt_text]
-    if image_url:
+
+    # --- แนบ media ให้ AI (ถ้ามี) ---
+    chosen_media = media_url or image_url
+    if chosen_media:
         try:
-            img_response = requests.get(image_url, timeout=10)
-            img_data = Image.open(io.BytesIO(img_response.content))
-            inputs.append(img_data)
+            media_input, kind = _load_media_for_ai(chosen_media)
+            if media_input is not None:
+                inputs.append(media_input)
+                print(f"🖼️ Attached media for AI: {kind}")
         except Exception as e:
-            print(f"⚠️ Failed to load image: {e}")
+            print(f"⚠️ Failed to attach media: {e}")
 
     try:
-        response = _safe_generate_content(inputs) 
+        response = _safe_generate_content(inputs)
         cleaned_text = clean_json_text(response.text)
         return json.loads(cleaned_text)
     except Exception as e:
@@ -299,6 +410,7 @@ def generate_post_engagement(post_content, image_url=None, youtube_url=None):
         return [{"user": "🧚‍♀️ Myla (System)", "text": "คนเยอะจัด เซิร์ฟเวอร์บินชั่วคราวค่ะบอส!", "reaction": "🙀"}]
 
 # 2. Mood Mocktail
+
 def get_cocktail_recipe(user_mood):
     if not is_ready: return "AI เมาค้าง... ลองใหม่นะ"
     prompt = f"คุณคือ 'บาร์เทนเดอร์ AI' ประจำคลับของ Dearluxion ลูกค้าบอกอารมณ์มาว่า: '{user_mood}' คิดสูตร 'Mocktail' (ชื่อ, ส่วนผสมลับนามธรรม, วิธีดื่ม, คำคม) ให้หน่อย"

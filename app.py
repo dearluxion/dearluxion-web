@@ -219,6 +219,12 @@ if st.session_state['is_admin']:
             st.markdown("---")
             send_webhook = st.checkbox("📢 ส่งแจ้งเตือนเข้า Discord", value=True, help="ติ๊กออกถ้าจะโพสต์เงียบๆ เพื่อทดสอบเว็บ")
 
+            # [NEW] คุมจำนวนหน้าม้า AI ก่อนโพสต์
+            num_bots_ui = st.slider("🤖 จำนวนหน้าม้า AI (คอมเมนต์จำลอง)", min_value=0, max_value=80, value=25, step=1, help="0 = ไม่เรียกหน้าม้า (โพสต์เงียบๆ)")
+
+            # [NEW] เลือกจำนวนรูปที่จะส่งเข้า Discord (แก้ปัญหาลิงก์รูปไม่เด้ง)
+            max_images_to_discord = st.slider("🖼️ ส่งรูปเข้า Discord กี่รูป", min_value=0, max_value=10, value=1, step=1, help="ระบบจะ 'แนบไฟล์' เพื่อให้ Discord แสดงรูปชัวร์ (เสถียรกว่าลิงก์)")
+
         if st.button("🚀 โพสต์เลย", use_container_width=True):
             # --- 1. แปลงลิงก์รูปและวิดีโอ ---
             link_errors = []
@@ -266,8 +272,17 @@ if st.session_state['is_admin']:
                         break
 
                 with st.spinner("📦 กำลังเรียกหน้าม้า AI (กำลังดูคลิปและส่องรูป)..."):
-                    # ส่งทั้ง Text, รูป และ YouTube URL ไปให้ AI
-                    ai_engagements = ai.generate_post_engagement(new_desc, main_img_url, main_yt_url)
+                    if num_bots_ui and int(num_bots_ui) > 0:
+                        # ส่งทั้ง Text, รูป, วิดีโอ Drive (ถ้ามี) และ YouTube URL ไปให้ AI
+                        ai_engagements = ai.generate_post_engagement(
+                            new_desc,
+                            main_img_url,
+                            main_yt_url,
+                            num_bots=num_bots_ui,
+                            media_url=(final_vid_links[0] if (not main_img_url and final_vid_links) else None),
+                        )
+                    else:
+                        ai_engagements = []
                 
                 # --- 4. วนลูปใส่ข้อมูลที่ AI ตอบกลับมา ---
                 for engagement in ai_engagements:
@@ -299,7 +314,7 @@ if st.session_state['is_admin']:
                 # [NEW] Logic การส่ง Webhook ตาม Checkbox
                 if send_webhook:
                     try:
-                        send_post_to_discord(new_post)
+                        send_post_to_discord(new_post, max_images=max_images_to_discord)
                         st.toast("ส่งเข้า Discord เรียบร้อย!", icon="📢")
                     except: pass
                 else:

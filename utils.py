@@ -5,6 +5,7 @@ import urllib.parse
 import datetime
 import json
 import collections
+import mimetypes
 
 # =========================================================
 # Google Sheets (Crypto Analysis Logger)
@@ -502,74 +503,133 @@ def get_discord_friendly_image(url):
     return url
 
 # --- ฟังก์ชันส่งโพสต์เข้า Discord (Webhook ห้องรวม) ---
-def send_post_to_discord(post):
+def _download_url_bytes(url: str, timeout: int = 15):
+    """ดาวน์โหลดไฟล์จาก URL แล้วคืน (bytes, content_type, filename_guess)
+
+    ใช้สำหรับแนบไฟล์เข้า Discord Webhook แบบ attachment://... ให้เสถียรกว่า embed url
+    """
+    if not url or not isinstance(url, str):
+        return None, None, None
+
+    # กันโดนบล็อกง่ายๆ: ใส่ UA
+    headers = {"User-Agent": "Mozilla/5.0 (MylaBot; DiscordWebhook)"}
+    r = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+    r.raise_for_status()
+
+    ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    # เดาชื่อไฟล์จาก URL
+    filename = url.split("?")[0].split("/")[-1] or "media"
+    if "." not in filename:
+        # เดา extension จาก content-type
+        ext = mimetypes.guess_extension(ctype) or ""
+        filename = f"{filename}{ext}"
+    return r.content, ctype, filename
+
+
+def send_post_to_discord(post, max_images: int = 1):
+    """ส่งโพสต์เข้า Discord (Webhook ห้องรวม) + รองรับแนบรูปแบบไฟล์ (เสถียร) + เลือกจำนวนรูปได้
+
+    - max_images: เลือกว่าจะส่งรูปกี่รูป (0 = ไม่ส่งรูป)
+    - รูปแรก: ใส่เป็น embed image (attachment://...)
+    - รูปที่เหลือ: ส่งเป็นข้อความเสริมพร้อมแนบไฟล์
+    """
     try:
-        # ดึง Webhook จาก Secrets
         webhook_url = st.secrets["general"]["discord_webhook"]
-    except:
+    except Exception:
         print("Webhook URL not found in secrets")
         return
-    
-    # 1. จัดการรูปภาพ (แปลงเป็นลิงก์ที่ Discord อ่านง่าย + GIF ขยับ)
-    image_url = ""
-    if post.get('images'):
-        valid_imgs = [img for img in post['images'] if img.startswith("http")]
-        if valid_imgs: 
-            # แปลงลิงก์แรกให้เป็น lh3 เพื่อให้ GIF ขยับ
-            image_url = get_discord_friendly_image(valid_imgs[0])
-    
-    # 2. จัดการวิดีโอ (สำคัญ: Drive Video เล่นใน Embed ไม่ได้ ต้องแปะลิงก์ให้กด)
+
+    # --- 1) เตรียมลิงก์รูป ---
+    image_urls = []
+    if post.get("images"):
+        valid_imgs = [img for img in post["images"] if isinstance(img, str) and img.startswith("http")]
+        if valid_imgs:
+            # แปลงลิงก์แรกให้ Discord Friendly (เดิม) — เผื่อกรณีผู้ใช้ส่ง thumbnail?id=...
+            valid_imgs = [get_discord_friendly_image(u) for u in valid_imgs]
+            image_urls = valid_imgs[: max(0, int(max_images or 0))]
+
+    # --- 2) เตรียมลิงก์วิดีโอ (Embed เล่น Drive ไม่ได้ — ส่งเป็นลิงก์ให้กด) ---
     video_content = ""
-    if post.get('video'):
+    if post.get("video"):
         video_links = []
-        for v in post['video']:
-            # ถ้าเป็น YouTube
+        for v in post["video"]:
+            if not isinstance(v, str) or not v.startswith("http"):
+                continue
             if "youtu" in v:
                 video_links.append(f"🎥 [คลิกเพื่อดู YouTube]({v})")
-            # ถ้าเป็น Drive
             elif "drive.google.com" in v:
-                # แปลงจาก preview เป็น view เพื่อให้กดแล้วเด้งไปดูง่ายๆ
                 view_link = v.replace("/preview", "/view")
                 video_links.append(f"🎬 [คลิกเพื่อดูคลิปวิดีโอ (Drive)]({view_link})")
             else:
-                 video_links.append(f"📹 [คลิกเพื่อดูวิดีโอ]({v})")
-        
+                video_links.append(f"📹 [คลิกเพื่อดูวิดีโอ]({v})")
         if video_links:
             video_content = "\n\n" + "\n".join(video_links)
 
-    # รวมเนื้อหาโพสต์ + ลิงก์วิดีโอ
-    final_description = post['content'] + video_content
-    
-    # สร้างข้อความ Embed สวยๆ
+    final_description = (post.get("content") or "") + video_content
+
+    # --- 3) สร้าง Embed หลัก ---
     embed_data = {
         "username": "Myla Post Update 📢",
         "avatar_url": "https://cdn-icons-png.flaticon.com/512/4712/4712109.png",
         "embeds": [{
-            "title": f"✨ มีโพสต์ใหม่จากบอส! ({post['date']})",
-            "description": final_description, # ใส่ลิงก์วิดีโอไปในนี้ด้วย
-            "color": int(post.get('color', '#A370F7').replace("#", ""), 16),
-            "footer": {"text": f"ID: {post['id']}"}
+            "title": f"✨ มีโพสต์ใหม่จากบอส! ({post.get('date','')})",
+            "description": final_description,
+            "color": int(str(post.get('color', '#A370F7')).replace('#', ''), 16),
+            "footer": {"text": f"ID: {post.get('id','')}"}
         }]
     }
-    
-    # ถ้ามีรูป ใส่รูปใน Embed
-    if image_url:
-        embed_data['embeds'][0]['image'] = {"url": image_url}
+
+    # --- 4) ถ้ามีรูป: แนบเป็นไฟล์เพื่อให้ Discord แสดงแน่นอน ---
+    files = None
+    if image_urls:
+        try:
+            b, ctype, filename = _download_url_bytes(image_urls[0])
+            if b:
+                # Discord webhook: อ้างอิงไฟล์ใน embed ผ่าน attachment://<filename>
+                embed_data["embeds"][0]["image"] = {"url": f"attachment://{filename}"}
+                files = {"file": (filename, b, ctype or "application/octet-stream")}
+        except Exception as e:
+            print(f"⚠️ Download/attach image failed: {e}")
 
     try:
-        # ส่ง Webhook หลัก (Embed)
-        requests.post(webhook_url, json=embed_data)
-        
-        # [EXTRA] กรณีเป็น YouTube ให้ส่งลิงก์เพียวๆ ไปอีกข้อความ เพื่อให้มันเด้งจอ Player ขึ้นมา
+        if files:
+            # multipart/form-data: payload_json + file
+            requests.post(
+                webhook_url,
+                data={"payload_json": json.dumps(embed_data)},
+                files=files,
+                timeout=20,
+            )
+        else:
+            requests.post(webhook_url, json=embed_data, timeout=20)
+
+        # --- 5) ส่งรูปที่เหลือเป็นข้อความเสริม (ถ้ามี) ---
+        if len(image_urls) > 1:
+            for idx, u in enumerate(image_urls[1:], start=2):
+                try:
+                    b, ctype, filename = _download_url_bytes(u)
+                    if not b:
+                        continue
+                    requests.post(
+                        webhook_url,
+                        data={"payload_json": json.dumps({"content": f"📎 รูปเพิ่มเติม ({idx}/{len(image_urls)})"})},
+                        files={"file": (filename, b, ctype or "application/octet-stream")},
+                        timeout=20,
+                    )
+                except Exception as e:
+                    print(f"⚠️ Failed to send extra image: {e}")
+
+        # [EXTRA] YouTube: ส่งลิงก์เพียวๆ เพิ่ม เพื่อให้เด้ง Player
         if post.get('video'):
             for v in post['video']:
-                if "youtu" in v:
-                    requests.post(webhook_url, json={"content": f"📺 **YouTube Player:** {v}"})
+                if isinstance(v, str) and "youtu" in v:
+                    requests.post(webhook_url, json={"content": f"📺 **YouTube Player:** {v}"}, timeout=20)
 
     except Exception as e:
         print(f"Error sending to Discord: {e}")
 
-# --- [ใหม่] ฟังก์ชันส่งจดหมายลับเข้า DM บอสโดยตรง (พร้อมระบบสายสืบ + รูป) ---
+# --- [ใหม่] ฟังก์ชันส่งจดหมายลับเข้า DM บอสโดยตรง
+# (พร้อมระบบสายสืบ + รูป) ---
 def send_secret_to_discord(text, sender_info="ไม่ระบุตัวตน (Guest)", avatar_url=None):
     # 1. พยายามดึง Token ของบอท
     try:
