@@ -493,13 +493,30 @@ def make_clickable(text):
     return re.sub(url_pattern, r'<a href="\1" target="_blank" style="color:#A370F7; text-decoration:underline; font-weight:bold;">\1</a>', text)
 
 # --- [NEW] Helper: แปลงลิงก์ Drive เป็นแบบที่ Discord ชอบ (เพื่อให้ GIF ขยับ) ---
+def _drive_uc_download_url(file_id: str):
+    """ลิงก์ดาวน์โหลดตรงของ Google Drive (เหมาะกับ Discord/Backend)"""
+    return f"https://drive.google.com/uc?export=download&id={file_id}"
+
+def _drive_lh3_url(file_id: str):
+    """ลิงก์ lh3 เป็น fallback สำหรับบางไฟล์ (โดยเฉพาะ GIF)"""
+    return f"https://lh3.googleusercontent.com/d/{file_id}"
+
+# --- แปลงลิงก์รูปให้เป็นแบบที่ Discord/Backend ดึงได้ง่ายที่สุด ---
 def get_discord_friendly_image(url):
-    # ถ้าเป็นลิงก์ thumbnail ที่เราแปลงมาแล้ว ให้ดึง ID ออกมาทำเป็น lh3 link
-    match = re.search(r'id=([a-zA-Z0-9_-]+)', url)
-    if match:
-        file_id = match.group(1)
-        # lh3 link รองรับ GIF บน Discord ได้ดีกว่า thumbnail?id=...
-        return f"https://lh3.googleusercontent.com/d/{file_id}"
+    """คืน URL ที่เหมาะกับการดึงไฟล์จริง (prefer: uc?export=download)
+
+    หมายเหตุ: ถ้าไฟล์ Drive ไม่ได้แชร์แบบ Anyone with the link,
+    backend/Discord จะดึงไม่ได้อยู่ดี
+    """
+    if not url or not isinstance(url, str):
+        return url
+    file_id = _extract_drive_file_id(url)
+    if file_id:
+        return _drive_uc_download_url(file_id)
+    # fallback: ดึง id=... แบบง่าย
+    m = re.search(r'(?:[?&]id=|thumbnail\?id=)([a-zA-Z0-9_-]+)', url)
+    if m:
+        return _drive_uc_download_url(m.group(1))
     return url
 
 # --- ฟังก์ชันส่งโพสต์เข้า Discord (Webhook ห้องรวม) ---
@@ -530,7 +547,35 @@ def _download_url_bytes(url: str, timeout: int = 15):
     return r.content, ctype, filename
 
 
-def send_post_to_discord(post, max_images: int = 1):
+def _download_url_bytes_with_fallback(url: str, timeout: int = 15):
+    """ดาวน์โหลดไฟล์จาก URL แบบมี fallback สำหรับ Google Drive
+
+    ลำดับการลอง:
+    1) URL เดิม
+    2) ถ้าดึง file_id ได้ -> uc?export=download&id=...
+    3) ถ้ายังไม่ได้ -> lh3.googleusercontent.com/d/<id>
+    """
+    try:
+        b, ctype, filename = _download_url_bytes(url, timeout=timeout)
+        if b:
+            return b, ctype, filename
+    except Exception:
+        b, ctype, filename = None, None, None
+
+    file_id = _extract_drive_file_id(url)
+    if file_id:
+        for alt in (_drive_uc_download_url(file_id), _drive_lh3_url(file_id)):
+            try:
+                b2, c2, f2 = _download_url_bytes(alt, timeout=timeout)
+                if b2:
+                    return b2, c2, f2
+            except Exception:
+                continue
+
+    return None, ctype, filename
+
+
+def send_post_to_discord(post, max_images: int = 1, send_comments: bool = False):
     """ส่งโพสต์เข้า Discord (Webhook ห้องรวม) + รองรับแนบรูปแบบไฟล์ (เสถียร) + เลือกจำนวนรูปได้
 
     - max_images: เลือกว่าจะส่งรูปกี่รูป (0 = ไม่ส่งรูป)
@@ -587,7 +632,7 @@ def send_post_to_discord(post, max_images: int = 1):
     files = None
     if image_urls:
         try:
-            b, ctype, filename = _download_url_bytes(image_urls[0])
+            b, ctype, filename = _download_url_bytes_with_fallback(image_urls[0])
             if b:
                 # Discord webhook: อ้างอิงไฟล์ใน embed ผ่าน attachment://<filename>
                 embed_data["embeds"][0]["image"] = {"url": f"attachment://{filename}"}
@@ -611,7 +656,7 @@ def send_post_to_discord(post, max_images: int = 1):
         if len(image_urls) > 1:
             for idx, u in enumerate(image_urls[1:], start=2):
                 try:
-                    b, ctype, filename = _download_url_bytes(u)
+                    b, ctype, filename = _download_url_bytes_with_fallback(u)
                     if not b:
                         continue
                     requests.post(
@@ -632,32 +677,33 @@ def send_post_to_discord(post, max_images: int = 1):
 
 
         # --- 6) ส่งคอมเมนต์หน้าม้า (ถ้ามี) ---
-        comments = post.get("comments") or []
-        if comments:
-            # ยิงหัวข้อสั้น ๆ
-            try:
-                requests.post(webhook_url, json={"content": "💬 **คอมเมนต์หน้าม้า**"}, timeout=20)
-            except Exception:
-                pass
-
-            # จำกัดจำนวนกันสแปม/กันเกิน rate limit
-            max_c = 25
-            for c in comments[:max_c]:
+        if send_comments:
+            comments = post.get("comments") or []
+            if comments:
+                # ยิงหัวข้อสั้น ๆ
                 try:
-                    if isinstance(c, dict):
-                        user = c.get("user") or c.get("name") or "Anon"
-                        text = c.get("text") or c.get("comment") or ""
-                        react = c.get("reaction") or ""
-                        line = f"• **{user}**: {text} {react}".strip()
-                    else:
-                        line = str(c)
-                    if not line:
-                        continue
-                    if len(line) > 1900:
-                        line = line[:1900] + "…"
-                    requests.post(webhook_url, json={"content": line}, timeout=20)
-                except Exception as e:
-                    print(f"⚠️ Failed to send comment: {e}")
+                    requests.post(webhook_url, json={"content": "💬 **คอมเมนต์หน้าม้า**"}, timeout=20)
+                except Exception:
+                    pass
+
+                # จำกัดจำนวนกันสแปม/กันเกิน rate limit
+                max_c = 25
+                for c in comments[:max_c]:
+                    try:
+                        if isinstance(c, dict):
+                            user = c.get("user") or c.get("name") or "Anon"
+                            text = c.get("text") or c.get("comment") or ""
+                            react = c.get("reaction") or ""
+                            line = f"• **{user}**: {text} {react}".strip()
+                        else:
+                            line = str(c)
+                        if not line:
+                            continue
+                        if len(line) > 1900:
+                            line = line[:1900] + "…"
+                        requests.post(webhook_url, json={"content": line}, timeout=20)
+                    except Exception as e:
+                        print(f"⚠️ Failed to send comment: {e}")
     except Exception as e:
         print(f"Error sending to Discord: {e}")
 

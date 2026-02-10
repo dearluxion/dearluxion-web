@@ -269,6 +269,11 @@ def _drive_uc_download_url(file_id: str):
     # ใช้สูตร download ตรง ๆ (เหมาะกับ video/gif/image)
     return f"https://drive.google.com/uc?export=download&id={file_id}"
 
+def _drive_lh3_url(file_id: str):
+    # fallback สำหรับบางไฟล์/บางสิทธิ์ (โดยเฉพาะรูป/GIF)
+    return f"https://lh3.googleusercontent.com/d/{file_id}"
+
+
 
 def _download_url(url: str, timeout: int = 20):
     """ดาวน์โหลดไฟล์จาก URL แล้วคืน (bytes, content_type)"""
@@ -290,6 +295,7 @@ def _load_media_for_ai(url: str):
         return None, None
 
     # 0) แปลง Google Drive ให้เป็น direct download ถ้าทำได้
+    fid = None
     if "drive.google.com" in url or "googleusercontent.com" in url:
         fid = _extract_drive_file_id(url)
         if fid:
@@ -301,7 +307,20 @@ def _load_media_for_ai(url: str):
     # 1.5) กันกรณีได้หน้า permission/login (HTML) แทนไฟล์จริง
     head = (data or b"")[:300].lower()
     if ctype in ("text/html", "application/xhtml+xml") or b"<html" in head or b"<!doctype html" in head:
-        return None, None
+        # fallback: บางครั้ง uc?download ดึงไม่ได้ แต่ lh3 ดึงได้
+        if fid:
+            try:
+                alt = _drive_lh3_url(fid)
+                data2, ctype2 = _download_url(alt)
+                head2 = (data2 or b"")[:300].lower()
+                if not (ctype2 in ("text/html", "application/xhtml+xml") or b"<html" in head2 or b"<!doctype html" in head2):
+                    data, ctype = data2, ctype2
+                else:
+                    return None, None
+            except Exception:
+                return None, None
+        else:
+            return None, None
 
     # 2) ถ้าเป็นรูป
     if ctype.startswith("image/"):

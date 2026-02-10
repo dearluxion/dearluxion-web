@@ -314,7 +314,7 @@ if st.session_state['is_admin']:
                 # [NEW] Logic การส่ง Webhook ตาม Checkbox
                 if send_webhook:
                     try:
-                        send_post_to_discord(new_post, max_images=max_images_to_discord)
+                        send_post_to_discord(new_post, max_images=max_images_to_discord, send_comments=False)
                         st.toast("ส่งเข้า Discord เรียบร้อย!", icon="📢")
                     except: pass
                 else:
@@ -382,7 +382,7 @@ if st.session_state['is_admin']:
             total = len(all_posts)
             for i, p in enumerate(all_posts):
                 status_text.text(f"กำลังส่งโพสต์วันที่ {p['date']} ({i+1}/{total})...")
-                send_post_to_discord(p)
+                send_post_to_discord(p, send_comments=False)
                 time.sleep(2)
                 my_bar.progress((i + 1) / total)
             status_text.success("✅ ส่งครบทุกโพสต์แล้วครับบอส!")
