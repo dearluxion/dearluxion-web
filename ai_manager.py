@@ -5,6 +5,7 @@ import re
 import requests
 import datetime
 import time
+import difflib
 from PIL import Image
 import io
 import mimetypes
@@ -362,8 +363,66 @@ def _load_media_for_ai(url: str):
     return None, None
 
 
+# =========================================================
+# Social Engagement Orchestrator (Anti-duplicate / Human-like)
+# =========================================================
+def _normalize_username(name: str) -> str:
+    s = (name or "").strip()
+    if not s:
+        return "Anonymous"
+    low = s.lower()
+    # Map variants into stable identities
+    if "myla" in low:
+        return "🧚‍♀️ Myla"
+    if "ariel" in low:
+        return "🍸 Ariel"
+    return s
+
+def _norm_comment_text(text: str) -> str:
+    s = (text or "").strip().lower()
+    # remove urls
+    s = re.sub(r"https?://\S+", " ", s)
+    # keep thai/latin/numbers and spaces
+    s = re.sub(r"[^0-9a-zA-Zก-๙\s]", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+def _is_too_similar(text: str, existing_norms: list[str], *, ratio_th: float = 0.84, jacc_th: float = 0.70) -> bool:
+    n = _norm_comment_text(text)
+    if not n:
+        return True
+    if len(n) <= 10:
+        for ex in existing_norms:
+            if ex.startswith(n) or n.startswith(ex):
+                return True
+    tokens = set(n.split())
+    for ex in existing_norms:
+        if not ex:
+            continue
+        r = difflib.SequenceMatcher(None, n, ex).ratio()
+        if r >= ratio_th:
+            return True
+        ex_t = set(ex.split())
+        if tokens and ex_t:
+            inter = len(tokens & ex_t)
+            union = len(tokens | ex_t)
+            if union and (inter / union) >= jacc_th:
+                return True
+    return False
+
+def _clip_comment(text: str, limit: int = 280) -> str:
+    s = (text or "").strip()
+    if not s:
+        return ""
+    return s if len(s) <= limit else s[: limit - 1] + "…"
+
 def generate_post_engagement(post_content, image_url=None, youtube_url=None, num_bots: int | None = None, media_url: str | None = None):
     """สร้างคอมเมนต์หน้าม้า (เลือกจำนวนได้) + ให้ AI เห็น media ได้ (รูป/GIF/วิดีโอ/Drive)
+
+    ✅ Anti-dup / Human-like rules (post-level):
+    - 1 คน = 1 คอมเมนต์ ต่อโพสต์ (กัน Myla/Ariel พิมพ์ซ้ำ)
+    - กันสำนวนซ้ำ ด้วย similarity filter
+    - พยายามให้มี Myla + Ariel อย่างละ 1 (ถ้า num_bots >= 2)
 
     Priority ของ media:
     1) media_url (ถ้าส่งมา)
@@ -373,6 +432,7 @@ def generate_post_engagement(post_content, image_url=None, youtube_url=None, num
     if not is_ready:
         return [{"user": "🧚‍♀️ Myla (Offline)", "text": "ระบบพักผ่อน... แต่รักบอสนะ!", "reaction": "😻"}]
 
+    # --- normalize num_bots ---
     if num_bots is None:
         num_bots = random.randint(8, 35)
     else:
@@ -380,6 +440,9 @@ def generate_post_engagement(post_content, image_url=None, youtube_url=None, num
             num_bots = max(1, min(80, int(num_bots)))
         except Exception:
             num_bots = random.randint(8, 35)
+
+    # We request more candidates than needed, then filter down to "human-like" set.
+    candidate_count = min(120, max(num_bots * 2, num_bots + 10))
 
     yt_context = ""
     if youtube_url:
@@ -391,31 +454,36 @@ def generate_post_engagement(post_content, image_url=None, youtube_url=None, num
             if not image_url and not media_url:
                 image_url = yt_thumb
 
-    prompt_text = f"""
-    Role: คุณคือ Simulator จำลองสังคม Community ใน Discord ของกลุ่มวัยรุ่น/Gamer ในปี 2026
-    Task: สร้างรายการคอมเมนต์จำลองจำนวน {num_bots} รายการ สำหรับโพสต์นี้
-
-    Post Content (จากแอดมิน): "{post_content}"
-    {yt_context}
-
-    คำสั่งพิเศษ:
-    1. **Username:** ชื่อคนคอมเมนต์ต้องดูเป็น User Discord/Gamer Tag (ห้ามใช้ชื่อจริง-นามสกุลจริง)
-    2. **Addressing:** เรียกเจ้าของโพสต์ว่า "แอด", "พี่เดียร์", "บอส", "เดียโบล" คละกันไป
-    3. **Character:**
-       - "🧚‍♀️ Myla": เรียก "ท่านเดียร์/บอส" นิสัยขี้อ้อน
-       - "🍸 Ariel": เรียก "เดียร์/นาย" นิสัยเย็นชา ปากแซ่บ
-       - "Members": สายปั่น, สายมีม, สายสาระ
-
-    Response Format (JSON Array):
-    [
-        {{ "user": "Name", "text": "Comment", "reaction": "Emoji [😻, 🙀, 😿, 😾, 🧠] or null" }}
-    ]
-    """
-
-    inputs = [prompt_text]
-
-    # --- แนบ media ให้ AI (ถ้ามี) ---
+    # --- attach media ---
+    inputs = []
     chosen_media = media_url or image_url
+
+    prompt_text = f"""
+Role: คุณคือ Simulator จำลองสังคม Community ใน Discord ของกลุ่มวัยรุ่น/Gamer ในปี 2026
+Task: สร้าง "Candidate" คอมเมนต์จำนวน {candidate_count} รายการ (เพื่อให้ระบบคัดให้เนียน)
+
+Post Content (จากแอดมิน): "{post_content}"
+{yt_context}
+
+กฎห้ามฝ่าฝืน (สำคัญมาก):
+1) 1 คน = 1 คอมเมนต์ เท่านั้น (ห้ามชื่อซ้ำเด็ดขาด)
+2) สำนวน/ใจความต้องต่างกันชัดเจน (ห้ามพูดคล้ายกันหลายเมนต์)
+3) ถ้า {num_bots} >= 2 ให้ "ต้องมี" Myla และ Ariel อย่างละ 1 เท่านั้น:
+   - user: "🧚‍♀️ Myla" (ขี้อ้อน เรียกบอส/ท่านเดียร์)
+   - user: "🍸 Ariel" (เย็นชา ปากแซ่บ เรียกเดียร์/นาย)
+4) ที่เหลือเป็นสมาชิกทั่วไป (Members) โทนคละ: สายปั่น, สายมีม, สายสาระ
+5) Username ต้องดูเป็น GamerTag / Discord name (ห้ามชื่อจริง-นามสกุลจริง)
+
+Addressing: เรียกเจ้าของโพสต์ว่า "แอด", "พี่เดียร์", "บอส", "เดียโบล" คละกันไป
+
+Response Format (JSON Array เท่านั้น):
+[
+  {{ "user": "Name", "text": "Comment", "reaction": "Emoji [😻, 🙀, 😿, 😾, 🧠] or null" }}
+]
+"""
+
+    inputs.append(prompt_text)
+
     if chosen_media:
         try:
             media_input, kind = _load_media_for_ai(chosen_media)
@@ -425,14 +493,182 @@ def generate_post_engagement(post_content, image_url=None, youtube_url=None, num
         except Exception as e:
             print(f"⚠️ Failed to attach media: {e}")
 
+    # --- helper: parse candidates safely ---
+    def _parse_candidates(text: str):
+        try:
+            cleaned = clean_json_text(text)
+            data = json.loads(cleaned)
+            return data if isinstance(data, list) else []
+        except Exception:
+            return []
+
+    # --- helper: post-process (dedupe user + dedupe similar text) ---
+    def _filter_candidates(cands: list, target_n: int):
+        picked = []
+        seen_users = set()
+        norm_texts = []
+
+        def _try_add(item):
+            if not isinstance(item, dict):
+                return
+            user = _normalize_username(item.get("user", ""))
+            text = _clip_comment(item.get("text", ""))
+            react = item.get("reaction", None)
+
+            if not user or not text:
+                return
+
+            key = user.strip().lower()
+            if key in seen_users:
+                return
+
+            if _is_too_similar(text, norm_texts):
+                return
+
+            seen_users.add(key)
+            norm_texts.append(_norm_comment_text(text))
+            picked.append({"user": user, "text": text, "reaction": react})
+
+        # 1) first pass: keep in order
+        for it in cands:
+            _try_add(it)
+            if len(picked) >= target_n:
+                break
+
+        return picked, seen_users, norm_texts
+
+    # --- 1st call: create candidates ---
     try:
         response = _safe_generate_content(inputs)
-        cleaned_text = clean_json_text(response.text)
-        return json.loads(cleaned_text)
+        cands = _parse_candidates(response.text or "")
     except Exception as e:
-        print(f"AI Engagement Error: {e}")
+        print(f"AI Engagement Error (1st call): {e}")
         return [{"user": "🧚‍♀️ Myla (System)", "text": "คนเยอะจัด เซิร์ฟเวอร์บินชั่วคราวค่ะบอส!", "reaction": "🙀"}]
 
+    # --- post-process + ensure Myla/Ariel once ---
+    desired = num_bots
+    picked, seen_users, norm_texts = _filter_candidates(cands, desired)
+
+    def _need_user(name: str) -> bool:
+        return name.lower() not in seen_users
+
+    def _gen_single_comment(role_name: str):
+        # tiny generation for missing core personas (cheap + stable)
+        persona_rule = ""
+        if role_name == "🧚‍♀️ Myla":
+            persona_rule = "คุณคือ 🧚‍♀️ Myla: ขี้อ้อน อบอุ่น เรียกคู่สนทนาว่า 'บอส' หรือ 'ท่านเดียร์' ให้ฟีลมนุษย์"
+        elif role_name == "🍸 Ariel":
+            persona_rule = "คุณคือ 🍸 Ariel: เย็นชา ปากแซ่บ Tsundere เรียกคู่สนทนาว่า 'เดียร์' หรือ 'นาย' ให้ฟีลมนุษย์"
+        else:
+            persona_rule = "คุณคือสมาชิกใน Discord ที่พูดสั้นๆ เป็นธรรมชาติ"
+
+        banned_users = ", ".join(sorted(list(seen_users))[:40])
+        banned_norms = "; ".join(norm_texts[:25])
+
+        prompt_one = f"""
+{persona_rule}
+โพสต์ของแอด: "{post_content}"
+{yt_context}
+
+เงื่อนไข:
+- ห้ามใช้ username ซ้ำกับ: {banned_users if banned_users else "(none)"}
+- ห้ามพูดซ้ำ/คล้ายกับประโยคเหล่านี้: {banned_norms if banned_norms else "(none)"}
+
+ตอบเป็น JSON Object เท่านั้น:
+{{"user":"{role_name}","text":"...","reaction":null}}
+"""
+        local_inputs = [prompt_one]
+        if chosen_media:
+            try:
+                media_input, _ = _load_media_for_ai(chosen_media)
+                if media_input is not None:
+                    local_inputs.append(media_input)
+            except Exception:
+                pass
+
+        try:
+            r = _safe_generate_content(local_inputs)
+            cleaned = clean_json_text(r.text or "")
+            obj = json.loads(cleaned)
+            if isinstance(obj, dict):
+                obj["user"] = _normalize_username(obj.get("user", role_name))
+                obj["text"] = _clip_comment(obj.get("text", ""))
+                return obj
+        except Exception:
+            return None
+        return None
+
+    # Ensure Myla/Ariel appear once (when possible)
+    if num_bots >= 2:
+        if _need_user("🧚‍♀️ myla"):
+            one = _gen_single_comment("🧚‍♀️ Myla")
+            if one:
+                # try add with same filter
+                tmp, seen_users2, norm2 = _filter_candidates([one], desired)
+                if tmp:
+                    picked = tmp + picked  # Myla appear near top
+                    seen_users = seen_users2 | seen_users
+                    norm_texts = norm2 + norm_texts
+                    picked = picked[:desired]
+        if len(picked) < desired and _need_user("🍸 ariel"):
+            one = _gen_single_comment("🍸 Ariel")
+            if one:
+                tmp, seen_users2, norm2 = _filter_candidates([one], desired)
+                if tmp:
+                    picked = tmp + picked
+                    seen_users = seen_users2 | seen_users
+                    norm_texts = norm2 + norm_texts
+                    picked = picked[:desired]
+    else:
+        # num_bots == 1 -> prefer Myla if missing
+        if _need_user("🧚‍♀️ myla"):
+            one = _gen_single_comment("🧚‍♀️ Myla")
+            if one:
+                picked = [{"user": _normalize_username(one.get("user","🧚‍♀️ Myla")), "text": _clip_comment(one.get("text","")), "reaction": one.get("reaction") }]
+
+    # If still not enough (after strict filters), do one refill pass
+    if len(picked) < desired:
+        remain = desired - len(picked)
+        refill_count = min(60, max(remain * 2, remain + 6))
+        banned_users = ", ".join(sorted(list(seen_users))[:60])
+        banned_norms = "; ".join(norm_texts[:35])
+
+        refill_prompt = f"""
+Role: คุณคือ Simulator สร้างคอมเมนต์สมาชิก Discord แบบเนียนๆ
+Task: สร้างคอมเมนต์เพิ่ม {refill_count} รายการ (เพื่อคัดให้เหลือ {remain})
+
+โพสต์ของแอด: "{post_content}"
+{yt_context}
+
+กฎ:
+- ห้ามใช้ username ซ้ำกับ: {banned_users if banned_users else "(none)"}
+- ห้ามมี Myla/Ariel เพิ่ม (ถ้ามีแล้ว): {("Myla,Ariel" if ("🧚‍♀️ myla" in seen_users or "🍸 ariel" in seen_users) else "none")}
+- ห้ามสำนวน/ใจความคล้ายกับ: {banned_norms if banned_norms else "(none)"}
+- 1 คน = 1 คอมเมนต์
+
+ตอบเป็น JSON Array เท่านั้น:
+[
+  {{ "user": "Name", "text": "Comment", "reaction": null }}
+]
+"""
+        refill_inputs = [refill_prompt]
+        if chosen_media:
+            try:
+                media_input, _ = _load_media_for_ai(chosen_media)
+                if media_input is not None:
+                    refill_inputs.append(media_input)
+            except Exception:
+                pass
+
+        try:
+            rr = _safe_generate_content(refill_inputs)
+            more = _parse_candidates(rr.text or "")
+            more_picked, seen_users, norm_texts = _filter_candidates(more, remain)
+            picked.extend(more_picked)
+        except Exception as e:
+            print(f"AI Engagement Error (refill): {e}")
+
+    return picked[:desired]
 # 2. Mood Mocktail
 
 def get_cocktail_recipe(user_mood):
