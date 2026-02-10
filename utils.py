@@ -517,6 +517,10 @@ def _download_url_bytes(url: str, timeout: int = 15):
     r.raise_for_status()
 
     ctype = (r.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    # กันกรณี Google/Drive ส่งหน้า permission/login (HTML) แทนไฟล์จริง
+    head = (r.content or b"")[:300].lower()
+    if ctype in ("text/html", "application/xhtml+xml") or b"<html" in head or b"<!doctype html" in head:
+        return None, ctype or "text/html", (url.split("?")[0].split("/")[-1] or "blocked.html")
     # เดาชื่อไฟล์จาก URL
     filename = url.split("?")[0].split("/")[-1] or "media"
     if "." not in filename:
@@ -625,6 +629,35 @@ def send_post_to_discord(post, max_images: int = 1):
                 if isinstance(v, str) and "youtu" in v:
                     requests.post(webhook_url, json={"content": f"📺 **YouTube Player:** {v}"}, timeout=20)
 
+
+
+        # --- 6) ส่งคอมเมนต์หน้าม้า (ถ้ามี) ---
+        comments = post.get("comments") or []
+        if comments:
+            # ยิงหัวข้อสั้น ๆ
+            try:
+                requests.post(webhook_url, json={"content": "💬 **คอมเมนต์หน้าม้า**"}, timeout=20)
+            except Exception:
+                pass
+
+            # จำกัดจำนวนกันสแปม/กันเกิน rate limit
+            max_c = 25
+            for c in comments[:max_c]:
+                try:
+                    if isinstance(c, dict):
+                        user = c.get("user") or c.get("name") or "Anon"
+                        text = c.get("text") or c.get("comment") or ""
+                        react = c.get("reaction") or ""
+                        line = f"• **{user}**: {text} {react}".strip()
+                    else:
+                        line = str(c)
+                    if not line:
+                        continue
+                    if len(line) > 1900:
+                        line = line[:1900] + "…"
+                    requests.post(webhook_url, json={"content": line}, timeout=20)
+                except Exception as e:
+                    print(f"⚠️ Failed to send comment: {e}")
     except Exception as e:
         print(f"Error sending to Discord: {e}")
 

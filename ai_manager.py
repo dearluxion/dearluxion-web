@@ -298,6 +298,11 @@ def _load_media_for_ai(url: str):
     # 1) ดาวน์โหลด
     data, ctype = _download_url(url)
 
+    # 1.5) กันกรณีได้หน้า permission/login (HTML) แทนไฟล์จริง
+    head = (data or b"")[:300].lower()
+    if ctype in ("text/html", "application/xhtml+xml") or b"<html" in head or b"<!doctype html" in head:
+        return None, None
+
     # 2) ถ้าเป็นรูป
     if ctype.startswith("image/"):
         try:
