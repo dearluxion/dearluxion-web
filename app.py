@@ -6,6 +6,7 @@ import time
 import random
 import base64
 import plotly.graph_objects as go
+import pandas as pd
 
 # --- [IMPORTED MODULES] ---
 from styles import get_css 
@@ -20,6 +21,8 @@ from utils import (
     append_crypto_analysis_to_gsheet,
     append_crypto_memory_to_gsheet,
     build_crypto_memory_context,
+    fetch_crypto_analysis_rows,
+    fetch_crypto_memory_rows,
 )
 import data_manager as dm
 import sidebar_manager as sm
@@ -441,6 +444,150 @@ if st.session_state['is_admin']:
             st.info("ยังไม่มี Snippet ครับ")
 
 # --- 5. Feed Display ---
+
+def _extract_auto_meta(text: str):
+    if not text or '[AUTO_META]' not in str(text):
+        return None
+    try:
+        raw = str(text).split('[AUTO_META]', 1)[1].strip()
+        return json.loads(raw)
+    except Exception:
+        return None
+
+
+def _reviewed_source_ids_for_symbol(symbol: str):
+    reviewed = set()
+    try:
+        mem_rows = fetch_crypto_memory_rows(year=str(datetime.datetime.now().year), symbol=symbol, limit=500)
+        for r in mem_rows:
+            tags = str(r.get('tags', '')).strip()
+            m = re.search(r'AUTO_REVIEW:([^,|\s]+)', tags)
+            if m:
+                reviewed.add(m.group(1))
+    except Exception:
+        pass
+    return reviewed
+
+
+def _run_auto_review_if_possible(symbol: str, df_hist, current_price: float, max_reviews: int = 3):
+    """ให้ AI ให้คะแนนตัวเองย้อนหลังอัตโนมัติจากข้อมูลที่บันทึกไว้ในชีต"""
+    notes = []
+    try:
+        rows = fetch_crypto_analysis_rows(symbol=symbol, limit=80)
+    except Exception as e:
+        return [f"⚠️ อ่านประวัติจากชีตไม่สำเร็จ: {e}"]
+
+    if not rows:
+        return notes
+
+    reviewed_ids = _reviewed_source_ids_for_symbol(symbol)
+    done = 0
+    idx = getattr(df_hist, 'index', None)
+    idx_tz = getattr(idx, 'tz', None) if idx is not None else None
+
+    for row in rows:
+        if done >= max_reviews:
+            break
+        source_id = str(row.get('timestamp', '')).strip()
+        if not source_id or source_id in reviewed_ids:
+            continue
+
+        meta = _extract_auto_meta(row.get('analysis', ''))
+        if not meta:
+            continue
+
+        try:
+            ts = datetime.datetime.fromisoformat(source_id)
+            ts_cmp = pd.Timestamp(ts)
+            if idx_tz is not None and ts_cmp.tzinfo is None:
+                ts_cmp = ts_cmp.tz_localize(idx_tz)
+            future_df = df_hist[df_hist.index >= ts_cmp]
+            if future_df is None or len(future_df) == 0:
+                continue
+
+            entry = float(meta.get('entry', 0) or 0)
+            target = float(meta.get('target', 0) or 0)
+            stoploss = float(meta.get('stoploss', 0) or 0)
+            confidence = float(meta.get('confidence', 0) or 0)
+            signal = str(meta.get('signal', 'BULLISH')).upper()
+            if entry <= 0 or target <= 0:
+                continue
+
+            if signal in ('BEARISH', 'SHORT'):
+                best_hit = float(future_df['Low'].min())
+                worst_adverse = float(future_df['High'].max())
+                target_hit = best_hit <= target
+                progress = ((entry - float(current_price)) / max(entry - target, 1e-9)) * 100.0
+                max_drawdown = max(0.0, ((worst_adverse - entry) / max(entry, 1e-9)) * 100.0)
+            else:
+                best_hit = float(future_df['High'].max())
+                worst_adverse = float(future_df['Low'].min())
+                target_hit = best_hit >= target
+                progress = ((float(current_price) - entry) / max(target - entry, 1e-9)) * 100.0
+                max_drawdown = max(0.0, ((entry - worst_adverse) / max(entry, 1e-9)) * 100.0)
+
+            progress = max(-100.0, min(160.0, progress))
+            time_held_hours = max(0.0, (datetime.datetime.now() - ts).total_seconds() / 3600.0)
+            trap_flag = (not target_hit) and (max_drawdown >= 4.0 or float(current_price) <= stoploss)
+            trap_rate = 100 if trap_flag else (60 if max_drawdown >= 3 else 20)
+
+            base_score = 40.0
+            if target_hit:
+                base_score += 35.0
+            base_score += max(0.0, min(20.0, progress / 5.0))
+            base_score -= min(20.0, max_drawdown * 2.5)
+            if time_held_hours >= 24:
+                base_score += 5.0
+            elif time_held_hours < 6:
+                base_score -= 2.0
+            if trap_flag:
+                base_score -= 10.0
+            score = max(0.0, min(100.0, base_score))
+            confidence_accuracy = max(0.0, 100.0 - abs(confidence - score))
+            outcome = 'WIN' if target_hit else ('PENDING' if progress >= 0 else 'LOSE')
+
+            mistake_text = (
+                f"รีวิวอัตโนมัติจากชีต: เป้าแตะ={'ใช่' if target_hit else 'ยัง'}, "
+                f"ย่อลึกสุด≈{max_drawdown:.2f}%, ถือมา≈{time_held_hours:.1f} ชม., "
+                f"ความแม่นของความมั่นใจ≈{confidence_accuracy:.1f}%, โอกาสเจอกับดัก≈{trap_rate}%"
+            )
+            fix_plan = 'ระบบจะใช้คะแนนนี้ไปปรับน้ำหนักคำเตือนรอบถัดไป ถ้าย่อลึกหรือโดนหลอกบ่อย จะลดความมั่นใจและบอกให้รอยืนยันมากขึ้น'
+            tags = (
+                f"AUTO_REVIEW:{source_id},target_hit={1 if target_hit else 0},max_drawdown={max_drawdown:.2f},"
+                f"time_held={time_held_hours:.1f},confidence_accuracy={confidence_accuracy:.1f},trap_rate={trap_rate}"
+            )
+
+            append_crypto_memory_to_gsheet(
+                symbol=symbol,
+                outcome=outcome,
+                self_score=round(score, 1),
+                mistakes=mistake_text,
+                fix_plan=fix_plan,
+                tags=tags,
+                mode='auto_review',
+                signal=signal,
+                status=meta.get('signal', ''),
+                score_pct=round(score, 1),
+                entry=entry,
+                target=target,
+                close_price=float(current_price),
+                logged_at=datetime.datetime.now().isoformat(timespec='seconds'),
+            )
+
+            notes.append(
+                f"✅ รีวิวอัตโนมัติย้อนหลัง {symbol} | เป้าแตะ: {'ใช่' if target_hit else 'ยัง'} | "
+                f"ย่อลึกสุด≈{max_drawdown:.2f}% | ถือมา≈{time_held_hours:.1f} ชม. | คะแนน≈{score:.1f}/100"
+            )
+            done += 1
+        except Exception as e:
+            notes.append(f"⚠️ ข้ามรายการรีวิวอัตโนมัติ 1 รายการ: {e}")
+
+    return notes
+
+
+def _build_sheet_safe_analysis_text(visible_text: str, meta: dict):
+    return f"{visible_text}\n\n[AUTO_META]{json.dumps(meta, ensure_ascii=False)}"
+
 # [Crypto War Room Display (RESTORED THAI VERSION)]
 if st.session_state.get('show_crypto', False):
     filtered = []  # รีเซต filtered สำหรับโหมด Crypto
@@ -448,7 +595,7 @@ if st.session_state.get('show_crypto', False):
         st.error("⚠️ โมดูล crypto_engine ยังไม่พร้อม กรุณาติดตั้ง")
     else:
         st.markdown("## 📈 ศูนย์บัญชาการคริปโต (Crypto Tactical War Room)")
-        st.caption("สรุปให้อ่านง่ายก่อน แล้วค่อยเจาะลึกแบบ AI ทีละชั้น | หน่วยราคา: THB")
+        st.caption("สรุปให้อ่านง่ายก่อน แล้วค่อยเจาะลึกแบบ AI ที่ยังแม่นขึ้น | หน่วยราคา: THB")
         
         # รายชื่อเหรียญครบ 8 ตัว
         coin_list = ["BTC", "ETH", "BNB", "SOL", "XRP", "DOGE", "PEPE", "SHIB"]
@@ -473,12 +620,12 @@ if st.session_state.get('show_crypto', False):
             # ปุ่มเดียว: กดแล้ว “ดึงข้อมูลสด + วิเคราะห์ครบ 8 เหรียญ” 1 รอบ แล้วเก็บผลไว้โชว์แบบนิ่งๆ
             c_rt1, c_rt2 = st.columns([2, 1])
             with c_rt1:
-                if st.button("🔴 ดึงสด 8 เหรียญรอบเดียว (Real-Time Radar)", type="primary", use_container_width=True, key="btn_realtime_all_once"):
+                if st.button("🔴 วิเคราะห์สดทั้ง 8 เหรียญ 1 รอบ (Real-Time)", type="primary", use_container_width=True, key="btn_realtime_all_once"):
                     st.session_state['realtime_all_request'] = True
                     st.rerun()
 
             with c_rt2:
-                if st.button("🧹 ล้างผล Real-Time", use_container_width=True, key="btn_clear_realtime_all"):
+                if st.button("🧹 ล้างผลวิเคราะห์สด (Real-Time)", use_container_width=True, key="btn_clear_realtime_all"):
                     st.session_state['realtime_all_result'] = None
                     st.session_state['realtime_all_request'] = False
                     st.rerun()
@@ -760,14 +907,14 @@ if st.session_state.get('show_crypto', False):
                     for item in rt_pack.get('results', []):
                         sym = item.get('symbol')
                         if item.get('error'):
-                            with st.expander(f"💎 {sym} (Real-Time)", expanded=False):
+                            with st.expander(f"💎 {sym} (วิเคราะห์สด | Real-Time)", expanded=False):
                                 st.error(item['error'])
                             continue
 
                         latest_price = item.get('latest_price', 0)
                         price_fmt = "{:,.4f}" if sym in ["SHIB", "PEPE", "DOGE"] else "{:,.2f}"
 
-                        with st.expander(f"🔴 {sym} Real-Time | ฿{price_fmt.format(latest_price)}", expanded=False):
+                        with st.expander(f"🔴 {sym} วิเคราะห์สด (Real-Time) | ฿{price_fmt.format(latest_price)}", expanded=False):
                             # Quick metrics
                             k1, k2, k3, k4 = st.columns(4)
                             try:
@@ -781,14 +928,9 @@ if st.session_state.get('show_crypto', False):
                                 pass
 
                             st.caption(f"📰 ข่าวล่าสุด: {item.get('news_count', 0)} รายการ")
-                            try:
-                                rt_brief = ai.build_trade_brief(sym, latest_price, item.get('indicators', {}) or {}, item.get('analysis', ''))
-                                st.markdown(ai.render_trade_brief_markdown(rt_brief))
-                            except Exception as _rt_brief_err:
-                                st.caption(f"ข้ามสรุปย่ออัตโนมัติ: {_rt_brief_err}")
                             deb = item.get("debate") or {}
                             if deb:
-                                t_final, t_analyst, t_critic = st.tabs(["🧠 Final", "🧚‍♀️ Analyst", "🍸 Critic"])
+                                t_final, t_analyst, t_critic = st.tabs(["🧠 สรุปสุดท้าย (Final)", "🧚‍♀️ มุมบวก (Analyst)", "🍸 มุมเสี่ยง (Critic)"])
                                 with t_final:
                                     st.markdown(item.get('analysis', ''))
                                 with t_analyst:
@@ -815,7 +957,7 @@ if st.session_state.get('show_crypto', False):
             }
             return mapping.get(classification, classification)
         
-        tab_analysis, tab_backtest = st.tabs(["📊 วิเคราะห์ตลาด", "⚖️ ตรวจการบ้าน (Backtest)"])
+        tab_analysis, tab_backtest = st.tabs(["📊 วิเคราะห์ตลาด", "⚖️ ตรวจการบ้านย้อนหลัง (Backtest)"])
         
         with tab_analysis:
             # ดึงข้อมูล
@@ -876,7 +1018,7 @@ if st.session_state.get('show_crypto', False):
                 # 3. AI Analysis Section (MODIFIED - WITH CACHE CHECK)
                 st.markdown("---")
                 if st.session_state.get('trigger_analysis'):
-                    st.markdown(f"### 🧠 ศูนย์วิเคราะห์เชิงลึก - {coin_select}")
+                    st.markdown(f"### 🧠 ข้อมูลจากนักวิเคราะห์ (AI) - {coin_select}")
                     
                     with st.chat_message("ai", avatar="👁️"):
                         # 1. เช็ค Cache ก่อน
@@ -885,8 +1027,16 @@ if st.session_state.get('show_crypto', False):
                         if cached_data:
                             # เจอข้อมูลของวันนี้ -> แสดงเลย ไม่ต้องโหลด
                             st.success(f"⚡ โหลดข้อมูลวิเคราะห์ประจำวันสำเร็จ (อัปเดตเมื่อ: {cached_data['updated_at']} น.)")
+                            snapshot = ai.build_trade_snapshot(latest_price, indicators, cached_data['analysis']) if hasattr(ai, 'build_trade_snapshot') else None
+                            if snapshot and hasattr(ai, 'build_trade_snapshot_markdown'):
+                                st.markdown(ai.build_trade_snapshot_markdown(coin_select, snapshot))
+                            auto_notes = _run_auto_review_if_possible(coin_select, df, latest_price, max_reviews=2)
+                            if auto_notes:
+                                with st.expander("🧾 ระบบให้คะแนนย้อนหลังอัตโนมัติจากชีต (Auto Review from Google Sheets)", expanded=False):
+                                    for note in auto_notes:
+                                        st.markdown(f"- {note}")
                             st.markdown(cached_data['analysis'])
-                            st.caption("ℹ️ นี่คือผลที่เคยวิเคราะห์ไว้แล้ววันนี้ ระบบจึงดึงมาให้ทันทีเพื่อประหยัดทรัพยากร")
+                            st.caption("ℹ️ ข้อมูลนี้ถูกวิเคราะห์ไว้แล้ววันนี้เพื่อประหยัดทรัพยากร (Cache Hit)")
                             st.session_state['trigger_analysis'] = False # ปิด Trigger
                             
                         else:
@@ -1001,11 +1151,19 @@ if st.session_state.get('show_crypto', False):
 
                                     # --- [NEW] Log ลง Google Sheets ---
                                     try:
+                                        snapshot = ai.build_trade_snapshot(latest_price, indicators, analysis_result) if hasattr(ai, 'build_trade_snapshot') else None
+                                        sheet_analysis_text = analysis_result
+                                        if snapshot and hasattr(ai, 'build_trade_snapshot_markdown'):
+                                            st.markdown(ai.build_trade_snapshot_markdown(coin_select, snapshot))
+                                            snapshot_meta = dict(snapshot)
+                                            snapshot_meta.update({"symbol": coin_select, "generated_at": datetime.datetime.now().isoformat(timespec="seconds")})
+                                            sheet_analysis_text = _build_sheet_safe_analysis_text(analysis_result, snapshot_meta)
+
                                         append_crypto_analysis_to_gsheet(
                                             mode="single",
                                             symbol=coin_select,
                                             price=latest_price,
-                                            analysis_text=analysis_result,
+                                            analysis_text=sheet_analysis_text,
                                             indicators=indicators,
                                             news_count=len(news) if news else 0,
                                             fg=fg_index,
@@ -1016,32 +1174,21 @@ if st.session_state.get('show_crypto', False):
                                     
                                     # ✅ แสดงผลแบบแท็บ (Final / Analyst / Critic)
                                     if isinstance(analysis_pack, dict) and (analysis_pack.get("analyst") or analysis_pack.get("critic")):
-                                        t_final, t_analyst, t_critic = st.tabs(["🧠 Final", "🧚‍♀️ Analyst", "🍸 Critic"])
+                                        t_final, t_analyst, t_critic = st.tabs(["🧠 สรุปสุดท้าย (Final)", "🧚‍♀️ มุมบวก (Analyst)", "🍸 มุมเสี่ยง (Critic)"])
                                         with t_final:
-                                            try:
-                                                brief = ai.build_trade_brief(coin_select, latest_price, indicators, analysis_pack.get("final", ""), memory_ctx)
-                                                st.markdown(ai.render_trade_brief_markdown(brief))
-                                                st.markdown("---")
-                                            except Exception as _brief_err:
-                                                st.caption(f"ข้ามสรุปย่ออัตโนมัติ: {_brief_err}")
                                             st.markdown(analysis_pack.get("final", ""))
                                         with t_analyst:
                                             st.markdown(analysis_pack.get("analyst", ""))
                                         with t_critic:
                                             st.markdown(analysis_pack.get("critic", ""))
                                     else:
-                                        try:
-                                            brief = ai.build_trade_brief(coin_select, latest_price, indicators, analysis_result, memory_ctx)
-                                            st.markdown(ai.render_trade_brief_markdown(brief))
-                                            st.markdown("---")
-                                        except Exception as _brief_err:
-                                            st.caption(f"ข้ามสรุปย่ออัตโนมัติ: {_brief_err}")
                                         st.markdown(analysis_result)
 
-                                    st.caption(f"🧠 วิเคราะห์แบบ Deep Reflection (3-Step Reasoning) | เวลา: {datetime.datetime.now().strftime('%H:%M')} น.")
+                                    st.caption(f"🧠 วิเคราะห์แบบคิด 3 ชั้น (Deep Reflection | 3-Step Reasoning) | เวลา: {datetime.datetime.now().strftime('%H:%M')} น.")
 
                                     # 🧠 บันทึกบทเรียนให้ระบบจำ (Memory) — เพื่อให้รอบหน้ามีคำเตือนที่ฉลาดขึ้น
-                                    with st.expander("🧠 บันทึกบทเรียนให้ระบบจำ (หลังเทรดจริง)", expanded=False):
+                                    with st.expander("🧠 บันทึกบทเรียนแบบกำหนดเอง (เสริม / ไม่จำเป็นต้องกดทุกครั้ง)", expanded=False):
+                                        st.caption("ระบบจะพยายามให้คะแนนย้อนหลังจาก Google Sheets ให้อัตโนมัติเมื่อคุณกดวิเคราะห์รอบถัดไป ปุ่มนี้เอาไว้ใช้เมื่ออยากเพิ่มมุมมองของตัวเองเป็นพิเศษ")
                                         with st.form(f"mem_form_{coin_select}"):
                                             outcome = st.selectbox("ผลลัพธ์รอบนี้", ["WIN", "LOSE", "DRAW"], index=1)
                                             self_score = st.slider("ให้คะแนนตัวเอง (0-100)", 0, 100, 70)
@@ -1056,7 +1203,7 @@ if st.session_state.get('show_crypto', False):
                                                 height=110
                                             )
                                             tags = st.text_input("Tags (คั่นด้วย comma)", placeholder="FOMO,RSI,OBV,news,breakout")
-                                            if st.form_submit_button("💾 บันทึก Memory"):
+                                            if st.form_submit_button("💾 บันทึกบทเรียนเพิ่มเอง (Manual Memory)"):
                                                 try:
                                                     append_crypto_memory_to_gsheet(
                                                         symbol=coin_select,
@@ -1095,7 +1242,7 @@ if st.session_state.get('show_crypto', False):
             # =========================================================
             st.markdown("---")
             st.markdown("### 🚀 วิเคราะห์เหมาเข่ง 8 เหรียญ (Batch Mode)")
-            if st.button("🚀 วิเคราะห์ทั้ง 8 เหรียญ โปรดของท่านเดียร์", use_container_width=True, key="btn_batch_tab"):
+            if st.button("🚀 สแกนทั้ง 8 เหรียญ (Market Radar)", use_container_width=True, key="btn_batch_tab"):
                 st.session_state['analyze_all'] = True
                 st.rerun()
 
@@ -1103,8 +1250,8 @@ if st.session_state.get('show_crypto', False):
         # BACKTEST TAB
         # =========================================================
         with tab_backtest:
-            st.markdown("### ⚖️ ตารางคะแนนความแม่นของระบบ (Reality Scoreboard)")
-            st.caption("เช็กว่าที่ระบบเคยแนะนำไว้ ตรงกับราคาจริงแค่ไหน เพื่อใช้เป็นบทเรียนก่อนเทรดรอบต่อไป")
+            st.markdown("### ⚖️ ตารางคะแนนผลงาน AI (Reality Check)")
+            st.caption("ระบบจะเทียบสิ่งที่ AI เคยวิเคราะห์ไว้กับราคาจริงภายหลัง เพื่อดูว่าคิดแม่นแค่ไหน")
             
             history = dm.get_today_summary()
             if history:
@@ -1131,7 +1278,7 @@ if st.session_state.get('show_crypto', False):
         # CASE B Background: วิเคราะห์รวดเดียว (Batch Mode)
         # =========================================================
         if st.session_state.get('analyze_all'):
-            st.markdown("### 🚀 รายงานสแกนตลาด 8 เหรียญ (Market Radar)")
+            st.markdown("### 🚀 รายงานสรุป 8 เหรียญโปรด (God Mode Batch)")
             if st.button("❌ ปิดโหมดวิเคราะห์รวม"):
                 st.session_state['analyze_all'] = False
                 st.rerun()
@@ -1141,7 +1288,7 @@ if st.session_state.get('show_crypto', False):
             
             # วนลูปวิเคราะห์ทีละตัว
             for idx, c_symbol in enumerate(coin_list):
-                status_text.text(f"กำลังสแกนตลาดและสรุปจุดเข้า {c_symbol} ({idx+1}/{len(coin_list)})...")
+                status_text.text(f"กำลังเจาะระบบวิเคราะห์ {c_symbol} ({idx+1}/{len(coin_list)})...")
                 
                 # 1. เช็คก่อนว่าวันนี้วิเคราะห์ไปหรือยัง (ประหยัด API บอส)
                 cached_data = dm.get_crypto_cache(c_symbol)
@@ -1179,12 +1326,6 @@ if st.session_state.get('show_crypto', False):
                                 
                                 # 🧠 สั่ง AI วิเคราะห์สด (Reflection Mode 3-Step)
                                 res_batch = ai.analyze_crypto_reflection_mode(c_symbol, last_p, indicators_b, "วิเคราะห์ตามกราฟเทคนิคอลล่าสุด", {"value":"50", "value_classification":"Neutral"})
-                                try:
-                                    batch_brief = ai.build_trade_brief(c_symbol, last_p, indicators_b, res_batch)
-                                    st.markdown(ai.render_trade_brief_markdown(batch_brief))
-                                    st.markdown("---")
-                                except Exception as _batch_brief_err:
-                                    st.caption(f"ข้ามสรุปย่ออัตโนมัติ: {_batch_brief_err}")
                                 st.markdown(res_batch)
                                 
                                 # --- [จุดที่เพิ่ม] บันทึกลง Google Sheets ทันที ---
