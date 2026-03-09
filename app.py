@@ -492,43 +492,54 @@ if st.session_state['is_admin']:
         else:
             st.info("ยังไม่มี Snippet ครับ")
 
-    # ==================== MYLA SCENE MANAGER (ปุ่มเพิ่ม GIF กลับมาแล้ว!) ====================
+    # ==================== 🎮 MYLA SCENE MANAGER (Admin Only) ====================
     with tab_myla:
         st.markdown("## 🎮 Myla Scene Manager (Admin Only)")
-        st.info("👇 แก้ลิงก์ Image + GIF แต่ละอารมณ์ได้เลย กด Save แต่ละอัน")
+        st.caption("วางลิงก์ Google Drive ปกติได้เลย ระบบจะแปลงเป็น lh3 ให้อัตโนมัติ 💖")
 
-        if 'myla_scenes' not in profile_data:
-            profile_data['myla_scenes'] = myla.MYLA_SCENES.copy()  # โหลดค่าเริ่มต้น
-            dm.save_profile(profile_data)
-            st.session_state.profile = profile_data.copy()
-
-        scenes = profile_data['myla_scenes']
-
-        
+        profile = dm.load_profile()
+        if 'myla_scenes' not in profile or not isinstance(profile['myla_scenes'], dict):
+            profile['myla_scenes'] = myla.MYLA_SCENES.copy()  # ใช้ค่าเริ่มต้นจาก myla_game_engine
 
         for emotion in ["happy", "blush", "bedtime_whisper", "excited", "shy", "kiss"]:
-            with st.expander(f"🎭 {emotion.upper()} Scene", expanded=True):
-                col1, col2 = st.columns(2)
-                with col1:
-                    new_img = st.text_input("🖼️ Image Link", 
-                                          value=scenes[emotion].get('image', ''), 
-                                          key=f"img_{emotion}")
-                with col2:
-                    new_gif = st.text_input("🎞️ GIF Link (เว้นว่างได้)", 
-                                          value=scenes[emotion].get('gif', ''), 
-                                          key=f"gif_{emotion}")
-                
+            st.subheader(f"😊 {emotion.upper()}")
+            
+            col_img, col_gif = st.columns([3, 2])
+            
+            with col_img:
+                new_image = st.text_input(
+                    "🖼️ Image Link (Google Drive ได้เลย)",
+                    value=profile['myla_scenes'].get(emotion, {}).get('image', ''),
+                    key=f"myla_img_{emotion}"
+                )
+            
+            with col_gif:
+                new_gif = st.text_input(
+                    "🎞️ GIF Link (Google Drive ได้เลย)",
+                    value=profile['myla_scenes'].get(emotion, {}).get('gif', ''),
+                    key=f"myla_gif_{emotion}"
+                )
+            
+            # แสดงตัวอย่าง (Preview) ทันที
+            converted_img = convert_drive_link(new_image)
+            converted_gif = convert_drive_link(new_gif)
+            
+            if converted_img:
+                st.image(converted_img, caption="ตัวอย่าง Image (จะใช้ตัวนี้จริง)", width=300)
+            if converted_gif:
+                st.image(converted_gif, caption="ตัวอย่าง GIF", width=300)
 
-                if st.button(f"💾 Save {emotion}", key=f"save_{emotion}", use_container_width=True):
-                    scenes[emotion] = {"image": new_img.strip(), "gif": new_gif.strip()}
-                    profile_data['myla_scenes'] = scenes
-                    dm.save_profile(profile_data)
-                    st.session_state.profile = profile_data.copy()
-                    st.success(f"✅ บันทึก {emotion} สำเร็จ! (GIF ใหม่พร้อมใช้)")
-                    st.rerun()
-        
+            if st.button(f"💾 บันทึก {emotion}", key=f"save_{emotion}", use_container_width=True):
+                profile['myla_scenes'][emotion] = {
+                    "image": converted_img,   # เก็บเป็น lh3 อัตโนมัติ
+                    "gif": converted_gif
+                }
+                dm.save_profile(profile)
+                st.session_state.profile = profile.copy()
+                st.success(f"✅ บันทึก {emotion} เรียบร้อย! (แปลงเป็น lh3 แล้ว)")
+                st.rerun()
 
-        st.caption("💡 เปลี่ยนลิงก์ Google Drive เป็น https://lh3.googleusercontent.com/d/xxxxxx")
+        st.info("✅ ตอนนี้พี่สามารถวางลิงก์ Drive ปกติได้เลย ไม่ต้องแปลงเองอีกต่อไป 💕")
 
 
 
