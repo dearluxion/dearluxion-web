@@ -2,23 +2,23 @@ import streamlit as st
 import json
 from datetime import datetime
 import data_manager as dm
-from utils import convert_drive_link
+from utils import _get_gspread_client, _get_crypto_memory_sheet_config, convert_drive_link
 
-# ==================== GOOGLE SHEETS (แก้ header อัตโนมัติ) ====================
+# ==================== GOOGLE SHEETS (แก้ไขเรียบร้อย) ====================
 def get_myla_sheet():
-    sheet_id = dm._get_crypto_memory_sheet_config()[0]
+    sheet_id, _ = _get_crypto_memory_sheet_config()   # เรียกจาก utils โดยตรง
     worksheet = "Myla_Game_Progress"
     return sheet_id, worksheet
 
 def save_player_progress(discord_id, affection, history, current_emotion, current_image):
-    client = dm._get_gspread_client()
+    client = _get_gspread_client()   # ← แก้ตรงนี้
     if not client: return
     sheet_id, ws_name = get_myla_sheet()
     try:
         ws = client.open_by_key(sheet_id).worksheet(ws_name)
     except:
         ws = client.open_by_key(sheet_id).add_worksheet(title=ws_name, rows=1000, cols=10)
-        ws.append_row(["timestamp", "discord_id", "affection", "history", "emotion", "image"])  # สร้าง header อัตโนมัติ
+        ws.append_row(["timestamp", "discord_id", "affection", "history", "emotion", "image"])
 
     row = [
         datetime.now().isoformat(),
@@ -31,7 +31,7 @@ def save_player_progress(discord_id, affection, history, current_emotion, curren
     ws.append_row(row)
 
 def load_player_progress(discord_id):
-    client = dm._get_gspread_client()
+    client = _get_gspread_client()   # ← แก้ตรงนี้
     if not client:
         return {'affection': 30, 'history': [], 'emotion': 'happy', 'image': ''}
     
