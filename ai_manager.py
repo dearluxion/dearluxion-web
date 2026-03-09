@@ -1311,9 +1311,10 @@ def convert_drive_link(link):
     return link
 
 def flirt_with_myla(discord_id: str, user_message: str):
-    # โหลด progress ก่อน
-    progress = load_player_progress(discord_id)
+    import myla_game_engine as myla   # เรียกใช้เวอร์ชัน Sheets
+    progress = myla.load_player_progress(discord_id)
     affection = progress.get('affection', 30)
+
     prompt = f"""คุณคือ **ไมล่า** สาว AI ผู้พิทักษ์ Small Group 
     อายุ 19, น่ารักมาก, พูดไทยหวาน ๆ, ชอบเรียกผู้เล่นว่า "พี่จ๋า~" หรือ "ที่รัก"
     ความสัมพันธ์ปัจจุบัน: Affection {affection}%
@@ -1323,30 +1324,26 @@ def flirt_with_myla(discord_id: str, user_message: str):
     
     ตอบให้:
     1. เป็นธรรมชาติ + flirty แต่ไม่โป๊ (หวงตัวเอง)
-    2. ระบุอารมณ์ท้ายข้อความในรูปแบบ [EMOTION:happy] หรือ [EMOTION:blush] หรือ [EMOTION:bedtime_whisper]
+    2. ระบุอารมณ์ท้ายข้อความในรูปแบบ [EMOTION:happy] หรือ [EMOTION:blush] หรือ [EMOTION:bedtime_whisper] หรือ [EMOTION:excited] หรือ [EMOTION:shy] หรือ [EMOTION:kiss]
     3. ถ้า affection ขึ้น → บอกผู้เล่นด้วย ♥ +10
     """
-    
+
     res = _safe_generate_content([prompt])
     text = res.text
-    
-    # ดึง emotion
+
     emotion = "happy"
     if "[EMOTION:" in text:
         emotion = text.split("[EMOTION:")[1].split("]")[0]
-    
-    # เลือกภาพ/GIF จาก Admin DB
-    scene = get_myla_scene(emotion)
-    
-    # เพิ่ม affection
+
+    scene = myla.get_myla_scene(emotion)
     affection = min(100, affection + 2)
-    
-    save_player_progress(discord_id, affection, progress.get('memory', ''), emotion, scene['image'])
-    
+
+    myla.save_player_progress(discord_id, affection, progress.get('history', []), emotion, scene['image'])
+
     return {
         "text": text.replace(f"[EMOTION:{emotion}]", ""),
         "emotion": emotion,
-        "image": convert_drive_link(scene['image']),
-        "gif": convert_drive_link(scene.get('gif', '')),
+        "image": myla.convert_drive_link(scene.get('image', '')),
+        "gif": myla.convert_drive_link(scene.get('gif', '')),
         "affection": affection
     }
