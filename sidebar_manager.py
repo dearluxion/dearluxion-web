@@ -13,6 +13,22 @@ def render_sidebar(ai_available):
 
     st.sidebar.title("🍸 เมนูหลัก")
 
+    # ==================== [NEW] ปุ่มคริปโตเด่นสุดด้านบน ====================
+    if st.session_state.get('show_crypto'):
+        st.sidebar.info("📈 กำลังอยู่ในห้องวิเคราะห์คริปโต (God Mode)")
+        if st.sidebar.button("🏠 กลับหน้าหลัก", key="back_from_crypto_top", use_container_width=True):
+            st.session_state['show_crypto'] = False
+            st.rerun()
+    else:
+        if st.sidebar.button("📈 วิเคราะห์คริปโตเจาะลึก (God Mode Beta)", 
+                           type="primary", 
+                           use_container_width=True):
+            st.session_state['show_crypto'] = True
+            st.session_state['show_code_zone'] = False
+            st.session_state['show_shop'] = False
+            st.rerun()
+    # ===================================================================
+
     with st.sidebar.expander("🧚‍♀️ ถาม-ตอบ กับไมล่า (Q&A)", expanded=True):
         st.markdown("### 💬 อยากรู้อะไรถามไมล่าได้เลย!")
         q_options = [
@@ -48,19 +64,10 @@ def render_sidebar(ai_available):
     if 'show_code_zone' not in st.session_state: st.session_state['show_code_zone'] = False
     if 'show_shop' not in st.session_state: st.session_state['show_shop'] = False
 
-    # --- FIX HERE: กำหนดค่าเริ่มต้นให้ selected_zone ---
-    selected_zone = "🏠 รวมทุกโซน"
-    # ---------------------------------------------
-
     if st.session_state.get('show_shop'):
         st.sidebar.info("🛒 กำลังดูร้านค้า")
         if st.sidebar.button("🏠 กลับหน้าหลัก"):
             st.session_state['show_shop'] = False
-            st.rerun()
-    elif st.session_state.get('show_crypto'):
-        st.sidebar.info("📈 กำลังอยู่ในห้องค้า (War Room)")
-        if st.sidebar.button("🏠 กลับหน้าหลัก", key="back_from_crypto"):
-            st.session_state['show_crypto'] = False
             st.rerun()
     elif st.session_state.get('show_code_zone'):
         st.sidebar.info("💻 กำลังดู Code Portfolio")
@@ -70,10 +77,7 @@ def render_sidebar(ai_available):
     else:
         selected_zone = st.sidebar.radio("หมวดหมู่:", ["🏠 รวมทุกโซน"] + sorted(list(all_hashtags)))
         
-        if st.sidebar.button("📈 วิเคราะตลาดcryptoเจาะลึก(Beta)", type="primary"):
-            st.session_state['show_crypto'] = True
-            st.rerun()
-        
+        # === ปุ่มคริปโตเก่าถูกลบออกไปแล้ว (ย้ายขึ้นด้านบน) ===
         if st.sidebar.button("💻 Code Showcase / Portfolio", help="แจกโค้ดฟรี + โดเนท"):
             st.session_state['show_code_zone'] = True
             st.session_state['show_crypto'] = False
@@ -85,7 +89,6 @@ def render_sidebar(ai_available):
     profile_data = dm.load_profile()
     st.sidebar.markdown("---")
     
-    # ... (ส่วนที่เหลือของโค้ดเหมือนเดิม) ...
     if st.session_state.get('is_admin'):
         st.sidebar.success(f"👑 Admin: {profile_data.get('name', 'Boss')}")
         if st.sidebar.button("Log out (Admin)"):
