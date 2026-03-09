@@ -5,17 +5,14 @@ import datetime
 import requests
 import re
 import data_manager as dm
-import ai_manager as ai  
+import ai_manager as ai
 from utils import get_discord_login_url, send_secret_to_discord
 
-def render_sidebar(ai_available): 
-    # --- เช็คสถานะ Login ---
+def render_sidebar(ai_available):
     is_logged_in = st.session_state.get('discord_user') or st.session_state.get('is_admin')
 
-    # --- Title ---
     st.sidebar.title("🍸 เมนูหลัก")
 
-    # --- Q&A Expander ---
     with st.sidebar.expander("🧚‍♀️ ถาม-ตอบ กับไมล่า (Q&A)", expanded=True):
         st.markdown("### 💬 อยากรู้อะไรถามไมล่าได้เลย!")
         q_options = [
@@ -30,7 +27,6 @@ def render_sidebar(ai_available):
         ]
         selected_q = st.selectbox("เลือกคำถาม:", q_options, label_visibility="collapsed")
         
-        # ... (โค้ดส่วน Q&A ยังคงอยู่เหมือนเดิม) ...
         if selected_q == "🤔 อยากโพสต์เรื่องราวบ้างต้องทำไง?":
             st.info("🧚‍♀️ **ไมล่า:** ไม่ได้น้า~ นี่เป็น **พื้นที่ส่วนตัวของบอส Dearluxion** เท่านั้นค่ะ! แต่พี่ๆ สามารถคอมเมนต์ หรือส่งข้อความลับมาคุยกับบอสได้นะคะ")
         elif selected_q != "เลือกคำถาม...":
@@ -38,7 +34,6 @@ def render_sidebar(ai_available):
 
     st.sidebar.markdown("---")
     
-    # --- Search & Filter ---
     search_query = st.sidebar.text_input("🔍 ค้นหา...", placeholder="พิมพ์คำค้นหา")
     posts = dm.load_data()
     all_hashtags = set()
@@ -49,12 +44,14 @@ def render_sidebar(ai_available):
 
     st.sidebar.markdown("### 📂 โซนของคุณ")
     
-    # --- Session State Management ---
     if 'show_crypto' not in st.session_state: st.session_state['show_crypto'] = False
     if 'show_code_zone' not in st.session_state: st.session_state['show_code_zone'] = False
     if 'show_shop' not in st.session_state: st.session_state['show_shop'] = False
 
-    # --- Page Navigation Logic ---
+    # --- FIX HERE: กำหนดค่าเริ่มต้นให้ selected_zone ---
+    selected_zone = "🏠 รวมทุกโซน"
+    # ---------------------------------------------
+
     if st.session_state.get('show_shop'):
         st.sidebar.info("🛒 กำลังดูร้านค้า")
         if st.sidebar.button("🏠 กลับหน้าหลัก"):
@@ -85,10 +82,10 @@ def render_sidebar(ai_available):
 
     st.sidebar.markdown("---")
     
-    # --- Login System ---
     profile_data = dm.load_profile()
     st.sidebar.markdown("---")
     
+    # ... (ส่วนที่เหลือของโค้ดเหมือนเดิม) ...
     if st.session_state.get('is_admin'):
         st.sidebar.success(f"👑 Admin: {profile_data.get('name', 'Boss')}")
         if st.sidebar.button("Log out (Admin)"):
