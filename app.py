@@ -196,6 +196,19 @@ if profile_data.get('billboard'):
         </div>
         """, unsafe_allow_html=True)
 
+# ==================== MYLA LOGIN POPUP (แสดงอัตโนมัติ + GIF) ====================
+if not st.session_state.get('discord_user') and not st.session_state.get('is_admin'):
+    myla_gif_url = profile_data.get('myla_login_gif', 
+        "https://media.giphy.com/media/3o7btPCcdNniyf0ArS/giphy.gif")
+    
+
+    st.markdown(f"""
+    <div class="myla-login-popup" onclick="window.open('{get_discord_login_url(st.secrets['discord_oauth']['client_id'], st.secrets['discord_oauth']['redirect_uri'])}', '_blank')">
+        <img src="{myla_gif_url}" alt="Myla">
+        <div class="myla-bubble">พี่จ๋า~ ล็อกอินก่อนสิคะ 💕<br><small>กดที่รูปเพื่อล็อกอิน Discord</small></div>
+    </div>
+    """, unsafe_allow_html=True)
+
 # --- 4. Admin Panel ---
 if st.session_state['is_admin']:
     tab_post, tab_profile, tab_inbox, tab_code, tab_myla = st.tabs(["📝 เขียน / ขายของ", "👤 แก้ไขโปรไฟล์", "📬 อ่านจดหมายลับ", "💻 ลงโค้ด", "🎮 Myla Scene Manager (Admin Only)"])
@@ -387,11 +400,11 @@ if st.session_state['is_admin']:
             value=profile_data.get('myla_login_gif', 'https://media.giphy.com/media/3o7btPCcdNniyf0ArS/giphy.gif'),
             help="ใส่ลิงก์ GIF ที่อยากให้เด้งเตือนตอนผู้ใช้ยังไม่ได้ล็อกอิน"
         )
-        if st.button("💾 บันทึกลิงก์ไมล่า"):
+        if st.button("💾 บันทึกลิงก์ GIF ไมล่า", type="primary", use_container_width=True):
             profile_data['myla_login_gif'] = myla_gif
             dm.save_profile(profile_data)
             st.session_state.profile = profile_data.copy()
-            st.success("✅ ตั้งค่า GIF ไมล่าเรียบร้อย!")
+            st.success("✅ บันทึก GIF Popup เรียบร้อย! (รีเฟรชหน้าเพื่อทดสอบ)")
             st.rerun()
 
         st.markdown("---")
@@ -478,6 +491,44 @@ if st.session_state['is_admin']:
                         st.rerun()
         else:
             st.info("ยังไม่มี Snippet ครับ")
+
+    # ==================== MYLA SCENE MANAGER (ปุ่มเพิ่ม GIF กลับมาแล้ว!) ====================
+    with tab_myla:
+        st.markdown("## 🎮 Myla Scene Manager (Admin Only)")
+        st.info("👇 แก้ลิงก์ Image + GIF แต่ละอารมณ์ได้เลย กด Save แต่ละอัน")
+
+        if 'myla_scenes' not in profile_data:
+            profile_data['myla_scenes'] = MYLA_SCENES.copy()  # โหลดค่าเริ่มต้น
+            dm.save_profile(profile_data)
+            st.session_state.profile = profile_data.copy()
+
+        scenes = profile_data['myla_scenes']
+
+        
+
+        for emotion in ["happy", "blush", "bedtime_whisper", "excited", "shy", "kiss"]:
+            with st.expander(f"🎭 {emotion.upper()} Scene", expanded=True):
+                col1, col2 = st.columns(2)
+                with col1:
+                    new_img = st.text_input("🖼️ Image Link", 
+                                          value=scenes[emotion].get('image', ''), 
+                                          key=f"img_{emotion}")
+                with col2:
+                    new_gif = st.text_input("🎞️ GIF Link (เว้นว่างได้)", 
+                                          value=scenes[emotion].get('gif', ''), 
+                                          key=f"gif_{emotion}")
+                
+
+                if st.button(f"💾 Save {emotion}", key=f"save_{emotion}", use_container_width=True):
+                    scenes[emotion] = {"image": new_img.strip(), "gif": new_gif.strip()}
+                    profile_data['myla_scenes'] = scenes
+                    dm.save_profile(profile_data)
+                    st.session_state.profile = profile_data.copy()
+                    st.success(f"✅ บันทึก {emotion} สำเร็จ! (GIF ใหม่พร้อมใช้)")
+                    st.rerun()
+        
+
+        st.caption("💡 เปลี่ยนลิงก์ Google Drive เป็น https://lh3.googleusercontent.com/d/xxxxxx")
 
 
 

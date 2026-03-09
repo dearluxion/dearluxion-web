@@ -62,4 +62,19 @@ MYLA_SCENES = {
 }
 
 def get_myla_scene(emotion):
-    return MYLA_SCENES.get(emotion, MYLA_SCENES["happy"])
+
+    """โหลดจากโปรไฟล์ก่อน (Admin แก้ได้) ถ้าไม่มีให้ใช้ค่าเริ่มต้น"""
+
+    try:
+
+        import data_manager as dm
+
+        profile = dm.load_profile()
+
+        dynamic_scenes = profile.get('myla_scenes', MYLA_SCENES)
+
+        return dynamic_scenes.get(emotion, MYLA_SCENES.get("happy", {"image": "", "gif": ""}))
+
+    except:
+
+        return MYLA_SCENES.get(emotion, MYLA_SCENES["happy"])
