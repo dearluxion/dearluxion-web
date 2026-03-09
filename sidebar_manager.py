@@ -1,19 +1,9 @@
-import streamlit as st
-import time
-import random
-import datetime
-import requests
-import re
-import data_manager as dm
-import ai_manager as ai
-from utils import get_discord_login_url, send_secret_to_discord
-
 def render_sidebar(ai_available, posts=None):
     is_logged_in = st.session_state.get('discord_user') or st.session_state.get('is_admin')
 
     st.sidebar.title("🍸 เมนูหลัก")
 
-    # ==================== [NEW] ปุ่มคริปโตเด่นสุดด้านบน ====================
+    # ==================== ปุ่มคริปโต ====================
     if st.session_state.get('show_crypto'):
         st.sidebar.info("📈 กำลังอยู่ในห้องวิเคราะห์คริปโต (God Mode)")
         if st.sidebar.button("🏠 กลับหน้าหลัก", key="back_from_crypto_top", use_container_width=True):
@@ -27,19 +17,14 @@ def render_sidebar(ai_available, posts=None):
             st.session_state['show_code_zone'] = False
             st.session_state['show_shop'] = False
             st.rerun()
-    # ===================================================================
 
+    # ==================== Q&A กับไมล่า ====================
     with st.sidebar.expander("🧚‍♀️ ถาม-ตอบ กับไมล่า (Q&A)", expanded=True):
         st.markdown("### 💬 อยากรู้อะไรถามไมล่าได้เลย!")
         q_options = [
-            "เลือกคำถาม...",
-            "🤔 อยากโพสต์เรื่องราวบ้างต้องทำไง?",
-            "🛍️ สนใจสินค้า ซื้อยังไง?",
-            "💻 เว็บนี้ใครสร้างครับ?",
-            "🧚‍♀️ ไมล่าคือใครคะ?",
-            "📞 ติดต่อบอส Dearluxion ได้ที่ไหน?",
-            "🤖 บอสใช้ AI ตัวไหนทำงาน?",
-            "🍕 บอสชอบกินอะไรที่สุด?"
+            "เลือกคำถาม...", "🤔 อยากโพสต์เรื่องราวบ้างต้องทำไง?", "🛍️ สนใจสินค้า ซื้อยังไง?",
+            "💻 เว็บนี้ใครสร้างครับ?", "🧚‍♀️ ไมล่าคือใครคะ?", "📞 ติดต่อบอส Dearluxion ได้ที่ไหน?",
+            "🤖 บอสใช้ AI ตัวไหนทำงาน?", "🍕 บอสชอบกินอะไรที่สุด?"
         ]
         selected_q = st.selectbox("เลือกคำถาม:", q_options, label_visibility="collapsed")
         
@@ -51,6 +36,7 @@ def render_sidebar(ai_available, posts=None):
     st.sidebar.markdown("---")
     
     search_query = st.sidebar.text_input("🔍 ค้นหา...", placeholder="พิมพ์คำค้นหา")
+    
     if posts is None:
         posts = dm.load_data()
     all_hashtags = set()
@@ -65,6 +51,9 @@ def render_sidebar(ai_available, posts=None):
     if 'show_code_zone' not in st.session_state: st.session_state['show_code_zone'] = False
     if 'show_shop' not in st.session_state: st.session_state['show_shop'] = False
 
+    # === แก้ปัญหา UnboundLocalError โดยกำหนดค่าเริ่มต้นก่อน ===
+    selected_zone = "🏠 รวมทุกโซน"   # ← ค่าเริ่มต้น (สำคัญ!)
+
     if st.session_state.get('show_shop'):
         st.sidebar.info("🛒 กำลังดูร้านค้า")
         if st.sidebar.button("🏠 กลับหน้าหลัก"):
@@ -78,7 +67,6 @@ def render_sidebar(ai_available, posts=None):
     else:
         selected_zone = st.sidebar.radio("หมวดหมู่:", ["🏠 รวมทุกโซน"] + sorted(list(all_hashtags)))
         
-        # === ปุ่มคริปโตเก่าถูกลบออกไปแล้ว (ย้ายขึ้นด้านบน) ===
         if st.sidebar.button("💻 Code Showcase / Portfolio", help="แจกโค้ดฟรี + โดเนท"):
             st.session_state['show_code_zone'] = True
             st.session_state['show_crypto'] = False
@@ -87,7 +75,8 @@ def render_sidebar(ai_available, posts=None):
 
     st.sidebar.markdown("---")
     
-    profile_data = dm.load_profile()
+    # โปรไฟล์ (ใช้ cache ถ้ามี)
+    profile_data = st.session_state.get('profile', dm.load_profile())
     st.sidebar.markdown("---")
     
     if st.session_state.get('is_admin'):
