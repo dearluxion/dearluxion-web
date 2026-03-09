@@ -1424,7 +1424,7 @@ elif st.session_state.get('show_code_zone', False):
     
     filtered = []  # รีเซต filtered สำหรับโหมด Code Zone
 
-# ==================== MYLA FULL GAME (เวอร์ชันแก้ไขล่าสุด) ====================
+# ==================== MYLA FULL GAME (สมบูรณ์แบบสุดท้าย) ====================
 elif st.session_state.get('show_myla_game', False):
     st.markdown("## 🎮 Myla Flirting Game - Full Edition 💕")
     st.caption("จีบไมล่าแบบสมบูรณ์แบบ | Affection + Gift + Date Event + ภาพเปลี่ยนตามอารมณ์")
@@ -1436,27 +1436,22 @@ elif st.session_state.get('show_myla_game', False):
             st.rerun()
     else:
         user_id = st.session_state['discord_user']['id']
-        progress = myla.load_player_progress(user_id)   # ← สำคัญ! ต้องมี myla.
-
+        progress = myla.load_player_progress(user_id)   # ← แก้แล้ว!
         
-        # Affection Bar
         aff = progress['affection']
         st.progress(aff / 100)
         st.markdown(f"**❤️ Affection Level: {aff:.1f}%** {'❤️' * int(aff//20)}")
 
-        # ภาพไมล่า (เปลี่ยนตามอารมณ์)
         scene = myla.get_myla_scene(progress['emotion'])
         if scene.get('image'):
             st.image(myla.convert_drive_link(scene['image']), use_column_width=True)
         if scene.get('gif'):
-            st.image(myla.convert_drive_link(scene['gif']), use_column_width=True)
+            st.image(myla.convert_drive_link(scene.get('gif', '')), use_column_width=True)
 
-        # แสดงแชทล่าสุด
         for msg in progress['history'][-8:]:
             with st.chat_message(msg['role']):
                 st.write(msg['content'])
 
-        # ช่องพิมพ์จีบ
         if prompt := st.chat_input("พิมพ์คำหวานจีบไมล่า... 💌"):
             with st.chat_message("user"):
                 st.write(prompt)
@@ -1470,16 +1465,13 @@ elif st.session_state.get('show_myla_game', False):
                 elif result.get('image'):
                     st.image(result['image'])
             
-            # บันทึก
             new_history = progress['history'] + [
                 {"role": "user", "content": prompt},
                 {"role": "assistant", "content": result['text']}
             ]
             myla.save_player_progress(user_id, result['affection'], new_history, result['emotion'], result['image'])
-            
             st.rerun()
 
-        # ปุ่มพิเศษ
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🎁 ส่งของขวัญให้ไมล่า", use_container_width=True):
