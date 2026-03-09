@@ -498,7 +498,7 @@ if st.session_state['is_admin']:
         st.info("👇 แก้ลิงก์ Image + GIF แต่ละอารมณ์ได้เลย กด Save แต่ละอัน")
 
         if 'myla_scenes' not in profile_data:
-            profile_data['myla_scenes'] = MYLA_SCENES.copy()  # โหลดค่าเริ่มต้น
+            profile_data['myla_scenes'] = myla.MYLA_SCENES.copy()  # โหลดค่าเริ่มต้น
             dm.save_profile(profile_data)
             st.session_state.profile = profile_data.copy()
 
