@@ -113,4 +113,50 @@ def get_css():
 
         a { color: #A370F7 !important; text-decoration: none; font-weight: 600; }
     </style>
+    
+    <!-- เพิ่มส่วนนี้ -->
+    <style>
+    .myla-login-popup {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        z-index: 99999;
+        animation: float 3s ease-in-out infinite;
+        cursor: pointer;
+        transition: transform 0.3s;
+    }
+    .myla-login-popup:hover {
+        transform: scale(1.15);
+    }
+    .myla-login-popup img {
+        width: 160px;
+        filter: drop-shadow(0 0 15px #ff9aee);
+        border-radius: 50%;
+    }
+    .myla-bubble {
+        position: absolute;
+        top: -65px;
+        right: 20px;
+        background: linear-gradient(135deg, #ff9aee, #a370f7);
+        color: white;
+        padding: 12px 18px;
+        border-radius: 20px;
+        font-size: 14px;
+        white-space: nowrap;
+        box-shadow: 0 4px 15px rgba(163, 112, 247, 0.4);
+        pointer-events: none;
+    }
+    .myla-bubble::after {
+        content: '';
+        position: absolute;
+        bottom: -8px;
+        right: 30px;
+        border: 8px solid transparent;
+        border-top-color: #a370f7;
+    }
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+    }
+    </style>
     """

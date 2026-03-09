@@ -23,6 +23,7 @@ from utils import (
     build_crypto_memory_context,
     fetch_crypto_analysis_rows,
     fetch_crypto_memory_rows,
+    get_discord_login_url,
 )
 import myla_game_engine as myla   # ← เพิ่มบรรทัดนี้
 import data_manager as dm
@@ -380,6 +381,20 @@ if st.session_state['is_admin']:
             time.sleep(1); st.rerun()
 
         st.markdown("---")
+        st.markdown("### 🧚‍♀️ ตั้งค่าไมล่า Login Popup")
+        myla_gif = st.text_input(
+            "ลิงก์ GIF ไมล่า (Google Drive หรือเว็บ)",
+            value=profile_data.get('myla_login_gif', 'https://media.giphy.com/media/3o7btPCcdNniyf0ArS/giphy.gif'),
+            help="ใส่ลิงก์ GIF ที่อยากให้เด้งเตือนตอนผู้ใช้ยังไม่ได้ล็อกอิน"
+        )
+        if st.button("💾 บันทึกลิงก์ไมล่า"):
+            profile_data['myla_login_gif'] = myla_gif
+            dm.save_profile(profile_data)
+            st.session_state.profile = profile_data.copy()
+            st.success("✅ ตั้งค่า GIF ไมล่าเรียบร้อย!")
+            st.rerun()
+
+        st.markdown("---")
         with st.form("pf_form"):
             p_name = st.text_input("ชื่อ", value=profile_data.get('name', 'Dearluxion'))
             p_emoji = st.text_input("อิโมจิประจำตัว", value=profile_data.get('emoji', '😎'))
@@ -465,6 +480,28 @@ if st.session_state['is_admin']:
             st.info("ยังไม่มี Snippet ครับ")
 
 
+
+# ==================== MYLA LOGIN POPUP (น่ารักมาก) ====================
+if not st.session_state.get('discord_user') and not st.session_state.get('is_admin'):
+    myla_gif_url = profile_data.get('myla_login_gif', 
+        "https://media.giphy.com/media/3o7btPCcdNniyf0ArS/giphy.gif")  # GIF สำรอง
+    
+    login_link = get_discord_login_url(
+        st.secrets["discord_oauth"]["client_id"],
+        st.secrets["discord_oauth"]["redirect_uri"]
+    )
+    
+    st.markdown(f"""
+    <a href="{login_link}" target="_blank" style="text-decoration:none;">
+        <div class="myla-login-popup" title="คลิกเพื่อล็อกอินกับไมล่า~ 💕">
+            <img src="{convert_drive_link(myla_gif_url)}" alt="Myla">
+            <div class="myla-bubble">
+                🧚‍♀️ พี่จ๋า~ ล็อกอินก่อนนะคะ<br>
+                ไมล่าจะได้ดูแลพี่แบบเต็มที่เลย 💖
+            </div>
+        </div>
+    </a>
+    """, unsafe_allow_html=True)
 
 # --- 5. Feed Display ---
 
@@ -1425,18 +1462,21 @@ elif st.session_state.get('show_code_zone', False):
     filtered = []  # รีเซต filtered สำหรับโหมด Code Zone
 
 # ==================== MYLA FULL GAME (สมบูรณ์แบบสุดท้าย) ====================
+# ==================== MYLA FULL GAME (มีปุ่มกลับชัดเจน) ====================
 elif st.session_state.get('show_myla_game', False):
     st.markdown("## 🎮 Myla Flirting Game - Full Edition 💕")
     st.caption("จีบไมล่าแบบสมบูรณ์แบบ | Affection + Gift + Date Event + ภาพเปลี่ยนตามอารมณ์")
+    
+    # ปุ่มกลับด้านบน (เห็นชัดที่สุด)
+    if st.button("🏠 กลับหน้าหลัก", type="primary", use_container_width=True):
+        st.session_state['show_myla_game'] = False
+        st.rerun()
 
     if not st.session_state.get('discord_user'):
         st.warning("กรุณา Login Discord ก่อนจีบไมล่านะพี่จ๋า~")
-        if st.button("🏠 กลับหน้าหลัก"):
-            st.session_state['show_myla_game'] = False
-            st.rerun()
     else:
         user_id = st.session_state['discord_user']['id']
-        progress = myla.load_player_progress(user_id)   # ← แก้แล้ว!
+        progress = myla.load_player_progress(user_id)
         
         aff = progress['affection']
         st.progress(aff / 100)
@@ -1472,6 +1512,7 @@ elif st.session_state.get('show_myla_game', False):
             myla.save_player_progress(user_id, result['affection'], new_history, result['emotion'], result['image'])
             st.rerun()
 
+        # ปุ่มพิเศษ
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🎁 ส่งของขวัญให้ไมล่า", use_container_width=True):
@@ -1484,7 +1525,8 @@ elif st.session_state.get('show_myla_game', False):
                 st.success("เย้~ ไมล่ายอมเดทกับพี่แล้ว! 💕")
                 st.rerun()
 
-        if st.button("🏠 กลับหน้าหลัก"):
+        # ปุ่มกลับด้านล่าง (กันพลาด)
+        if st.button("🏠 กลับหน้าหลัก", type="primary", use_container_width=True):
             st.session_state['show_myla_game'] = False
             st.rerun()
 
