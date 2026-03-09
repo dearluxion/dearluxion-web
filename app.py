@@ -196,7 +196,7 @@ if profile_data.get('billboard'):
 
 # --- 4. Admin Panel ---
 if st.session_state['is_admin']:
-    tab_post, tab_profile, tab_inbox, tab_code = st.tabs(["📝 เขียน / ขายของ", "👤 แก้ไขโปรไฟล์", "📬 อ่านจดหมายลับ", "💻 ลงโค้ด"])
+    tab_post, tab_profile, tab_inbox, tab_code, tab_myla = st.tabs(["📝 เขียน / ขายของ", "👤 แก้ไขโปรไฟล์", "📬 อ่านจดหมายลับ", "💻 ลงโค้ด", "🎮 Myla Scene Manager (Admin Only)"])
     
     with tab_post:
         st.info("ℹ️ **แจ้งเตือนจาก Eri:** ระบบอัปโหลดไฟล์ถูกปิดแล้วนะ ใช้ลิงก์ Google Drive หรือลิงก์เว็บแทนนะ เว็บจะได้ไม่หน่วง")
@@ -462,6 +462,72 @@ if st.session_state['is_admin']:
                         st.rerun()
         else:
             st.info("ยังไม่มี Snippet ครับ")
+
+    with tab_myla:
+        st.markdown("## 🎮 Myla Flirting Game - Full Edition 💕")
+        st.caption("จีบไมล่าแบบเต็มระบบ | Affection + Gift + Date Event")
+
+        if not st.session_state.get('discord_user'):
+            st.warning("กรุณา Login Discord ก่อนจีบไมล่านะพี่จ๋า~")
+        else:
+            user_id = st.session_state['discord_user']['id']
+            progress = load_player_progress(user_id)
+            
+            # Affection Bar
+            aff = progress['affection']
+            st.progress(aff / 100)
+            st.markdown(f"**❤️ Affection Level: {aff:.1f}%**")
+            
+            # ภาพไมล่า
+            scene = get_myla_scene(progress['emotion'])
+            if scene['image']:
+                st.image(convert_drive_link(scene['image']), use_column_width=True)
+            
+            # Chat History
+            for msg in progress['history'][-10:]:
+                with st.chat_message(msg['role']):
+                    st.write(msg['content'])
+            
+            # Chat Input
+            if prompt := st.chat_input("พิมพ์ข้อความจีบไมล่า..."):
+                with st.chat_message("user"):
+                    st.write(prompt)
+                
+                # เรียก AI จีบ
+                result = ai.flirt_with_myla(str(user_id), prompt)
+                
+                with st.chat_message("assistant"):
+                    st.write(result['text'])
+                    if result['gif']:
+                        st.image(convert_drive_link(result['gif']))
+                    elif result['image']:
+                        st.image(convert_drive_link(result['image']))
+                
+                # บันทึก
+                new_history = progress['history'] + [
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": result['text']}
+                ]
+                save_player_progress(
+                    user_id, 
+                    result['affection'], 
+                    new_history, 
+                    result['emotion'], 
+                    result['image']
+                )
+                
+                # Gift Button
+                col_gift, col_date = st.columns(2)
+                with col_gift:
+                    if st.button("🎁 ส่งของขวัญให้ไมล่า"):
+                        st.success("ไมล่าดีใจมากเลยค่ะพี่จ๋า~ +15 Affection ❤️")
+                        save_player_progress(user_id, min(100, aff + 15), new_history, result['emotion'], result['image'])
+                        st.rerun()
+                
+                with col_date:
+                    if st.button("🌹 ชวนไมล่าเดท"):
+                        st.balloons()
+                        st.success("เย้~ ไมล่ายอมเดทกับพี่แล้ว! 💕")
 
 # --- 5. Feed Display ---
 

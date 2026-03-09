@@ -60,6 +60,7 @@ def render_sidebar(ai_available, posts=None):
     if 'show_crypto' not in st.session_state: st.session_state['show_crypto'] = False
     if 'show_code_zone' not in st.session_state: st.session_state['show_code_zone'] = False
     if 'show_shop' not in st.session_state: st.session_state['show_shop'] = False
+    if 'show_myla_game' not in st.session_state: st.session_state['show_myla_game'] = False
 
     selected_zone = "🏠 รวมทุกโซน"   # ← ค่าเริ่มต้นป้องกัน UnboundLocalError
 
@@ -80,6 +81,10 @@ def render_sidebar(ai_available, posts=None):
             st.session_state['show_code_zone'] = True
             st.session_state['show_crypto'] = False
             st.session_state['show_shop'] = False
+            st.rerun()
+
+        if st.sidebar.button("🎮 จีบไมล่า (Full Game)"):
+            st.session_state['show_myla_game'] = True
             st.rerun()
 
     st.sidebar.markdown("---")
