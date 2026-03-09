@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import os
 import datetime
 import re
@@ -29,7 +29,6 @@ import data_manager as dm
 import sidebar_manager as sm
 import ai_manager as ai
 import prediction_engine as pe
-import myla_game_engine as myla
 try:
     import crypto_engine as ce
     crypto_available = True
@@ -465,71 +464,7 @@ if st.session_state['is_admin']:
         else:
             st.info("ยังไม่มี Snippet ครับ")
 
-    with tab_myla:
-        st.markdown("## 🎮 Myla Flirting Game - Full Edition 💕")
-        st.caption("จีบไมล่าแบบเต็มระบบ | Affection + Gift + Date Event")
 
-        if not st.session_state.get('discord_user'):
-            st.warning("กรุณา Login Discord ก่อนจีบไมล่านะพี่จ๋า~")
-        else:
-            user_id = st.session_state['discord_user']['id']
-            progress = load_player_progress(user_id)
-            
-            # Affection Bar
-            aff = progress['affection']
-            st.progress(aff / 100)
-            st.markdown(f"**❤️ Affection Level: {aff:.1f}%**")
-            
-            # ภาพไมล่า
-            scene = get_myla_scene(progress['emotion'])
-            if scene['image']:
-                st.image(convert_drive_link(scene['image']), use_column_width=True)
-            
-            # Chat History
-            for msg in progress['history'][-10:]:
-                with st.chat_message(msg['role']):
-                    st.write(msg['content'])
-            
-            # Chat Input
-            if prompt := st.chat_input("พิมพ์ข้อความจีบไมล่า..."):
-                with st.chat_message("user"):
-                    st.write(prompt)
-                
-                # เรียก AI จีบ
-                result = ai.flirt_with_myla(str(user_id), prompt)
-                
-                with st.chat_message("assistant"):
-                    st.write(result['text'])
-                    if result['gif']:
-                        st.image(convert_drive_link(result['gif']))
-                    elif result['image']:
-                        st.image(convert_drive_link(result['image']))
-                
-                # บันทึก
-                new_history = progress['history'] + [
-                    {"role": "user", "content": prompt},
-                    {"role": "assistant", "content": result['text']}
-                ]
-                save_player_progress(
-                    user_id, 
-                    result['affection'], 
-                    new_history, 
-                    result['emotion'], 
-                    result['image']
-                )
-                
-                # Gift Button
-                col_gift, col_date = st.columns(2)
-                with col_gift:
-                    if st.button("🎁 ส่งของขวัญให้ไมล่า"):
-                        st.success("ไมล่าดีใจมากเลยค่ะพี่จ๋า~ +15 Affection ❤️")
-                        save_player_progress(user_id, min(100, aff + 15), new_history, result['emotion'], result['image'])
-                        st.rerun()
-                
-                with col_date:
-                    if st.button("🌹 ชวนไมล่าเดท"):
-                        st.balloons()
-                        st.success("เย้~ ไมล่ายอมเดทกับพี่แล้ว! 💕")
 
 # --- 5. Feed Display ---
 
@@ -1489,7 +1424,7 @@ elif st.session_state.get('show_code_zone', False):
     
     filtered = []  # รีเซต filtered สำหรับโหมด Code Zone
 
-# ==================== MYLA FULL GAME ====================
+# ==================== MYLA FULL GAME (เวอร์ชันแก้ไขล่าสุด) ====================
 elif st.session_state.get('show_myla_game', False):
     st.markdown("## 🎮 Myla Flirting Game - Full Edition 💕")
     st.caption("จีบไมล่าแบบสมบูรณ์แบบ | Affection + Gift + Date Event + ภาพเปลี่ยนตามอารมณ์")
@@ -1501,9 +1436,10 @@ elif st.session_state.get('show_myla_game', False):
             st.rerun()
     else:
         user_id = st.session_state['discord_user']['id']
-        progress = myla.load_player_progress(user_id)   # ใช้ myla. แทน
+        progress = myla.load_player_progress(user_id)   # ← สำคัญ! ต้องมี myla.
+
         
-        # Affection Bar สวย ๆ
+        # Affection Bar
         aff = progress['affection']
         st.progress(aff / 100)
         st.markdown(f"**❤️ Affection Level: {aff:.1f}%** {'❤️' * int(aff//20)}")
@@ -1525,8 +1461,7 @@ elif st.session_state.get('show_myla_game', False):
             with st.chat_message("user"):
                 st.write(prompt)
             
-            # เรียก AI จีบ (เวอร์ชันใหม่)
-            result = ai.flirt_with_myla(str(user_id), prompt)   # ยังใช้ ai. แต่เราจะแก้ในขั้นตอนที่ 2
+            result = ai.flirt_with_myla(str(user_id), prompt)
             
             with st.chat_message("assistant"):
                 st.write(result['text'])
@@ -1535,7 +1470,7 @@ elif st.session_state.get('show_myla_game', False):
                 elif result.get('image'):
                     st.image(result['image'])
             
-            # บันทึกอัตโนมัติ
+            # บันทึก
             new_history = progress['history'] + [
                 {"role": "user", "content": prompt},
                 {"role": "assistant", "content": result['text']}
@@ -1554,7 +1489,7 @@ elif st.session_state.get('show_myla_game', False):
                 st.rerun()
         with col2:
             if st.button("🌹 ชวนเดท", use_container_width=True):
-                st.success("เย้~ ไมล่ายอมเดทกับพี่แล้ว! 💕 วันนี้เราจะคุยกันทั้งคืนเลยนะคะ~")
+                st.success("เย้~ ไมล่ายอมเดทกับพี่แล้ว! 💕")
                 st.rerun()
 
         if st.button("🏠 กลับหน้าหลัก"):
