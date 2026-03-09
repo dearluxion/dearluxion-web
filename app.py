@@ -294,8 +294,7 @@ if st.session_state['is_admin']:
                             new_desc,
                             main_img_url,
                             main_yt_url,
-                            num_bots=num_bots_ui,
-                            media_url=(final_vid_links[0] if (not main_img_url and final_vid_links) else None),
+                            num_bots=num_bots_ui
                         )
                     else:
                         ai_engagements = []
@@ -307,7 +306,7 @@ if st.session_state['is_admin']:
                         "user": engagement.get('user', 'Anonymous'),
                         "text": engagement.get('text', '...'),
                         "is_admin": False,
-                        "image": None
+                        "image": engagement.get('image')
                     })
                     
                     # กด Reaction (ถ้า AI เลือกกด)
