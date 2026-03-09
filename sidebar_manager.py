@@ -1,3 +1,13 @@
+import streamlit as st
+import time
+import random
+import datetime
+import requests
+import re
+import data_manager as dm
+import ai_manager as ai
+from utils import get_discord_login_url, send_secret_to_discord
+
 def render_sidebar(ai_available, posts=None):
     is_logged_in = st.session_state.get('discord_user') or st.session_state.get('is_admin')
 
@@ -51,8 +61,7 @@ def render_sidebar(ai_available, posts=None):
     if 'show_code_zone' not in st.session_state: st.session_state['show_code_zone'] = False
     if 'show_shop' not in st.session_state: st.session_state['show_shop'] = False
 
-    # === แก้ปัญหา UnboundLocalError โดยกำหนดค่าเริ่มต้นก่อน ===
-    selected_zone = "🏠 รวมทุกโซน"   # ← ค่าเริ่มต้น (สำคัญ!)
+    selected_zone = "🏠 รวมทุกโซน"   # ← ค่าเริ่มต้นป้องกัน UnboundLocalError
 
     if st.session_state.get('show_shop'):
         st.sidebar.info("🛒 กำลังดูร้านค้า")
@@ -75,7 +84,6 @@ def render_sidebar(ai_available, posts=None):
 
     st.sidebar.markdown("---")
     
-    # โปรไฟล์ (ใช้ cache ถ้ามี)
     profile_data = st.session_state.get('profile', dm.load_profile())
     st.sidebar.markdown("---")
     
