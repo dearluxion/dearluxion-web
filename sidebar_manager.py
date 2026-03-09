@@ -8,7 +8,7 @@ import data_manager as dm
 import ai_manager as ai
 from utils import get_discord_login_url, send_secret_to_discord
 
-def render_sidebar(ai_available):
+def render_sidebar(ai_available, posts=None):
     is_logged_in = st.session_state.get('discord_user') or st.session_state.get('is_admin')
 
     st.sidebar.title("🍸 เมนูหลัก")
@@ -51,7 +51,8 @@ def render_sidebar(ai_available):
     st.sidebar.markdown("---")
     
     search_query = st.sidebar.text_input("🔍 ค้นหา...", placeholder="พิมพ์คำค้นหา")
-    posts = dm.load_data()
+    if posts is None:
+        posts = dm.load_data()
     all_hashtags = set()
     if posts:
         for p in posts:

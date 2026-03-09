@@ -85,6 +85,19 @@ if 'realtime_all_request' not in st.session_state: st.session_state['realtime_al
 if 'realtime_all_result' not in st.session_state: st.session_state['realtime_all_result'] = None
 if 'realtime_all_summary' not in st.session_state: st.session_state['realtime_all_summary'] = None
 
+# === PERFORMANCE BOOST: Session State Cache (โหลดครั้งเดียว) ===
+if 'posts' not in st.session_state:
+    st.session_state.posts = dm.load_data()
+
+if 'profile' not in st.session_state:
+    st.session_state.profile = dm.load_profile()
+
+if 'snippets' not in st.session_state:
+    st.session_state.snippets = dm.load_snippets()
+
+if 'mailbox' not in st.session_state:
+    st.session_state.mailbox = dm.load_mailbox()
+
 filtered = []  # ประกาศตัวแปร global ดักไว้เลย กันพลาด
 
 # --- Login Discord Logic (Auto Admin Check) ---
@@ -129,10 +142,10 @@ if now - st.session_state['last_bar_regen'] >= 3600:
 
 # --- 2. Render Sidebar ---
 # ไม่ต้องส่ง model แล้ว ส่งแค่สถานะว่าพร้อมไหม
-search_query, selected_zone = sm.render_sidebar(ai_available) 
+search_query, selected_zone = sm.render_sidebar(ai_available, posts=st.session_state.posts) 
 
 # --- 3. Header & Profile ---
-profile_data = dm.load_profile()
+profile_data = st.session_state.profile
 user_emoji = profile_data.get('emoji', '😎') 
 user_status = profile_data.get('status', 'ยินดีต้อนรับสู่โลกของdearluxion ✨')
 
@@ -310,9 +323,10 @@ if st.session_state['is_admin']:
                             new_post['likes'] += 1
 
                 # --- 5. บันทึกลง Database ---
-                current = dm.load_data()
+                current = st.session_state.posts.copy()
                 current.append(new_post)
                 dm.save_data(current)
+                st.session_state.posts = current  # อัปเดต Cache
                 
                 # [NEW] Logic การส่ง Webhook ตาม Checkbox
                 if send_webhook:
@@ -338,12 +352,14 @@ if st.session_state['is_admin']:
             if st.button("บันทึกป้ายไฟ"):
                 profile_data['billboard'] = {'text': bb_text, 'timestamp': datetime.datetime.now().strftime("%d/%m/%Y %H:%M")}
                 dm.save_profile(profile_data)
+                st.session_state.profile = profile_data.copy()  # อัปเดต Cache
                 st.success("อัปเดตป้ายไฟแล้ว!")
                 st.rerun()
         with c_bb2:
             if st.button("ลบป้ายไฟ", type="primary"):
                 profile_data['billboard'] = {'text': '', 'timestamp': ''}
                 dm.save_profile(profile_data)
+                st.session_state.profile = profile_data.copy()  # อัปเดต Cache
                 st.rerun()
         
         st.markdown("---")
@@ -358,7 +374,8 @@ if st.session_state['is_admin']:
             profile_data['settings']['enable_bar'] = enable_bar
             profile_data['settings']['enable_ariel'] = enable_ariel
             profile_data['settings']['enable_battle'] = enable_battle
-            dm.save_profile(profile_data) 
+            dm.save_profile(profile_data)
+            st.session_state.profile = profile_data.copy()  # อัปเดต Cache 
             st.success("บันทึกการตั้งค่าแล้ว!")
             time.sleep(1); st.rerun()
 
@@ -374,12 +391,13 @@ if st.session_state['is_admin']:
             if st.form_submit_button("บันทึกข้อมูลส่วนตัว"):
                 profile_data.update({"name": p_name, "emoji": p_emoji, "status": p_status, "bio": p_bio, "discord": p_discord, "ig": p_ig, "extras": p_ex})
                 dm.save_profile(profile_data)
+                st.session_state.profile = profile_data.copy()  # อัปเดต Cache
                 st.success("อัปเดตแล้ว!")
                 st.rerun()
 
         st.markdown("---")
         if st.button("⚠️ กดเพื่อส่งทุกโพสต์ (ตั้งแต่แรก) ไป Discord"):
-            all_posts = dm.load_data()
+            all_posts = st.session_state.posts.copy()
             my_bar = st.progress(0)
             status_text = st.empty()
             total = len(all_posts)
@@ -392,10 +410,11 @@ if st.session_state['is_admin']:
             
     with tab_inbox:
         st.markdown("### 💌 จดหมายลับจากแฟนคลับ")
-        msgs = dm.load_mailbox()
+        msgs = st.session_state.mailbox
         if msgs:
             if st.button("ลบจดหมายทั้งหมด"):
                 if os.path.exists(dm.MAILBOX_FILE): os.remove(dm.MAILBOX_FILE)
+                st.session_state.mailbox = []  # อัปเดต Cache
                 st.rerun()
             for m in reversed(msgs):
                 st.info(f"📅 **{m['date']}**: {m['text']}")
@@ -430,15 +449,17 @@ if st.session_state['is_admin']:
                     st.error("ใส่ชื่อกับโค้ดก่อนสิครับบอส!")
         st.markdown("---")
         st.markdown("### 🗑️ ลบ Snippet")
-        snippets = dm.load_snippets()
+        snippets = st.session_state.snippets
         if snippets:
             for idx, s in enumerate(snippets):
                 c1, c2 = st.columns([4, 1])
                 with c1: st.markdown(f"**{idx+1}. {s['title']}** ({s['lang']})")
                 with c2:
                     if st.button("ลบ", key=f"del_snip_{idx}"):
+                        snippets = st.session_state.snippets.copy()
                         snippets.pop(idx)
                         dm.save_snippets(snippets)
+                        st.session_state.snippets = snippets  # อัปเดต Cache
                         st.rerun()
         else:
             st.info("ยังไม่มี Snippet ครับ")
@@ -1411,11 +1432,11 @@ elif st.session_state['show_shop']:
                 st.session_state['show_shop'] = False
                 st.balloons(); time.sleep(1); st.rerun()
         with c2: st.info("👈 กดปุ่มนี้ ไมล่าจะพาพี่กลับหน้าหลักเองค่ะ!")
-    posts = dm.load_data()
+    posts = st.session_state.posts
     filtered = [p for p in posts if p.get('price', 0) > 0 or "#ร้านค้า" in p['content']]
     if not filtered: st.warning("ยังไม่มีสินค้าวางขายจ้า")
 else:
-    posts = dm.load_data()
+    posts = st.session_state.posts
     filtered = posts
 
 if filtered:
@@ -1444,8 +1465,9 @@ if filtered:
             with col_del:
                 if st.session_state['is_admin']:
                     if st.button("🗑️", key=f"del_{post['id']}"):
-                        all_p = dm.load_data()
+                        all_p = st.session_state.posts.copy()
                         dm.save_data([x for x in all_p if x['id'] != post['id']])
+                        st.session_state.posts = [x for x in all_p if x['id'] != post['id']]  # อัปเดต Cache
                         st.rerun()
 
             if post.get('images'):
@@ -1487,7 +1509,7 @@ if filtered:
                 with rx_cols[i]:
                     count = post['reactions'].get(emo, 0)
                     if st.button(f"{emo} {count}", key=f"react_{post['id']}_{i}", type="primary" if user_react == emo else "secondary"):
-                        d = dm.load_data()
+                        d = st.session_state.posts.copy()
                         for p in d:
                             if p['id'] == post['id']:
                                 if 'reactions' not in p: p['reactions'] = {'😻': 0, '🙀': 0, '😿': 0, '😾': 0, '🧠': 0}
@@ -1510,6 +1532,7 @@ if filtered:
                                     elif emo == '🧠': st.toast("สุดยอด! บิ๊กเบรนมากค่ะ! ✨🧠✨", icon="🧠")
                                 break
                         dm.save_data(d)
+                        st.session_state.posts = d  # อัปเดต Cache
                         time.sleep(1.5); st.rerun()
 
             # --- ส่วน Comment (ปรับใหม่ให้ซ่อนถ้าไม่ Login) ---
@@ -1542,10 +1565,12 @@ if filtered:
                             
                             # ปุ่มลบของ Admin
                             if st.session_state['is_admin'] and st.button("ลบ", key=f"dc_{post['id']}_{i}"):
-                                d = dm.load_data()
+                                d = st.session_state.posts.copy()
                                 for x in d:
                                     if x['id'] == post['id']: x['comments'].pop(i); break
-                                dm.save_data(d); st.rerun()
+                                dm.save_data(d)
+                                st.session_state.posts = d  # อัปเดต Cache
+                                st.rerun()
 
                     # ฟอร์มคอมเมนต์ (เฉพาะคน Login แล้ว)
                     admin_cmt_img_link = None
@@ -1570,12 +1595,13 @@ if filtered:
                             elif t:
                                 cmt_img_val = None
                                 if admin_cmt_img_link: cmt_img_val = convert_drive_link(admin_cmt_img_link)
-                                d = dm.load_data()
+                                d = st.session_state.posts.copy()
                                 for x in d:
                                     if x['id'] == post['id']: 
                                         x['comments'].append({"user": u, "text": t, "is_admin": st.session_state['is_admin'], "image": cmt_img_val})
                                         break
                                 dm.save_data(d)
+                                st.session_state.posts = d  # อัปเดต Cache
                                 if not st.session_state['is_admin']: st.session_state['last_comment_time'] = now 
                                 st.rerun()
 else:
