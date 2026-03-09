@@ -1557,10 +1557,27 @@ if filtered:
                             if is_admin_comment:
                                 st.markdown(f"""<div class='admin-comment-box'><b>👑 {c['user']} (Owner):</b> {c['text']}</div>""", unsafe_allow_html=True)
                                 if c.get('image'):
-                                    if c['image'].startswith("http"): st.image(convert_drive_link(c['image']), width=200)
-                                    elif os.path.exists(c['image']): st.image(c['image'], width=200)
+                                    img_url = c['image']
+                                    if img_url.startswith("http"):
+                                        try:
+                                            st.image(img_url, width=320, use_column_width=False)
+                                        except:
+                                            st.markdown(f"![GIF]({img_url})")
+                                            st.caption(f"ลิงก์ GIF: {img_url}")
+                                    else:
+                                        st.image(img_url, width=320)
                             else:
                                 st.markdown(f"<div class='comment-box'><b>{c['user']}:</b> {c['text']}</div>", unsafe_allow_html=True)
+                                if c.get('image'):
+                                    img_url = c['image']
+                                    if img_url.startswith("http"):
+                                        try:
+                                            st.image(img_url, width=320, use_column_width=False)
+                                        except:
+                                            st.markdown(f"![GIF]({img_url})")
+                                            st.caption(f"ลิงก์ GIF: {img_url}")
+                                    else:
+                                        st.image(img_url, width=320)
                             
                             # ปุ่มลบของ Admin
                             if st.session_state['is_admin'] and st.button("ลบ", key=f"dc_{post['id']}_{i}"):
