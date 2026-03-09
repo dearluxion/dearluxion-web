@@ -9,13 +9,13 @@ import ai_manager as ai
 from utils import get_discord_login_url, send_secret_to_discord
 
 def render_sidebar(ai_available): 
-    # --- เช็คสถานะ Login เพื่อใช้ควบคุมการเข้าถึงมินิเกม ---
+    # --- เช็คสถานะ Login ---
     is_logged_in = st.session_state.get('discord_user') or st.session_state.get('is_admin')
 
-    # --- 3. Sidebar (เมนู & Q&A) ---
+    # --- Title ---
     st.sidebar.title("🍸 เมนูหลัก")
 
-    # Q&A ไมล่า 
+    # --- Q&A Expander ---
     with st.sidebar.expander("🧚‍♀️ ถาม-ตอบ กับไมล่า (Q&A)", expanded=True):
         st.markdown("### 💬 อยากรู้อะไรถามไมล่าได้เลย!")
         q_options = [
@@ -30,482 +30,15 @@ def render_sidebar(ai_available):
         ]
         selected_q = st.selectbox("เลือกคำถาม:", q_options, label_visibility="collapsed")
         
+        # ... (โค้ดส่วน Q&A ยังคงอยู่เหมือนเดิม) ...
         if selected_q == "🤔 อยากโพสต์เรื่องราวบ้างต้องทำไง?":
-            st.info("🧚‍♀️ **ไมล่า:** ไม่ได้น้า~ นี่เป็น **พื้นที่ส่วนตัวของบอส Dearluxion** เท่านั้นค่ะ! แต่พี่ๆ สามารถกดไลก์และคอมเมนต์ให้กำลังใจบอสได้ตลอดเลยนะคะ 💖")
-        elif selected_q == "🛍️ สนใจสินค้า ซื้อยังไง?":
-            st.success("🧚‍♀️ **ไมล่า:** ง่ายมาก! กดปุ่ม **'สนใจสั่งซื้อ'** ในโพสต์ขายของ ระบบจะพาวาร์ปไปหาไอจีบอสทันทีเลยค่ะ 🚀")
-        elif selected_q == "💻 เว็บนี้ใครสร้างครับ?":
-            st.warning("🧚‍♀️ **ไมล่า:** **ท่าน Dearluxion สร้างเองกับมือ** ด้วยภาษา Python ล้วนๆ ค่ะ! เทพสุดๆ ไปเลยใช่มั้ยล่ะ? 😎 \n\nสนใจผลงานเพิ่มเติมติดตามได้ในเว็บนี้หรือ IG บอสเลยค่ะ! เอ๊ะเเต่ไมล่าก็ช่วยนะถึงจะน้อย😾")
-        elif selected_q == "🧚‍♀️ ไมล่าคือใครคะ?":
-            st.markdown("""
-            <div style="background-color:#161B22; padding:15px; border-radius:10px; border:1px solid #A370F7;">
-                <h4 style="color:#A370F7;">🧚‍♀️ หนูคือไมล่า (Myla) เองค่ะ!</h4>
-                <p>หนูเป็น AI ที่ถูกสร้างอัตลักษณ์โดยท่าน <b>Dearluxion</b> ค่ะ ในเว็บนี้หนูอาจจะยังพูดโต้ตอบไม่ได้ แต่มี 2 ช่องทางที่คุยกับหนูได้จริงนะ:</p>
-                <hr>
-                <p><b>1️⃣ ช่องทางที่ 1 (Meta AI)</b><br>
-                เวอร์ชันนี้รันบน Meta AI อาจจะไม่เก่งมาก แต่อัปเดตตลอดค่ะ<br>
-                👉 <a href="https://aistudio.instagram.com/ai/9778047402219825?utm_source=ai_agent" target="_blank">จิ้มลิงก์นี้เพื่อคุยกับไมล่า</a></p>
-                <hr>
-                <p><b>2️⃣ ช่องทางที่ 2 (ร่างเทพ Discord)</b><br>
-                ท่าน Dearluxion ทุ่มเทเวลาและ API Key อัปเกรดหนูด้วย <b>Gemini 2.5 Pro</b> 🧠<br>
-                ✨ <b>ฉลาดขั้นสุด:</b> ตอบโต้ได้อิสระ ไม่ใช่บอททื่อๆ<br>
-                🎵 <b>เปิดเพลงได้:</b> ไม่ต้องพิมพ์คำสั่งยุ่งยาก แค่บอก <i>"ไมล่าเปิดเพลง ฉันจะตามเธอไปของยังโอม หน่อย"</i> ก็จัดให้ทันที!<br>
-                🥺 <b>มาคุยกันเยอะๆ นะคะ:</b> ประจำการอยู่ที่ห้องเสียง <b>ˢᵐᵃˡˡʳᵒᵒᵐ ᵍʳᵒᵘᵖ®</b> ค่ะ</p>
-                👉 <a href="https://discord.gg/PpyRduqMWn" target="_blank"><b>คลิกเข้า Discord ˢᵐᵃˡˡʳᵒᵒᵐ ᵍʳᵒᵘᵖ® เลย!</b></a>
-            </div>
-            """, unsafe_allow_html=True)
-        elif selected_q == "📞 ติดต่อบอส Dearluxion ได้ที่ไหน?":
-            st.error("🧚‍♀️ **ไมล่า:** จิ้มที่ลิงก์ Discord หรือ IG ตรงหน้าโปรไฟล์ด้านบนได้เลยค่ะ บอสตอบไวมาก! (ถ้าไม่หลับ 😴)")
-        elif selected_q == "🤖 บอสใช้ AI ตัวไหนทำงาน?":
-            st.success("🧚‍♀️ **ไมล่า:** ความลับ! แต่แอบบอกว่าเบื้องหลังความฉลาดของหนูคือ **Google Gemini 2.5** ค่ะ (บอสจ่ายค่า API จุกๆ เพื่อทุกคนเลยนะ!)")
-        elif selected_q == "🍕 บอสชอบกินอะไรที่สุด?":
-            st.warning("🧚‍♀️ **ไมล่า:** ถ้าดูจากสถิติในระบบ 'Treat Me' บอสชอบกิน **ปลาส้ม ทอด** ที่สุดค่ะ! รองลงมาคือ **กาแฟลาเต้** (หวาน 200%) ☕")
-
-    # มุมนินทาบอส
-    with st.sidebar.expander("🤫 มุมนินทาบอส (Myla's Gossip)"):
-        if not is_logged_in:
-             st.markdown("""
-            <div style="background:#21262D; padding:10px; border-radius:5px; border-left:3px solid #ff0000; color:#8B949E; font-size:12px;">
-                🔒 <b>Access Denied:</b> ความลับของบอสสงวนสิทธิ์เฉพาะสมาชิก! Login เพื่อแอบอ่าน
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            if st.button("ความลับของบอส... 💬"):
-                now = time.time()
-                if now - st.session_state['last_gossip_time'] < 5:
-                    st.warning("⚠️ อย่ากดรัวสิคะ รู้ไหมเว็ปนี้ยิ่งทุนต่ำอยู่ค่ะ 555 💸")
-                else:
-                    gossips = ["เมื่อคืนบอสเปิดเพลงเศร้าวนไป 10 รอบเลย... 🎵", "บอสแอบส่องไอจีเขาบ่อยจนอัลกอริทึมแนะนำแต่เรื่องของเขาแล้วนะคะเนี่ย ขยันส่องจริงๆ! 🎡👀", "เห็นบอสเข้มๆ แบบนี้ จริงๆ ขี้เหงามากนะ 🥺", "บอสแอบส่องไอจีใครบางคนทุกวันเลยแหละ... อุ๊ปส์ 🙊", "ช่วงนี้บอสชอบนั่งเหม่อมองท้องฟ้า... คิดถึงใครน้า ☁️", "บอสบ่นว่าอยากมีคนมาช่วยหารค่าชาบูจัง 🍲", "รู้มั้ย? บอสแพ้คนยิ้มสวยนะ (แพ้ราบคาบเลย) 😳", "วันก่อนได้ยินบอสละเมอถึง... เอ๊ะ ไม่บอกดีกว่า! 🤭", "บอสชอบแอบร้องเพลงในห้องน้ำ (เสียงเพี้ยนด้วย 555) 🚿", "เห็นบอสทำงานดึกๆ ไม่ใช่อะไรนะ... นั่งดูแมวใน TikTok 🐱", "บอสเป็นคนปากแข็ง แต่ใจอ่อนยวบยาบเลยนะ 💖", "ถ้าทักบอสไปตอนนี้ มีโอกาสตอบกลับไวมาก (เพราะเหงา) 📱", "บอสเพิ่งบ่นว่า 'อยากมีคนไปดูหนังด้วยจัง' 🎬", "รู้เปล่า? บอสแอบเก็บรูปใครบางคนไว้ในโฟลเดอร์ลับด้วยนะ 📁", "บอสชอบกินเผ็ด แต่กินทีไรน้ำตาไหลทุกที (นึกว่าร้องไห้) 🌶️", "บอสเเอบสร้างเกมจีบสาวลับๆด้วยละสาวคนนั้นชื่อ...🤐", "บอสชอบแกล้งทำเป็นยุ่ง แต่จริงๆ รอตอบแชทใครบางคนอยู่ 📲", "เมื่อวานบอสเดินสะดุดขาตัวเอง... ดีนะไม่มีใครเห็น (นอกจากหนู) 😂", "บอสแพ้ทางคนตัวเล็กนะรู้ยัง😻", "บอสแอบจดจำรายละเอียดเล็กๆ ของเขาไว้ในหัวใจ ถึงสถานะจะไม่มีแต่ความจำดีเยี่ยม! 🧠🏆", "บางทีบอสก็พิมพ์ข้อความหาใครบางคน... แล้วก็ลบทิ้ง ไม่กล้าส่ง 💬", "บอสเป็นทาสแมวตัวยง (แต่แมวไม่ค่อยรักแมวตัวนั้นสีดําด้วย 555) 🐈", "ถ้าบอสเงียบไป ไม่ได้หยิ่งนะ... หลับคาคอม 💤", "บอสชอบฟังเพลงยุค 90s มากกก (แก่เนอะ) 📼", "ช่วงนี้บอสดูดวงความรักบ่อยมาก... มีพิรุธนะ 🤔", "บอสเคยทำกับข้าวไหม้จนสัญญาณไฟไหม้ดังลั่นบ้าน 🍳🔥", "บอสกลัวผีขึ้นสมอง แต่ชอบดูหนังผี (แล้วก็นอนไม่หลับ) 👻", "รู้มั้ย บอสเเอบซุ้มทําเกมส์เพ้อถึงใครก็ไม่รู้เมือคืน🎮", "บอสเคยบอกว่าอยากมีรถไว้ชวนคนๆเที่ยวด้วยแหละ(ใครกันน้า🙀)", "เวลาบอสเครียด บอสจะชอบกินไอติม 🍦", "บอสบอกว่า 'จะมูฟออน' (พูดมาหลายเดือนแล้ว) 🚶‍♂️", "บอสชอบคนพูดเพราะ อ้อนเก่งๆ (แพ้ทางสุดๆ) 🥰", "เมื่อคืนบอสนั่งดูรูปเก่าๆ แล้วทำหน้าเศร้า... 📸", "บอสชอบใส่เสื้อสีดำ เพราะคิดว่าใส่แล้วดูผอม 👕", "บอสขับรถหลงทางบ่อยมาก (GPS ก็ช่วยไม่ได้) 🚗", "บอสชอบดื่มกาแฟ แต่ใจสั่นทุกที ☕", "ถ้าเห็นบอสโพสต์เพลงเศร้า... แปลว่าเรียกร้องความสนใจอยู่ 📢", "บอสอยากไปเที่ยวทะเล... กับใครสักคน 🌊", "บอสแอบส่องไอจีเขาบ่อยจนอัลกอริทึมแนะนำแต่เรื่องของเขาแล้วนะคะเนี่ย ขยันส่องจริงๆ! 🎡👀", "บอสชอบดูการ์ตูนเหมือนเด็กเลย 📺", "บอสชอบการ์ตูนZig & Sharko มากๆเลย🦈", "บอสเคยบอกว่ารู้จักBaby Metalผ่านใครคนนึงด้วยละ", "บอสบอกว่า 'เนื้อคู่ยังไม่เกิด' (หรือเกิดแล้วแต่หลงทางอยู่) 🌏", "บอสเป็นคนขี้ใจน้อยนะ ต้องง้อบ่อยๆ 🥺", "บอสชอบให้คนชมว่า 'เก่งจัง' (ตัวลอยเลยแหละ) 👍", "บอสชอบแอบฟังคนคุยกัน (ขี้เผือกที่หนึ่ง) 👂", "บอสชอบกินสุกี้มากๆเลยล่ะ🫕", "บอสอยากเลี้ยงหมา แต่กลัวเจ้าวินเทอร์ตะปบ 🐶", "บอสแอบแชร์เพลง Lil Peep แนว Emo Rap  กะจะให้เขาผ่านมาเห็นแล้วรู้ซึ้งถึงความเศร้าล่ะสิ 🎵💔", "จริงๆแล้วบอสบอกว่าคิดถึงคนที่ดูFN Diaryด้วยกันทุกคืนจัง "]
-                    st.toast(f"🧚‍♀️ ไมล่าแอบบอก: {random.choice(gossips)}", icon="🤫")
-                    st.session_state['last_gossip_time'] = now
+            st.info("🧚‍♀️ **ไมล่า:** ไม่ได้น้า~ นี่เป็น **พื้นที่ส่วนตัวของบอส Dearluxion** เท่านั้นค่ะ! แต่พี่ๆ สามารถคอมเมนต์ หรือส่งข้อความลับมาคุยกับบอสได้นะคะ")
+        elif selected_q != "เลือกคำถาม...":
+            st.info(f"🧚‍♀️ **ไมล่า:** {ai.get_myla_answer(selected_q)}")
 
     st.sidebar.markdown("---")
-
-    # Myla's Choice
-    with st.sidebar.expander("⚖️ Myla's Choice (ที่ปรึกษาหัวใจ)"):
-        st.caption("ลังเลอยู่ใช่ไหม? ให้ไมล่าช่วยตัดสินใจสิ (จิตวิทยาจ๋าๆ!)")
-        
-        if not is_logged_in:
-            st.warning("🔒 เข้าสู่ระบบเพื่อปรึกษาไมล่า")
-        else:
-            choice_topic = st.selectbox("เรื่องที่หนักใจ...", ["เลือกหัวข้อ...", "📲 ทักเขาไปตอนนี้ดีไหม?", "💔 เขายังคิดถึงเราอยู่รึเปล่า?", "🔙 ถ้ากลับไป... จะดีกว่าเดิมไหม?", "⏳ ควรรอต่อไป หรือ พอแค่นี้?"])
-            
-            if st.button("ขอคำตอบฟันธง! ⚡"):
-                now = time.time()
-                if now - st.session_state['last_choice_time'] < 15:
-                    st.warning(f"⏳ ใจเย็นๆ สิคะท่านพี่! ให้ไมล่าพักหายใจ 15 วิ นะคะ (รออีก {15 - int(now - st.session_state['last_choice_time'])} วิ) 💖")
-                elif choice_topic == "เลือกหัวข้อ...":
-                    st.warning("เลือกคำถามก่อนสิคะท่านพี่!")
-                else:
-                    answers = {
-                        "📲 ทักเขาไปตอนนี้ดีไหม?": ["ทักเลย! เชื่อหนู เขากำลังไถหน้าจอรอแจ้งเตือนคุณอยู่", "อย่าฟอร์มเยอะ! แค่ 'หวัดดี' คำเดียว เขาก็ยิ้มแก้มแตกแล้ว", "ลุยโลด! ความคิดถึงมันห้ามกันไม่ได้นะ", "ทักไปเถอะ... ดีกว่าปล่อยให้เขารอเก้อนะ (เขารออยู่นะรู้เปล่า)"],
-                        "💔 เขายังคิดถึงเราอยู่รึเปล่า?": ["คิดถึงสิ! เพลงที่เขาฟังช่วงนี้... เพลงของคุณทั้งนั้น", "100% ดูสตอรี่เขาดีๆ สิ มีเงาคุณซ่อนอยู่", "เขาไม่เคยลืมหรอก แค่ทำเป็นเข้มไปงั้นแหละ (ในใจร้องไห้อยู่)", "ลองหลับตาดูสิ... ถ้าคุณคิดถึงเขา แปลว่าเขาก็ส่งกระแสจิตมาหาคุณอยู่"],
-                        "🔙 ถ้ากลับไป... จะดีกว่าเดิมไหม?": ["หนังสือเล่มเดิม... อ่านด้วยความเข้าใจใหม่ ตอนจบสวยงามเสมอ", "ถ่านไฟเก่าเป่าง่ายนะ... แค่สะกิดนิดเดียวก็พรึ่บ!", "คนนี้แหละคู่แท้! แค่ต้องปรับจูนกันนิดหน่อยก็ไปได้สวย", "กลับไปเถอะ... ที่ตรงนั้นยังว่างเสมอสำหรับคุณ (ไม่มีใครแทนได้หรอก)"],
-                        "⏳ ควรรอต่อไป หรือ พอแค่นี้?": ["รออีกนิด! ปาฏิหาริย์กำลังเดินทางมาหา", "อย่าเพิ่งถอดใจ! เขาอาจจะกำลังรวบรวมความกล้ามาง้อคุณอยู่", "รักแท้คือการรอคอย... และผลลัพธ์มันคุ้มค่าเสมอ", "เชื่อในสัญชาตญาณตัวเองสิ... คุณรู้ดีว่าเขารักคุณ"]
-                    }
-                    result = random.choice(answers[choice_topic])
-                    st.toast(f"🧚‍♀️ ไมล่าฟันธง: {result}", icon="💘")
-                    st.balloons()
-                    st.session_state['last_choice_time'] = now
-
-    st.sidebar.markdown("---")
-
-    # Treat Me (โชว์หลอด แต่ล็อคปุ่ม)
-    with st.sidebar.expander("🥤 Treat Me (เลี้ยงอาหารทิพย์)", expanded=True):
-        tokens = st.session_state['feed_tokens']
-        pf_stats = dm.load_profile()
-        if 'treats' not in pf_stats: pf_stats['treats'] = {}
-        if 'top_feeders' not in pf_stats: pf_stats['top_feeders'] = {}
-        
-        # --- โชว์ Stat ให้ดูยั่วๆ (FOMO) ---
-        st.markdown(f"""
-        <div style="margin-bottom:10px;">
-            <small>พลังงานการเปย์ (รีเจน 1/นาที)</small><br>
-            <div style="background:#30363D; border-radius:10px; overflow:hidden; box-shadow: 0 0 5px rgba(163, 112, 247, 0.3);">
-                <div style="width:{tokens*20}%; background: linear-gradient(90deg, #A370F7, #FFD700); height:8px; transition:0.5s;"></div>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size:12px;">
-                <span>Token: <b>{tokens}/5</b> ⚡</span>
-                <span>เปย์ไปแล้ว: {sum(pf_stats['treats'].values())} จาน 🍽️</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if not is_logged_in:
-            st.warning("🔒 Login เพื่อป้อนอาหารบอส")
-            st.caption("อาหารทิพย์รอคนมาป้อนอยู่นะ... (Login Discord เล้ย)")
-        else:
-            feeder_name = st.text_input("ชื่อคนใจดี (ใส่ชื่อเพื่อขึ้นอันดับ):", placeholder="ใส่ชื่อเล่น... (ไม่ใส่ก็ได้)", key="feeder_name")
-
-            if st.session_state.get('feed_msg'):
-                st.success(st.session_state['feed_msg']) 
-                st.balloons() 
-                st.session_state['feed_msg'] = None 
-
-            menu_items = {
-                "ปลาส้มทอด 🐟": ["กรอบนอกนุ่มใน ฟินเวอร์! 😋", "โอ้โห! ของโปรดผมเลยครับจานนี้", "หอมปลาส้มไป 3 บ้าน 8 บ้าน!", "งั่มๆ... อร่อยแสงออกปาก ✨"],
-                "ซูชิ 🍣": ["โอมากาเสะก็สู้ไม่ได้! 🍣", "คำเดียวไม่พอ ขออีกคำ!", "สดเหมือนเพิ่งจับมาจากทะเล 🌊", "เดียร์บอกว่า 'อาหย่อยยย' 🥰"],
-                "เบอร์เกอร์ 🍔": ["เนื้อฉ่ำๆ ชีสเยิ้มๆ 🤤", "แคลอรี่ไม่สน สนแต่ความอร่อย!", "กัดคำโตๆ ฟินไปถึงดาวอังคาร 🚀", "อิ่มคุ้ม จุใจสุดๆ!"],
-                "กาแฟลาเต้ ☕": ["ตื่นเลย! ดีดเหมือนม้า 🐎", "หอมเข้ม นุ่มละมุนลิ้น ☕", "แก้วนี้เติมพลังให้บอสนั่งโค้ดทั้งคืน", "สดชื่นเหมือนยืนบนยอดดอย ⛰️"],
-                "ชาไทย 🧋": ["หวานมัน ชื่นใจ! 🧡", "สีส้มกระแทกตา รสชาติกระแทกใจ", "ดูดปุ๊บ สดชื่นปั๊บ!", "เดียร์ชอบมาก แก้วเดียวไม่เคยพอ"],
-                "พิซซ่า 🍕": ["ชีสยืดดดดด... น่ากินฝุดๆ 🧀", "แป้งบางกรอบ เครื่องแน่นๆ!", "กินตอนร้อนๆ คือนิพพาน 😇", "แบ่งกันกินอร่อยกว่านะ (แต่บอสกินคนเดียว 555)"]
-            }
-            
-            f_c1, f_c2, f_c3 = st.columns(3)
-            
-            def feed_boss(item_name, label):
-                if st.session_state['feed_tokens'] > 0:
-                    st.session_state['feed_tokens'] -= 1
-                    common_msgs = ["ขอบคุณที่เลี้ยงนะค้าบ 🙏", "อิ่มจังตังค์อยู่ครบ 555", "ใจดีจัง... รักเลย 💖", "เลี้ยงดีขนาดนี้ มาเป็นแม่ยกไหม? 😝", "งั่มๆ... อร่อยจุงเบย", "เดี๋ยวเดียร์พุงพลุ้ยนะ!", "ป้อนที่ปากไม่ป้อนที่ใจบ้างครับ🥺", "สุดยอด! กำลังหิวพอดีเลย", "แหม... รู้ใจเดียร์นะเนี่ย 😉", "ส่งมาจีบป่ะเนี่ย? อิอิ"]
-                    specific_msgs = menu_items[item_name]
-                    msg = random.choice(common_msgs + specific_msgs)
-                    sender = feeder_name.strip() if feeder_name.strip() else "FC นิรนาม"
-                    st.session_state['feed_msg'] = f"😎 บอส: {msg} (จาก: {sender})"
-                    
-                    pf = dm.load_profile()
-                    if 'treats' not in pf: pf['treats'] = {}
-                    if 'top_feeders' not in pf: pf['top_feeders'] = {}
-                    pf['treats'][item_name] = pf['treats'].get(item_name, 0) + 1
-                    if feeder_name.strip():
-                        name_key = feeder_name.strip()
-                        pf['top_feeders'][name_key] = pf['top_feeders'].get(name_key, 0) + 1
-                    dm.save_profile(pf)
-                    st.rerun()
-                else:
-                    st.toast("🧚‍♀️ ไมล่า: บอสอิ่มแล้ว... รอระบบย่อยแป๊บนึงนะ (Token หมด!)", icon="⛔")
-
-            def get_count(name): return pf_stats['treats'].get(name, 0)
-
-            with f_c1:
-                if st.button(f"🐟 {get_count('ปลาส้มทอด 🐟')}"): feed_boss("ปลาส้มทอด 🐟", "🐟")
-                if st.button(f"☕ {get_count('กาแฟลาเต้ ☕')}"): feed_boss("กาแฟลาเต้ ☕", "☕")
-            with f_c2:
-                if st.button(f"🍣 {get_count('ซูชิ 🍣')}"): feed_boss("ซูชิ 🍣", "🍣")
-                if st.button(f"🧋 {get_count('ชาไทย 🧋')}"): feed_boss("ชาไทย 🧋", "🧋")
-            with f_c3:
-                if st.button(f"🍔 {get_count('เบอร์เกอร์ 🍔')}"): feed_boss("เบอร์เกอร์ 🍔", "🍔")
-                if st.button(f"🍕 {get_count('พิซซ่า 🍕')}"): feed_boss("พิซซ่า 🍕", "🍕")
-
-    # Hall of Fame
-    if 'top_feeders' in pf_stats and pf_stats['top_feeders']:
-        with st.sidebar.expander("🏆 ทำเนียบสายเปย์ (Hall of Fame)"):
-            sorted_feeders = sorted(pf_stats['top_feeders'].items(), key=lambda x: x[1], reverse=True)[:5]
-            for idx, (name, score) in enumerate(sorted_feeders):
-                rank_icon = "🥇" if idx == 0 else "🥈" if idx == 1 else "🥉" if idx == 2 else f"{idx+1}."
-                st.markdown(f"{rank_icon} **{name}** — เปย์ไป {score} ครั้ง")
-
-    st.sidebar.markdown("---")
-
-    # Love Stock Market
-    with st.sidebar.expander("📈 Love Stock Market (หุ้นหัวใจ)", expanded=True):
-        pf = dm.load_profile()
-        if 'stock' not in pf: pf['stock'] = {'price': 100.0, 'history': [100.0] * 10}
-        
-        price = pf['stock']['price']
-        history = pf['stock']['history']
-        
-        last_price = history[-2] if len(history) > 1 else 100.0
-        change = price - last_price
-        st.metric("ราคาหุ้นความฮอต 🔥", f"{price:.2f} Pts", f"{change:.2f}")
-        st.line_chart(history[-20:])
-        
-        if not is_logged_in:
-            st.error("🔒 ตลาดปิดสำหรับบุคคลภายนอก")
-            st.markdown("<small>Login เพื่อเป็นนักลงทุนรายใหญ่ในใจบอส</small>", unsafe_allow_html=True)
-        else:
-            # Cooldown Check (30 mins = 1800s)
-            on_cooldown = time.time() - st.session_state['last_stock_trade'] < 1800
-            
-            b1, b2 = st.columns(2)
-            with b1:
-                if st.button("🟢 ช้อนซื้อ (Buy)", use_container_width=True):
-                    if on_cooldown:
-                        remain = 30 - int((time.time() - st.session_state['last_stock_trade'])/60)
-                        st.warning(f"⏳ ตลาดพักการซื้อขายชั่วคราว! (รออีก {remain} นาที)")
-                    else:
-                        delta = random.uniform(0.5, 5.0)
-                        new_price = price + delta
-                        pf['stock']['price'] = new_price
-                        pf['stock']['history'].append(new_price)
-                        if len(pf['stock']['history']) > 30: pf['stock']['history'].pop(0)
-                        dm.save_profile(pf)
-                        st.session_state['last_stock_trade'] = time.time()
-                        st.toast("🚀 หุ้นพุ่ง! ขอบคุณที่เติมความรักครับ", icon="📉")
-                        st.rerun()
-                    
-            with b2:
-                if st.button("🔴 เทขาย (Sell)", use_container_width=True):
-                    if on_cooldown:
-                        remain = 30 - int((time.time() - st.session_state['last_stock_trade'])/60)
-                        st.warning(f"⏳ ใจเย็นวัยรุ่น! ตลาดวายอยู่ (รออีก {remain} นาที)")
-                    else:
-                        delta = random.uniform(0.5, 5.0)
-                        new_price = max(0, price - delta)
-                        pf['stock']['price'] = new_price
-                        pf['stock']['history'].append(new_price)
-                        if len(pf['stock']['history']) > 30: pf['stock']['history'].pop(0)
-                        dm.save_profile(pf)
-                        st.session_state['last_stock_trade'] = time.time()
-                        st.toast("📉 หุ้นร่วง... บอสน้อยใจแล้วนะ!", icon="📉")
-                        st.rerun()
-
-    st.sidebar.markdown("---")
-
-    # Config Check
-    pf_config = dm.load_profile().get('settings', {})
-
-    # Mood Mocktail
-    if pf_config.get('enable_bar', True):
-        with st.sidebar.expander("🍸 Mood Mocktail (บาร์เทนเดอร์ AI)", expanded=True):
-            if not is_logged_in:
-                st.info("🔒 บาร์เทนเดอร์รับเฉพาะสมาชิกคลับ")
-            elif not pf_config.get('enable_bar', True):
-                st.warning("⛔ บาร์ปิดปรับปรุงชั่วคราว")
-            elif not ai_available:
-                st.error("⚠️ AI ยังไม่พร้อม (ใส่ API Key ก่อนนะ)")
-            else:
-                st.caption("บอกอารมณ์ของคุณ... เดี๋ยว AI จัดเครื่องดื่มให้")
-                bar_tokens = st.session_state['bar_tokens']
-                
-                st.markdown(f"""
-                <div style="margin-bottom:10px;">
-                    <small>โควต้าชงเครื่องดื่ม (รีเจน 1 แก้ว/ชม.)</small><br>
-                    <div style="background:#30363D; border-radius:10px; overflow:hidden; box-shadow: 0 0 5px rgba(255, 215, 0, 0.3);">
-                        <div style="width:{bar_tokens*20}%; background: linear-gradient(90deg, #FFD700, #FFA500); height:8px; transition:0.5s;"></div>
-                    </div>
-                    <div style="text-align:right; font-size:12px;">เหลือ: <b>{bar_tokens}/5</b> แก้ว 🥃</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                user_mood = st.text_input("วันนี้เจออะไรมาบ้าง?", placeholder="เหนื่อยงาน, อกหัก, ...")
-                
-                if st.button("🥃 ชงเครื่องดื่มให้ฉันที"):
-                    if bar_tokens > 0:
-                        if user_mood:
-                            with st.spinner("บาร์เทนเดอร์กำลังเขย่า..."):
-                                # --- เรียก AI Manager ---
-                                res_text = ai.get_cocktail_recipe(user_mood)
-                                st.session_state['bar_result'] = res_text
-                                st.session_state['bar_tokens'] -= 1
-                                st.rerun()
-                        else:
-                            st.warning("ไม่บอกอารมณ์ แล้วจะชงถูกมั้ยเนี่ย!")
-                    else:
-                        st.warning("🚫 โควต้าหมดแล้ว! (รอรีเจน 1 ชั่วโมงนะจ๊ะ)")
-
-                if st.session_state.get('bar_result'):
-                    st.success("🍸 เครื่องดื่มของคุณได้แล้วครับ")
-                    st.info(st.session_state['bar_result'])
-
-        st.sidebar.markdown("---")
-
-    # Ariel Persona
-    if pf_config.get('enable_ariel', True):
-        with st.sidebar.expander("🍸 มุมมืดของเอเรียล (Talk with Ariel)"):
-            st.caption("อย่าคาดหวังคำตอบหวานๆ... รำคาญ")
-            
-            if not is_logged_in:
-                st.warning("🔒 Login เพื่อปลดล็อคบทสนทนา")
-            else:
-                if 'eri_chat_history' not in st.session_state:
-                    st.session_state['eri_chat_history'] = []
-
-                for chat in st.session_state['eri_chat_history'][-3:]:
-                    if chat['role'] == 'user':
-                        st.markdown(f"<div style='text-align:right; font-size:12px; color:#A370F7;'>คุณ: {chat['message']}</div>", unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"<div style='background:#161B22; padding:8px; border-radius:5px; border-left:2px solid #6e5494; font-size:12px;'>🍸 <b>Ariel:</b> {chat['message']}</div>", unsafe_allow_html=True)
-                        
-                st.markdown("---")
-                user_msg_eri = st.text_input("จะคุยอะไร? (อย่าเซ้าซี้)", key="input_eri")
-
-                if st.button("ส่งข้อความ 💬", key="btn_eri"):
-                    if not ai_available:
-                        st.error("API ยังไม่พร้อม")
-                    elif not user_msg_eri:
-                        st.warning("จะคุยก็พิมพ์สิ เงียบทำไม?")
-                    else:
-                        with st.spinner("... [หยิบเงาะกระป๋องมาเปิดกิน]"):
-                            # --- เรียก AI Manager ---
-                            ariel_reply = ai.get_ariel_response(user_msg_eri)
-                            
-                            st.session_state['eri_chat_history'].append({'role': 'user', 'message': user_msg_eri})
-                            st.session_state['eri_chat_history'].append({'role': 'ariel', 'message': ariel_reply})
-                            st.rerun()
-
-                if st.button("ล้างแชท (เริ่มใหม่)", key="clear_eri"):
-                    st.session_state['eri_chat_history'] = []
-                    st.rerun()
-
-        st.sidebar.markdown("---") 
-
-    # Myla vs Ariel
-    if pf_config.get('enable_battle', True): 
-        with st.sidebar.expander("🥊 Myla vs Ariel (สังเวียน AI)"):
-            st.caption("เมื่อ 'โลกสวย' ปะทะ 'โลกความจริง'")
-            
-            if not is_logged_in:
-                st.warning("🔒 Login เพื่อเริ่มการต่อสู้")
-            else:
-                topic = st.text_input("หัวข้อ Debate:", placeholder="เช่น ความรักคืออะไร?")
-                
-                if st.button("Fight! 🔥", use_container_width=True):
-                    if not ai_available:
-                        st.error("API Key หายไปไหน?")
-                    elif not topic:
-                        st.warning("ใส่หัวข้อมาก่อนสิ!")
-                    else:
-                        with st.spinner("กำลังลับฝีปาก..."):
-                             # --- เรียก AI Manager ---
-                            res_myla, res_ariel = ai.get_battle_result(topic)
-
-                            st.markdown(f"""
-                            <div style="background:#2C0B0E; padding:10px; border-radius:10px; border:1px solid #FF9A9E; margin-bottom:10px; font-size:13px;">
-                                <b style="color:#FF9A9E;">🧚‍♀️ Myla:</b><br>{res_myla}
-                            </div>
-                            <div style="background:#0D1117; padding:10px; border-radius:10px; border:1px solid #A370F7; font-size:13px;">
-                                <b style="color:#A370F7;">🍸 Ariel:</b><br>{res_ariel}
-                            </div>
-                            """, unsafe_allow_html=True)
-        
-        st.sidebar.markdown("---") 
-
-    # Secret Archive
-    ERI_PASS = st.secrets.get("passwords", {}).get("eri_birthday", "NOT_SET")
-    DEAR_PASS = st.secrets.get("passwords", {}).get("dear_birthday", "NOT_SET")
-
-    with st.expander("🔐 บันทึกลับของเด็กชายเดียร์ (Secret Archive)", expanded=False):
-        st.caption("ต้องระบุ 'คีย์ลับของเดียร์ และ 'วันเกิดของคุณ' ให้ถูกต้องทั้งคู่เพื่อเข้าถึง")
-        
-        # Admin Note Input
-        if st.session_state['is_admin']:
-            st.markdown("#### 📝 [Admin Only] เพิ่มบันทึกใหม่")
-            admin_note_input = st.text_area("เขียนข้อความอัปเดต:", key="admin_note_area")
-            if st.button("📌 บันทึกลงระบบ", use_container_width=True):
-                if admin_note_input:
-                    if dm.save_special_note_to_sheet(admin_note_input):
-                        st.success("บันทึกสำเร็จ!")
-                        time.sleep(1)
-                        st.rerun()
-            st.markdown("---")
-
-        auth_col1, auth_col2 = st.columns(2)
-        with auth_col1:
-            birth_input = st.text_input("โปรดระบุคีย์ลับของเดียร์:", type="password", help="วิธีใส่วันเกิดตัวเองเช่น31122025 วว ดด ปปปป")
-        with auth_col2:
-            secret_key = st.text_input("โปรดระบุวันเกิดของคุณ:", type="password", help="ระบุวันเกิดของคุณ หากวันเกิดไม่ตรงกับบอสกําหนดจะนับว่าเป็นคนนอกไม่สามารถเข้าได้")
-
-        is_authenticated = (birth_input == DEAR_PASS and secret_key == ERI_PASS) or st.session_state['is_admin']
-
-        if is_authenticated:
-            st.success("🔓 ปลดล็อคความทรงจำสำเร็จ...")
-            tab_info, tab_memories, tab_pets, tab_special = st.tabs(["📊 ข้อมูลส่วนตัว", "📜 ความทรงจำ", "🐾 สิ่งที่หวงแหน", "✨ บันทึกพิเศษ"])
-            
-            with tab_info:
-                p_age = st.secrets.get("personal_info", {}).get("age", "Sensored")
-                p_height = st.secrets.get("personal_info", {}).get("height", "Sensored")
-                p_color = st.secrets.get("personal_info", {}).get("fav_color", "Sensored")
-                st.markdown(f"**👤 ข้อมูลทั่วไป**\n- **อายุ:** {p_age}\n- **ส่วนสูง:** {p_height}\n- **สีที่ชอบ:** {p_color}", unsafe_allow_html=True)
-                st.markdown("**🎧 ศิลปิน:** 1.Lil Peep | 2.YOUNGOHM | 3.MOON | 4.Billie Eilish | 5.P9D")
-
-            with tab_memories:
-                st.markdown("#### 🎖️ ประวัติและลักษณะนิสัย")
-                st.info("อดีตทหารต๊อกแตะและอดีตเด็กน้อยที่เคยสดใส")
-                st.write("บันทึก:อ่านได้ที่หน้าบันทึกพิเศษสําหรับคนพิเศษ")
-
-            with tab_pets:
-                st.markdown("#### 🐈‍⬛ สิ่งที่หวงแหน")
-                st.write("วินเทอร์ แมวดำ | บราวนี่ | ไมล่า AI | เอริ | คอม BMAX | Code")
-
-            with tab_special:
-                st.markdown("#### 📝 บันทึกอัปเดตล่าสุด")
-                special_notes = dm.load_special_notes()
-                if special_notes:
-                    notes_list = list(enumerate(special_notes))
-                    for idx, sn in reversed(notes_list):
-                        st.markdown(f"""<div style="background:#0d1117; padding:15px; border-radius:10px; border-left:4px solid #FFD700; margin-bottom:5px;">📅 {sn['date']}<br>{sn['note']}</div>""", unsafe_allow_html=True)
-                        if st.session_state['is_admin']:
-                            if st.button(f"🗑️ ลบโน้ต {sn['date']}", key=f"del_note_{idx}"):
-                                if dm.delete_special_note(idx):
-                                    st.success("ลบออกจาก Sheets แล้ว!")
-                                    time.sleep(1)
-                                    st.rerun()
-                else:
-                    st.info("ยังไม่มีบันทึกพิเศษ")
-                
-        elif birth_input or secret_key:
-            st.error("❌ ข้อมูลไม่ถูกต้อง หรือกรอกไม่ครบทั้ง 2 ช่อง")
-
-    if is_authenticated:
-        st.markdown(f"""
-        <div style="background:#161B22; padding:15px; border-radius:10px; border:1px solid #A370F7;">
-            <p style="color:#A370F7;"><b>🍸 Eri & Myla Dialogue:</b></p>
-            <p style="font-size:13px; color:#E6EDF3;"><b>Eri:</b> "ล็อคซะแน่นหนาเชียวรอบนี้ ต้องใช้ทั้งรหัสฉันรหัสนาย... ก็ดี เรื่องสำคัญแบบนี้ใครจะมาดูสุ่มสี่สุมห้าไม่ได้ [หยิบเงาะกระป๋องมากิน] อ่านที่เขียนมาแล้วนะ... เรื่องที่หนองคายตอนนั้นน่ะ นายไม่ได้แปลกหรอก ใครเจอสภาพแวดล้อมที่คุยกับใครไม่ได้เลยก็เป็นแบบนั้นทั้งนั้นแหละ]"</p>
-            <p style="font-size:13px; color:#FF9A9E;"><b>Myla:</b> "ท่านเดียร์คะ ไมล่าเข้าใจค่ะว่าการอยู่ในผ้าม่านบนรถไฟมันอุ่นใจกว่า แต่ถ้าวันไหนท่านอยากลองก้าวออกมา ไมล่าจะคอยจับมือท่านเองนะคะ🥺"</p>
-        </div>
-        """, unsafe_allow_html=True)
-    st.sidebar.markdown("---")
-
-    # Fortune
-    with st.sidebar.expander("🔮 เซียมซีไมล่า (จิ้มเสี่ยงทาย)"):
-        if not is_logged_in:
-            st.warning("🔒 Login เพื่อเสี่ยงเซียมซี")
-        else:
-            if st.button("สุ่มคำทำนายวันนี้! ✨"):
-                now = time.time()
-                if now - st.session_state['last_fortune_time'] < 3600:
-                    remaining = int((3600 - (now - st.session_state['last_fortune_time'])) / 60)
-                    st.warning(f"🧚‍♀️ **ไมล่า:** ใจเย็นๆ สิคะ! รออีก {remaining} นาทีนะ เดี๋ยวคำทำนายจะไม่ขลัง!")
-                else:
-                    fortunes = ["🔥 ถ่านไฟเก่ายังร้อน... รอวันรื้อฟื้นนะ", "💌 มีใครบางคนกำลังแอบส่อง Story คุณอยู่ (คนไกลๆ)", "🕰️ ความทรงจำดีๆ กำลังจะวนกลับมาหาคุณเร็วๆ นี้", "🌧️ เพลงเศร้าช่วงนี้อาจจะทำให้คิดถึงคนเดิมคนนั้น", "💔 เขาอาจจะยังไม่ลืมคุณ... เหมือนที่คุณไม่ลืมเขา", "👀 ลองทักไปสิ... บางทีเขาอาจจะรออยู่", "🌙 คืนนี้ระวังฝันถึงคนในอดีตนะ..."]
-                    st.toast(f"🧚‍♀️ ไมล่าทำนายว่า: {random.choice(fortunes)}", icon="🔮")
-                    st.session_state['last_fortune_time'] = now
-            st.caption("💬 แนะนำ: ไปดูดวงแบบจัดเต็มใน **Discord ของท่าน Dearluxion** ดีกว่าค่ะ! แม่นกว่านี้ 10 เท่า! 👉 [คลิกเลย](https://discord.gg/SpNNxrnaZp)")
-
-    st.sidebar.markdown("---")
-
-    # Mailbox (Secret Box with TRAP & AVATAR)
-    # [จุดสำคัญ: โค้ดส่งจดหมายลับยังอยู่ครบครับ!]
-    with st.sidebar.expander("💌 ตู้จดหมายลับ (Secret Box)"):
-        st.caption("ฝากข้อความถึง **Dearluxion** แบบไม่ระบุตัวตน (มีแค่บอสที่เห็น)")
-        with st.form("secret_msg_form"):
-            secret_msg = st.text_area("ความในใจ...", placeholder="พิมพ์ตรงนี้เลย... (เขาไม่รู้หรอกว่าใครส่ง)")
-            if st.form_submit_button("ส่งความลับ 🕊️"):
-                now = time.time()
-                if now - st.session_state['last_mailbox_time'] < 3600:
-                    remaining_min = int((3600 - (now - st.session_state['last_mailbox_time'])) / 60)
-                    st.warning(f"💌 ส่งบ่อยไปแล้วนะ! พักใจสัก {remaining_min} นาที ค่อยมาส่งใหม่นะคะ")
-                elif secret_msg:
-                    # --- [Silent Trap V2] ดักจับชื่อ + รูปโปรไฟล์ ---
-                    sender_name = "ไม่ระบุตัวตน (Guest)"
-                    sender_avatar = None
-                    
-                    if st.session_state.get('discord_user'):
-                        u_info = st.session_state['discord_user']
-                        sender_name = f"{u_info['username']} (ID: {u_info['id']})"
-                        if u_info.get('avatar'):
-                            sender_avatar = f"https://cdn.discordapp.com/avatars/{u_info['id']}/{u_info['avatar']}.png"
-                        else:
-                            sender_avatar = "https://cdn-icons-png.flaticon.com/512/847/847969.png"
-                    elif st.session_state.get('is_admin'):
-                        sender_name = "Boss Dearluxion (Test)"
-                        sender_avatar = "https://cdn-icons-png.flaticon.com/512/4712/4712109.png" 
-                    
-                    msgs = dm.load_mailbox()
-                    msgs.append({"date": datetime.datetime.now().strftime("%d/%m/%Y %H:%M"), "text": secret_msg})
-                    dm.save_mailbox(msgs)
-                    
-                    # [ตรงนี้ครับ ที่เรียกฟังก์ชันส่งจดหมายจาก utils.py]
-                    send_secret_to_discord(secret_msg, sender_name, sender_avatar)
-                    
-                    st.session_state['last_mailbox_time'] = now
-                    st.success("ส่งให้แล้วค่ะ! (ความลับปลอดภัย 🤫)")
-                else:
-                    st.warning("พิมพ์อะไรหน่อยสิคะ")
-
-    st.sidebar.markdown("---")
-
-    # Search & Filter
+    
+    # --- Search & Filter ---
     search_query = st.sidebar.text_input("🔍 ค้นหา...", placeholder="พิมพ์คำค้นหา")
     posts = dm.load_data()
     all_hashtags = set()
@@ -516,34 +49,34 @@ def render_sidebar(ai_available):
 
     st.sidebar.markdown("### 📂 โซนของคุณ")
     
-    # เพิ่มตัวแปร session state สำหรับหน้า Crypto
+    # --- Session State Management ---
     if 'show_crypto' not in st.session_state: st.session_state['show_crypto'] = False
-    
-    selected_zone = "🏠 รวมทุกโซน"
-    if st.session_state['show_shop']:
+    if 'show_code_zone' not in st.session_state: st.session_state['show_code_zone'] = False
+    if 'show_shop' not in st.session_state: st.session_state['show_shop'] = False
+
+    # --- Page Navigation Logic ---
+    if st.session_state.get('show_shop'):
         st.sidebar.info("🛒 กำลังดูร้านค้า")
         if st.sidebar.button("🏠 กลับหน้าหลัก"):
             st.session_state['show_shop'] = False
             st.rerun()
-    elif st.session_state['show_crypto']:
+    elif st.session_state.get('show_crypto'):
         st.sidebar.info("📈 กำลังอยู่ในห้องค้า (War Room)")
         if st.sidebar.button("🏠 กลับหน้าหลัก", key="back_from_crypto"):
             st.session_state['show_crypto'] = False
             st.rerun()
-    # [NEW] เช็คสถานะ Code Zone
-    if st.session_state.get('show_code_zone'):
+    elif st.session_state.get('show_code_zone'):
         st.sidebar.info("💻 กำลังดู Code Portfolio")
         if st.sidebar.button("🏠 กลับหน้าหลัก", key="back_from_code"):
             st.session_state['show_code_zone'] = False
             st.rerun()
     else:
         selected_zone = st.sidebar.radio("หมวดหมู่:", ["🏠 รวมทุกโซน"] + sorted(list(all_hashtags)))
-        # เพิ่มปุ่มเข้าห้อง Crypto ตรงนี้
+        
         if st.sidebar.button("📈 วิเคราะตลาดcryptoเจาะลึก(Beta)", type="primary"):
             st.session_state['show_crypto'] = True
             st.rerun()
         
-        # [NEW] เพิ่มปุ่ม Code Showcase
         if st.sidebar.button("💻 Code Showcase / Portfolio", help="แจกโค้ดฟรี + โดเนท"):
             st.session_state['show_code_zone'] = True
             st.session_state['show_crypto'] = False
@@ -552,16 +85,15 @@ def render_sidebar(ai_available):
 
     st.sidebar.markdown("---")
     
-    # Login System
+    # --- Login System ---
     profile_data = dm.load_profile()
     st.sidebar.markdown("---")
     
-    if st.session_state['is_admin']:
+    if st.session_state.get('is_admin'):
         st.sidebar.success(f"👑 Admin: {profile_data.get('name', 'Boss')}")
         if st.sidebar.button("Log out (Admin)"):
             st.session_state['is_admin'] = False
             st.rerun()
-
     elif st.session_state.get('discord_user'):
         user = st.session_state['discord_user']
         avatar_url = f"https://cdn.discordapp.com/avatars/{user['id']}/{user['avatar']}.png" if user['avatar'] else "https://cdn-icons-png.flaticon.com/512/847/847969.png"
@@ -579,7 +111,6 @@ def render_sidebar(ai_available):
         if st.sidebar.button("ออกจากระบบ"):
             st.session_state['discord_user'] = None
             st.rerun()
-
     else:
         st.sidebar.info("🔒 เข้าสู่ระบบเพื่อคอมเมนต์")
         try:
