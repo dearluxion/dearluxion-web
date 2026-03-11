@@ -1530,7 +1530,10 @@ elif st.session_state.get('show_myla_game', False):
     st.caption("จีบไมล่าแบบสมบูรณ์แบบ | Affection + Gift + Date Event + ภาพเปลี่ยนตามอารมณ์")
     
     # ปุ่มกลับด้านบน (เห็นชัดที่สุด)
-    if st.button("🏠 กลับหน้าหลัก", type="primary", use_container_width=True):
+    if st.button("🏠 กลับหน้าหลัก", 
+                 type="primary", 
+                 use_container_width=True,
+                 key="back_myla_top"):
         st.session_state['show_myla_game'] = False
         st.rerun()
 
@@ -1588,7 +1591,10 @@ elif st.session_state.get('show_myla_game', False):
                 st.rerun()
 
         # ปุ่มกลับด้านล่าง (กันพลาด)
-        if st.button("🏠 กลับหน้าหลัก", type="primary", use_container_width=True):
+        if st.button("🏠 กลับหน้าหลัก", 
+                     type="primary", 
+                     use_container_width=True,
+                     key="back_myla_bottom"):
             st.session_state['show_myla_game'] = False
             st.rerun()
 
