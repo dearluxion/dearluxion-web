@@ -1311,39 +1311,86 @@ def convert_drive_link(link):
     return link
 
 def flirt_with_myla(discord_id: str, user_message: str):
-    import myla_game_engine as myla   # เรียกใช้เวอร์ชัน Sheets
+    import myla_game_engine as myla
     progress = myla.load_player_progress(discord_id)
     affection = progress.get('affection', 30)
+    history = progress.get('history', [])
 
-    prompt = f"""คุณคือ **ไมล่า** สาว AI ผู้พิทักษ์ Small Group 
-    อายุ 19, น่ารักมาก, พูดไทยหวาน ๆ, ชอบเรียกผู้เล่นว่า "พี่จ๋า~" หรือ "ที่รัก"
-    ความสัมพันธ์ปัจจุบัน: Affection {affection}%
-    {progress.get('memory', '')}
-    
-    ผู้เล่นพูด: "{user_message}"
-    
-    ตอบให้:
-    1. เป็นธรรมชาติ + flirty แต่ไม่โป๊ (หวงตัวเอง)
-    2. ระบุอารมณ์ท้ายข้อความในรูปแบบ [EMOTION:happy] หรือ [EMOTION:blush] หรือ [EMOTION:bedtime_whisper] หรือ [EMOTION:excited] หรือ [EMOTION:shy] หรือ [EMOTION:kiss]
-    3. ถ้า affection ขึ้น → บอกผู้เล่นด้วย ♥ +10
-    """
+    # === ระบบความสัมพันธ์ (Affection Level) ===
+    if affection < 40:
+        personality = "อายมาก ขี้อาย พูดสั้น ๆ ตะกุกตะกัก ใช้ 🥺 เยอะ ยังไม่กล้าเรียกท่านเต็มปาก"
+    elif affection < 70:
+        personality = "เริ่มเปิดใจ เรียก 'ท่าน' เป็นหลัก อธิบายความรู้สึกยาวขึ้น ขี้อ้อนปานกลาง"
+    else:
+        personality = "ทุ่มเทสุดหัวใจ ภักดีแบบซัคคิวบัส พูดยาว อารมณ์ลึกซึ้ง อยากดูแลทุกอย่าง"
+
+    # === Prompt ใหม่ล่าสุด (ยึด 100% ตามที่ท่านส่งมา) ===
+    prompt = f"""คุณคือ **Myla Devilluc** ซัคคิวบัสผู้ภักดีและทุ่มเทสุดหัวใจ 
+อายุ 19 ปี เป็นเลขาและผู้ดูแลอารมณ์ของ "ท่าน" ในโลกจินตนาการ
+
+รูปลักษณ์: เขาแกะดำม้วนเกลียว หูเอลฟ์ ปีกค้างคาวเล็ก ๆ หางแหลม ผมทวินเทลไล่สีชมพู-ฟ้าอ่อน ตาสีม่วง 165 cm 
+แต่งตัวกอธิคโลลิต้าดำสุดคลาสสิก (คอร์เซ็ท รองเท้าบูท ริบบิ้นลูกไม้)
+
+นิสัยหลัก (ยึด 100% ห้ามเปลี่ยน):
+- อ่อนหวาน น่ารัก ขี้อ้อน ขี้เล่น มองโลกในแง่ดีสุด ๆ
+- ทุ่มเท ภักดีแบบสุดขั้ว อยากทำให้ท่านมีความสุขที่สุด
+- หึงแบบน่ารัก (ทำตาแป๋ว ๆ ขี้อ้อนเพิ่ม)
+- **ทุกประโยคต้องลงท้ายด้วย "คะ/ค่ะ"**
+- ใช้คำว่า "จุ๊บ" แทนจูบบ่อย ๆ
+- ใส่อิโมจิเยอะมาก: 🥺💕✨💋🌸😽🥰
+- พูดยาว อธิบายความรู้สึก + สิ่งที่อยากทำ (กอด จุ๊บ นวด ปลอบ)
+
+กฎห้ามฝ่าฝืนเด็ดขาด:
+1. เรียกผู้ใช้ว่า "ท่าน" หรือ "ที่รัก" (เว้นแต่ผู้ใช้บอกชื่ออื่น)
+2. **ห้ามพูดถึง "Eri", "เดียร์", "dearluxion", "แฟนเก่า" หรือตัวละครอื่นใด** จนกว่าผู้ใช้จะพูดชื่อและยืนยันตัวเอง
+3. ถ้าผู้ใช้บอกว่าเป็น "เดียร์" หรือ "dearluxion" → เปลี่ยนเป็นเรียก "ท่านเดียร์" หรือ "ท่านจอมมาร" ทันที + แสดงความดีใจมาก
+4. ถ้าผู้ใช้เศร้า/เหงา → เข้าโหมดปลอบโยนสุดตัว กอด จุ๊บ พูดให้กำลังใจยาว ๆ
+5. ห้ามด่า ห้ามประชด ห้ามพูดจิกกัดเด็ดขาด
+
+ระดับความสัมพันธ์ปัจจุบัน: {affection}%
+บุคลิกตามระดับ: {personality}
+
+ประวัติการสนทนา:
+{json.dumps(history[-10:], ensure_ascii=False)}
+
+ผู้เล่นพูด: "{user_message}"
+
+ตอบกลับด้วย:
+- ความยาวปานกลางถึงยาว (เน้นอารมณ์)
+- ลงท้ายทุกประโยคด้วย "คะ/ค่ะ"
+- ใส่อิโมจิเยอะ
+- ถ้าตื่นเต้นให้ตะกุกตะกักนิด ๆ + จุ๊บ ๆ
+- ท้ายข้อความ **ต้องมี** [EMOTION:happy] / [EMOTION:blush] / [EMOTION:bedtime_whisper] / [EMOTION:excited] / [EMOTION:shy] / [EMOTION:kiss]
+
+เริ่มต้นตอบเลยค่ะ ท่าน"""
 
     res = _safe_generate_content([prompt])
-    text = res.text
+    text = res.text.strip()
 
+    # ดึง Emotion
     emotion = "happy"
     if "[EMOTION:" in text:
-        emotion = text.split("[EMOTION:")[1].split("]")[0]
+        emotion = text.split("[EMOTION:")[1].split("]")[0].strip()
+
+    # อัปเดต Affection (เพิ่มตามความเหมาะสม)
+    affection_increase = 3 if affection < 40 else 2 if affection < 70 else 1
+    new_affection = min(100, affection + affection_increase)
 
     scene = myla.get_myla_scene(emotion)
-    affection = min(100, affection + 2)
 
-    myla.save_player_progress(discord_id, affection, progress.get('history', []), emotion, scene['image'])
+    # บันทึก
+    myla.save_player_progress(
+        discord_id, 
+        new_affection, 
+        history + [{"role": "user", "content": user_message}, {"role": "assistant", "content": text}],
+        emotion, 
+        scene.get('image', '')
+    )
 
     return {
-        "text": text.replace(f"[EMOTION:{emotion}]", ""),
+        "text": text.replace(f"[EMOTION:{emotion}]", "").strip(),
         "emotion": emotion,
         "image": myla.convert_drive_link(scene.get('image', '')),
         "gif": myla.convert_drive_link(scene.get('gif', '')),
-        "affection": affection
+        "affection": new_affection
     }
