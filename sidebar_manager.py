@@ -41,7 +41,14 @@ def render_sidebar(ai_available, posts=None):
         if selected_q == "🤔 อยากโพสต์เรื่องราวบ้างต้องทำไง?":
             st.info("🧚‍♀️ **ไมล่า:** ไม่ได้น้า~ นี่เป็น **พื้นที่ส่วนตัวของบอส Dearluxion** เท่านั้นค่ะ! แต่พี่ๆ สามารถคอมเมนต์ หรือส่งข้อความลับมาคุยกับบอสได้นะคะ")
         elif selected_q != "เลือกคำถาม...":
-            st.info(f"🧚‍♀️ **ไมล่า:** {ai.get_myla_answer(selected_q)}")
+            try:
+                if ai.check_ready():
+                    answer = ai.get_myla_answer(selected_q)
+                else:
+                    answer = "🧚‍♀️ **ไมล่า:** ระบบ AI ยังไม่พร้อมค่ะ รอแป๊บนึงนะคะ 💕"
+                st.info(f"🧚‍♀️ **ไมล่า:** {answer}")
+            except:
+                st.info("🧚‍♀️ **ไมล่า:** ไมล่ายังไม่พร้อมตอบคำถามนี้ค่ะ รอแป๊บนึงนะคะ 💕")
 
     st.sidebar.markdown("---")
     
