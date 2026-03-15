@@ -115,20 +115,15 @@ def save_data(posts_list):
 # Profile + Snippets + Mailbox
 # =========================================================
 
-def load_profile():
-    client = _get_gspread_client()
-    sheet_id = _get_main_sheet_config()
-    if not client or not sheet_id:
-        return {"name": "Dearluxion", "emoji": "😎", "status": "ยินดีต้อนรับ"}
+def _serialize_for_sheet(value):
+    """แปลง dict/list ให้เป็น JSON string อัตโนมัติ (กัน error)"""
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
+    return value
 
-    try:
-        ws = client.open_by_key(sheet_id).worksheet("Profile")
-        data = ws.get_all_records()
-        return data[0] if data else {}
-    except:
-        return {"name": "Dearluxion", "emoji": "😎", "status": "ยินดีต้อนรับ"}
 
 def save_profile(profile_dict):
+    """บันทึก Profile แบบปลอดภัย (รองรับ billboard เป็น dict)"""
     client = _get_gspread_client()
     sheet_id = _get_main_sheet_config()
     if not client or not sheet_id:
@@ -138,13 +133,52 @@ def save_profile(profile_dict):
     try:
         ws = sh.worksheet("Profile")
     except:
-        ws = sh.add_worksheet(title="Profile", rows=100, cols=20)
-        ws.append_row(list(profile_dict.keys()))
+        ws = sh.add_worksheet(title="Profile", rows=100, cols=30)
+        ws.append_row(list(profile_dict.keys()))  # สร้าง header ครั้งแรก
 
-    # อัปเดตแถวแรก
+    # --- ล้าง + เขียนใหม่ (แต่ serialize ก่อน) ---
     ws.clear()
+
+    # Header
     ws.append_row(list(profile_dict.keys()))
-    ws.append_row(list(profile_dict.values()))
+
+    # Values (แปลง dict → JSON string)
+    serialized_values = [_serialize_for_sheet(v) for v in profile_dict.values()]
+    ws.append_row(serialized_values)
+
+    print("✅ Profile saved successfully (billboard serialized)")
+
+
+def load_profile():
+    """โหลด + แปลง JSON string กลับเป็น dict อัตโนมัติ"""
+    client = _get_gspread_client()
+    sheet_id = _get_main_sheet_config()
+    if not client or not sheet_id:
+        return {"name": "Dearluxion", "emoji": "😎", "status": "ยินดีต้อนรับ"}
+
+    try:
+        ws = client.open_by_key(sheet_id).worksheet("Profile")
+        records = ws.get_all_records()
+        if not records:
+            return {}
+        
+        row = records[0]  # แถวแรกคือข้อมูลโปรไฟล์
+
+        # แปลงทุกคอลัมน์ที่เป็น JSON string กลับเป็น dict/list
+        for key in row:
+            val = row[key]
+            if isinstance(val, str) and val.strip().startswith(('{', '[')):
+                try:
+                    row[key] = json.loads(val)
+                except:
+                    pass  # ถ้า parse ไม่ได้ก็เว้นไว้ (string ธรรมดา)
+
+        return row
+
+    except Exception as e:
+        print(f"⚠️ Load profile failed: {e}")
+        return {"name": "Dearluxion", "emoji": "😎", "status": "ยินดีต้อนรับ"}
+
 
 def load_snippets():
     # ใช้ worksheet Snippets
