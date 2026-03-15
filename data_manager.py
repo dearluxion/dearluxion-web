@@ -12,14 +12,15 @@ from utils import _get_gspread_client, _get_crypto_memory_sheet_config
 # Config (ใช้ secrets เดียวกับ utils.py)
 # =========================================================
 def _get_main_sheet_config():
+    """ดึง main_sheet_id จาก [google_sheets] เท่านั้น (ตามที่บอสให้มา)"""
     cfg = st.secrets.get("google_sheets", {})
-    sheet_id = (
-        cfg.get("main_sheet_id")
-        or cfg.get("posts_sheet_id")
-        or cfg.get("crypto_analysis_sheet_id")
-        or st.secrets.get("main_sheet_id")
-        or st.secrets.get("posts_sheet_id")
-    )
+    
+    sheet_id = cfg.get("main_sheet_id") or cfg.get("posts_sheet_id")
+    
+    if not sheet_id:
+        # กันกรณี secrets ยังไม่สมบูรณ์ (แต่แนะนำย้ายไป [google_sheets] ให้หมด)
+        sheet_id = st.secrets.get("main_sheet_id") or st.secrets.get("posts_sheet_id")
+    
     return sheet_id
 
 # =========================================================
