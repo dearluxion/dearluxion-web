@@ -254,3 +254,31 @@ def save_prediction_log(data: dict):
 def update_crypto_cache(symbol, analysis_text):
     # เก็บไว้เผื่อใช้ในอนาคต
     pass  # ถ้าต้องการจริง บอกมาได้เลย
+
+# =========================================================
+# TODAY SUMMARY (สำหรับ Crypto Tactical War Room)
+# =========================================================
+def get_today_summary():
+    """สรุปผลการทำนาย + บทเรียนวันนี้ (ใช้ใน War Room)"""
+    import datetime
+    
+    pending = get_pending_predictions()          # จาก Predictions sheet
+    today_str = datetime.datetime.now().strftime("%Y-%m-%d")
+    
+    # ดึงบทเรียนย้อนหลังวันนี้ (จาก Crypto_Memory sheet)
+    memory_rows = fetch_crypto_memory_rows()     # ใช้จาก utils (import อยู่แล้ว)
+    today_memory = [r for r in memory_rows 
+                    if str(r.get("timestamp", "")).startswith(today_str)]
+    
+    win_today = sum(1 for r in today_memory if str(r.get("outcome", "")).upper() == "WIN")
+    total_today = len(today_memory)
+    winrate_today = round((win_today / total_today * 100), 1) if total_today > 0 else 0.0
+    
+    return {
+        "date": today_str,
+        "pending_predictions": len(pending),
+        "today_memory_count": len(today_memory),
+        "today_winrate": winrate_today,
+        "pending_items": pending[:5],           # 5 อันล่าสุด
+        "message": f"วันนี้ ( {today_str} ) มีการทำนายค้างตรวจ {len(pending)} รายการ | Win Rate วันนี้ {winrate_today}%"
+    }
