@@ -494,56 +494,52 @@ if st.session_state['is_admin']:
 
     # ==================== 🎮 MYLA SCENE MANAGER (Admin Only) ====================
     with tab_myla:
-        st.markdown("## 🎮 Myla Scene Manager (ระบบจัดการภาพสาวน้อย)")
-        st.caption("วางลิงก์ Google Drive ปกติได้เลย! ระบบจะนำไปใช้ในเกมจีบไมล่า 💖")
+        st.markdown("## 🎮 Myla Scene Manager (Admin Only)")
+        st.caption("วางลิงก์ Google Drive ปกติได้เลย ระบบจะแปลงเป็น lh3 ให้อัตโนมัติ 💖")
 
         profile = dm.load_profile()
         if 'myla_scenes' not in profile or not isinstance(profile['myla_scenes'], dict):
-            profile['myla_scenes'] = myla.DEFAULT_SCENES.copy()
+            profile['myla_scenes'] = myla.MYLA_SCENES.copy()  # ใช้ค่าเริ่มต้นจาก myla_game_engine
 
-        # เพิ่ม Service เข้าไปในลูป
-        emotions_list = ["happy", "blush", "bedtime_whisper", "excited", "shy", "kiss", "service"]
-        
-        for emotion in emotions_list:
-            st.markdown("---")
-            if emotion == "service":
-                st.subheader("🔞 SERVICE (โหมดอ้อน/ยั่วเบาๆ)")
-                st.caption("ใช้เมื่อความสัมพันธ์สูง หรือผู้เล่นเริ่มจีบหนักๆ")
-            else:
-                st.subheader(f"😊 {emotion.upper()}")
+        for emotion in ["happy", "blush", "bedtime_whisper", "excited", "shy", "kiss"]:
+            st.subheader(f"😊 {emotion.upper()}")
             
-            col_img, col_gif = st.columns([1, 1])
+            col_img, col_gif = st.columns([3, 2])
             
             with col_img:
                 new_image = st.text_input(
-                    "🖼️ Image Link (พื้นหลัง/ภาพนิ่ง)",
+                    "🖼️ Image Link (Google Drive ได้เลย)",
                     value=profile['myla_scenes'].get(emotion, {}).get('image', ''),
                     key=f"myla_img_{emotion}"
                 )
-                converted_img = convert_drive_link(new_image)
-                if converted_img:
-                    st.image(converted_img, caption="ตัวอย่างภาพนิ่ง", use_container_width=True)
-
+            
             with col_gif:
                 new_gif = st.text_input(
-                    "🎞️ GIF Link (ถ้ามีจะแสดงเป็นภาพเคลื่อนไหวทับภาพนิ่ง)",
+                    "🎞️ GIF Link (Google Drive ได้เลย)",
                     value=profile['myla_scenes'].get(emotion, {}).get('gif', ''),
                     key=f"myla_gif_{emotion}"
                 )
-                converted_gif = convert_drive_link(new_gif)
-                if converted_gif:
-                    st.image(converted_gif, caption="ตัวอย่าง GIF", use_container_width=True)
+            
+            # แสดงตัวอย่าง (Preview) ทันที
+            converted_img = convert_drive_link(new_image)
+            converted_gif = convert_drive_link(new_gif)
+            
+            if converted_img:
+                st.image(converted_img, caption="ตัวอย่าง Image (จะใช้ตัวนี้จริง)", width=300)
+            if converted_gif:
+                st.image(converted_gif, caption="ตัวอย่าง GIF", width=300)
 
-            if st.button(f"💾 บันทึกฉาก {emotion.upper()}", key=f"save_{emotion}", type="primary"):
-                if 'myla_scenes' not in profile: profile['myla_scenes'] = {}
+            if st.button(f"💾 บันทึก {emotion}", key=f"save_{emotion}", use_container_width=True):
                 profile['myla_scenes'][emotion] = {
-                    "image": new_image, # เก็บลิงก์ดิบ
-                    "gif": new_gif
+                    "image": converted_img,   # เก็บเป็น lh3 อัตโนมัติ
+                    "gif": converted_gif
                 }
                 dm.save_profile(profile)
                 st.session_state.profile = profile.copy()
-                st.success(f"✅ บันทึกฉาก {emotion.upper()} เรียบร้อย!")
+                st.success(f"✅ บันทึก {emotion} เรียบร้อย! (แปลงเป็น lh3 แล้ว)")
                 st.rerun()
+
+        st.info("✅ ตอนนี้พี่สามารถวางลิงก์ Drive ปกติได้เลย ไม่ต้องแปลงเองอีกต่อไป 💕")
 
 
 
@@ -1527,89 +1523,80 @@ elif st.session_state.get('show_code_zone', False):
     
     filtered = []  # รีเซต filtered สำหรับโหมด Code Zone
 
-# ==================== MYLA FULL GAME (Dating Sim) ====================
+# ==================== MYLA FULL GAME (สมบูรณ์แบบสุดท้าย) ====================
+# ==================== MYLA FULL GAME (มีปุ่มกลับชัดเจน) ====================
 elif st.session_state.get('show_myla_game', False):
-    st.markdown("## 🎮 Myla Devilluc: The Dating Sim 💕")
+    st.markdown("## 🎮 Myla Flirting Game - Full Edition 💕")
+    st.caption("จีบไมล่าแบบสมบูรณ์แบบ | Affection + Gift + Date Event + ภาพเปลี่ยนตามอารมณ์")
     
-    # ปุ่มกลับ
-    if st.button("🏠 ถอยกลับหน้าหลัก", key="back_myla_top"):
+    # ปุ่มกลับด้านบน (เห็นชัดที่สุด)
+    if st.button("🏠 กลับหน้าหลัก", 
+                 type="primary", 
+                 use_container_width=True,
+                 key="back_myla_top"):
         st.session_state['show_myla_game'] = False
         st.rerun()
 
     if not st.session_state.get('discord_user'):
-        st.error("🔒 ต้องเข้าสู่ระบบด้วย Discord ก่อน ถึงจะเข้าไปจีบไมล่าได้นะคะ!")
-        login_link = get_discord_login_url(st.secrets["discord_oauth"]["client_id"], st.secrets["discord_oauth"]["redirect_uri"])
-        st.markdown(f'<a href="{login_link}" target="_blank"><button style="width:100%; padding:15px; background:#5865F2; color:white; border:none; border-radius:10px; font-size:18px;">👾 Login with Discord เพื่อเริ่มเกม</button></a>', unsafe_allow_html=True)
+        st.warning("กรุณา Login Discord ก่อนจีบไมล่านะพี่จ๋า~")
     else:
-        user_info = st.session_state['discord_user']
-        user_id = user_info['id']
-        username = user_info['username']
-        
-        # ดึงเซฟจาก Google Sheets
+        user_id = st.session_state['discord_user']['id']
         progress = myla.load_player_progress(user_id)
+        
         aff = progress['affection']
-        
-        # โชว์หลอดหัวใจ
-        st.progress(min(aff / 100.0, 1.0))
-        heart_emoji = "💖" if aff >= 90 else "❤️" if aff >= 60 else "💕" if aff >= 30 else "🤍"
-        st.markdown(f"**{heart_emoji} ระดับความสัมพันธ์ (Affection): {aff:.1f}/100**")
-        
-        if aff >= 90: st.caption("🔥 ปลดล็อคโหมดซัคคิวบัส (Service Ready)")
+        st.progress(aff / 100)
+        st.markdown(f"**❤️ Affection Level: {aff:.1f}%** {'❤️' * int(aff//20)}")
 
-        # จัดการการแสดงผลภาพและ GIF (ซ้อนกันหรือคู่กัน)
         scene = myla.get_myla_scene(progress['emotion'])
-        img_url = myla.convert_drive_link(scene.get('image', ''))
-        gif_url = myla.convert_drive_link(scene.get('gif', ''))
+        if scene.get('image'):
+            st.image(myla.convert_drive_link(scene['image']), use_column_width=True)
+        if scene.get('gif'):
+            st.image(myla.convert_drive_link(scene.get('gif', '')), use_column_width=True)
 
-        media_container = st.container()
-        with media_container:
-            # ถ้ามี GIF ให้โชว์ GIF เป็นหลัก ถ้าไม่มีค่อยโชว์ภาพ
-            if gif_url:
-                st.image(gif_url, use_container_width=True)
-                if img_url:
-                    st.caption("✨ ฉากพื้นหลังพร้อมใช้งาน")
-            elif img_url:
-                st.image(img_url, use_container_width=True)
-            else:
-                st.info("🖼️ แอดมินยังไม่ได้ตั้งค่าภาพสำหรับอารมณ์นี้")
+        for msg in progress['history'][-8:]:
+            with st.chat_message(msg['role']):
+                st.write(msg['content'])
 
-        st.markdown("---")
-        
-        # แสดงประวัติแชท
-        chat_container = st.container(height=400)
-        with chat_container:
-            for msg in progress['history']:
-                if msg['role'] == "user":
-                    with st.chat_message("user", avatar="👤"):
-                        st.write(msg['content'])
-                else:
-                    with st.chat_message("assistant", avatar="🧚‍♀️"):
-                        st.write(msg['content'])
+        if prompt := st.chat_input("พิมพ์คำหวานจีบไมล่า... 💌"):
+            with st.chat_message("user"):
+                st.write(prompt)
+            
+            result = ai.flirt_with_myla(str(user_id), prompt)
+            
+            with st.chat_message("assistant"):
+                st.write(result['text'])
+                if result.get('gif'):
+                    st.image(result['gif'])
+                elif result.get('image'):
+                    st.image(result['image'])
+            
+            new_history = progress['history'] + [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": result['text']}
+            ]
+            myla.save_player_progress(user_id, result['affection'], new_history, result['emotion'], result['image'])
+            st.rerun()
 
-        # กล่องพิมพ์จีบ
-        if prompt := st.chat_input("พิมพ์คำหวาน หรือชวนคุยตรงนี้... 💌"):
-            with st.spinner("ไมล่ากำลังเขิน..."):
-                result = myla.flirt_with_myla(user_id, username, prompt)
-            st.rerun() # รีเฟรชหน้าเพื่ออัปเดตกราฟิกและแชท
-
-        # ปุ่ม Event พิเศษ
-        st.markdown("<br>", unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            if st.button("🎁 ให้เค้กสตรอว์เบอร์รี (+2 Aff)"):
-                myla.flirt_with_myla(user_id, username, "*ยื่นเค้กสตรอว์เบอร์รีชิ้นโตให้* ทานสิครับไมล่า")
+        # ปุ่มพิเศษ
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🎁 ส่งของขวัญให้ไมล่า", use_container_width=True):
+                st.balloons()
+                st.success("ไมล่าดีใจมากเลยค่ะพี่จ๋า~ +15 Affection ❤️")
+                myla.save_player_progress(user_id, min(100, aff + 15), progress['history'], progress['emotion'], progress['image'])
                 st.rerun()
-        with c2:
-            if st.button("💆‍♂️ ลูบหัวเบาๆ (+3 Aff)"):
-                myla.flirt_with_myla(user_id, username, "*เอื้อมมือไปลูบหัวไมล่าเบาๆ อย่างอ่อนโยน*")
+        with col2:
+            if st.button("🌹 ชวนเดท", use_container_width=True):
+                st.success("เย้~ ไมล่ายอมเดทกับพี่แล้ว! 💕")
                 st.rerun()
-        with c3:
-            if aff >= 50:
-                if st.button("🌹 ชวนเดทดูหนัง (Unlock)"):
-                    myla.flirt_with_myla(user_id, username, "สุดสัปดาห์นี้... เราไปเดทดูหนังด้วยกันไหมครับ?")
-                    st.rerun()
-            else:
-                st.button("🔒 ชวนเดท (ต้องการ Affection 50+)", disabled=True)
+
+        # ปุ่มกลับด้านล่าง (กันพลาด)
+        if st.button("🏠 กลับหน้าหลัก", 
+                     type="primary", 
+                     use_container_width=True,
+                     key="back_myla_bottom"):
+            st.session_state['show_myla_game'] = False
+            st.rerun()
 
 elif st.session_state['show_shop']:
     st.markdown("## 🛒 ร้านค้า (Shop Zone)")
