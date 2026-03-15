@@ -7,6 +7,7 @@ import random
 import base64
 import plotly.graph_objects as go
 import pandas as pd
+import json   # ← เพิ่มบรรทัดนี้
 
 # --- [IMPORTED MODULES] ---
 from styles import get_css 
@@ -1614,6 +1615,26 @@ elif st.session_state['show_shop']:
 else:
     posts = st.session_state.posts
     filtered = posts
+
+    # === SAFETY NET แก้ reactions เก่า (สำคัญมาก!) ===
+    for p in st.session_state.posts:
+        reactions = p.get("reactions")
+        if not isinstance(reactions, dict):
+            try:
+                if isinstance(reactions, str) and reactions.strip():
+                    p["reactions"] = json.loads(reactions)
+                else:
+                    p["reactions"] = {}
+            except:
+                p["reactions"] = {"😻": p.get("likes", 0), "🙀": 0, "😿": 0, "😾": 0, "🧠": 0}
+
+    # ตรวจสอบ emoji ทุกตัว (กัน error)
+    for p in st.session_state.posts:
+        if 'reactions' not in p or not isinstance(p['reactions'], dict):
+            p['reactions'] = {"😻": 0, "🙀": 0, "😿": 0, "😾": 0, "🧠": 0}
+        for e in ['😻', '🙀', '😿', '😾', '🧠']:
+            if e not in p['reactions']:
+                p['reactions'][e] = 0
 
 if filtered:
     for post in reversed(filtered):

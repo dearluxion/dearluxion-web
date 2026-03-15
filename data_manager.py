@@ -28,7 +28,7 @@ def _get_main_sheet_config():
 # =========================================================
 
 def load_data():
-    """โหลดโพสต์ทั้งหมด (Posts worksheet)"""
+    """โหลดโพสต์ + แปลง JSON อัตโนมัติ (สำคัญมาก!)"""
     client = _get_gspread_client()
     sheet_id = _get_main_sheet_config()
     if not client or not sheet_id:
@@ -38,14 +38,45 @@ def load_data():
         sh = client.open_by_key(sheet_id)
         ws = sh.worksheet("Posts")
         records = ws.get_all_records()
-        return records
-    except Exception:
-        # ถ้า worksheet ยังไม่มี → สร้างใหม่
+    except:
         sh = client.open_by_key(sheet_id)
         ws = sh.add_worksheet(title="Posts", rows=1000, cols=20)
-        headers = ["id", "date", "content", "images", "video", "color", "price", "likes", "reactions", "comments"]
-        ws.append_row(headers)
+        ws.append_row(["id", "date", "content", "images", "video", "color", "price", "likes", "reactions", "comments"])
         return []
+
+    # === แปลงทุกคอลัมน์ที่เป็น JSON string ให้เป็น dict/list ===
+    for row in records:
+        # reactions
+        if isinstance(row.get("reactions"), str) and row["reactions"].strip():
+            try:
+                row["reactions"] = json.loads(row["reactions"])
+            except:
+                row["reactions"] = {"😻": row.get("likes", 0), "🙀": 0, "😿": 0, "😾": 0, "🧠": 0}
+        else:
+            row["reactions"] = {"😻": row.get("likes", 0), "🙀": 0, "😿": 0, "😾": 0, "🧠": 0}
+
+        # images
+        if isinstance(row.get("images"), str) and row["images"].strip():
+            try:
+                row["images"] = json.loads(row["images"])
+            except:
+                row["images"] = []
+
+        # video
+        if isinstance(row.get("video"), str) and row["video"].strip():
+            try:
+                row["video"] = json.loads(row["video"])
+            except:
+                row["video"] = []
+
+        # comments
+        if isinstance(row.get("comments"), str) and row["comments"].strip():
+            try:
+                row["comments"] = json.loads(row["comments"])
+            except:
+                row["comments"] = []
+
+    return records
 
 def save_data(posts_list):
     """บันทึกโพสต์ทั้งหมด"""
@@ -153,11 +184,12 @@ def update_prediction_result(row_idx, status, score, current_price):
     sheet_id, _ = _get_crypto_memory_sheet_config()
     try:
         ws = client.open_by_key(sheet_id).worksheet("Predictions")
-        ws.update_cell(row_idx + 2, 6, status)      # column F = status
-        ws.update_cell(row_idx + 2, 7, score)       # column G = score
-        ws.update_cell(row_idx + 2, 8, current_price)
-    except:
-        pass
+        # แก้ column ให้ตรงกับ sheet ที่มี status/score/close_price แยกคอลัมน์
+        ws.update_cell(row_idx + 2, 9, status)          # I = status
+        ws.update_cell(row_idx + 2, 10, score)          # J = score
+        ws.update_cell(row_idx + 2, 11, current_price)  # K = close_price
+    except Exception as e:
+        print(f"Update prediction error: {e}")
 
 def save_prediction_log(data: dict):
     """บันทึก prediction log (ใช้ใน ai_manager)"""
