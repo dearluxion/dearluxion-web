@@ -6,7 +6,10 @@ DATA MANAGER - Pure Google Sheets Version
 import streamlit as st
 import datetime
 import json
-from utils import _get_gspread_client, _get_crypto_memory_sheet_config
+from utils import (
+    _get_gspread_client, 
+    _get_crypto_memory_sheet_config
+)
 
 # =========================================================
 # Config (ใช้ secrets เดียวกับ utils.py)
@@ -261,12 +264,13 @@ def update_crypto_cache(symbol, analysis_text):
 def get_today_summary():
     """สรุปผลการทำนาย + บทเรียนวันนี้ (ใช้ใน War Room)"""
     import datetime
-    
+    from utils import fetch_crypto_memory_rows  # 👈 เพิ่มบรรทัดนี้เข้ามาข้างในฟังก์ชัน!
+
     pending = get_pending_predictions()          # จาก Predictions sheet
     today_str = datetime.datetime.now().strftime("%Y-%m-%d")
-    
+
     # ดึงบทเรียนย้อนหลังวันนี้ (จาก Crypto_Memory sheet)
-    memory_rows = fetch_crypto_memory_rows()     # ใช้จาก utils (import อยู่แล้ว)
+    memory_rows = fetch_crypto_memory_rows()     # 👈 ตอนนี้ระบบจะรู้จักและหาเจอแน่นอนครับ
     today_memory = [r for r in memory_rows 
                     if str(r.get("timestamp", "")).startswith(today_str)]
     

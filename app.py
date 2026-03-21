@@ -1376,9 +1376,11 @@ if st.session_state.get('show_crypto', False):
             st.markdown("### ⚖️ ตารางคะแนนผลงาน AI (Reality Check)")
             st.caption("ระบบจะเทียบสิ่งที่ AI เคยวิเคราะห์ไว้กับราคาจริงภายหลัง เพื่อดูว่าคิดแม่นแค่ไหน")
             
-            history = dm.get_today_summary()
-            if history:
-                for h in history:
+            history = dm.get_today_summary()   # ← เรียกได้ปกติแล้ว
+            if history and history.get('pending_items'):
+                st.info(history.get('message', ''))
+                st.markdown("### 📋 การทำนายค้างตรวจวันนี้")
+                for h in history.get('pending_items', []):
                     try:
                         score = int(str(h.get('score', '0')).replace("%", "").strip())
                     except:

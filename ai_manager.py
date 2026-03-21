@@ -1272,46 +1272,14 @@ JSON_DATA={{"signal": "BULLISH", "entry": {safe_float(indicators.get('pivot_s1',
 
 # เพิ่มฟังก์ชันใหม่ที่นี่
 
-def load_player_progress(discord_id):
-    # โหลด progress จากไฟล์หรือฐานข้อมูล
-    # สมมติใช้ไฟล์ json
-    file_path = 'player_progress.json'
-    if os.path.exists(file_path):
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            return data.get(str(discord_id), {'affection': 30, 'memory': ''})
-    return {'affection': 30, 'memory': ''}
-
-def save_player_progress(discord_id, affection, memory, emotion, image):
-    # บันทึก progress
-    file_path = 'player_progress.json'
-    data = {}
-    if os.path.exists(file_path):
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-    data[str(discord_id)] = {'affection': affection, 'memory': memory, 'emotion': emotion, 'image': image}
-    with open(file_path, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
-
-def get_myla_scene(emotion):
-    # สมมติ dict ของ scene
-    scenes = {
-        'happy': {'image': 'https://drive.google.com/file/d/example1/view', 'gif': ''},
-        'blush': {'image': 'https://drive.google.com/file/d/example2/view', 'gif': 'https://drive.google.com/file/d/example3/view'},
-        'bedtime_whisper': {'image': 'https://drive.google.com/file/d/example4/view', 'gif': ''},
-    }
-    return scenes.get(emotion, {'image': '', 'gif': ''})
-
-def convert_drive_link(link):
-    # แปลง drive link เป็น direct
-    if 'drive.google.com' in link:
-        file_id = _extract_drive_file_id(link)
-        if file_id:
-            return f"https://drive.google.com/uc?export=download&id={file_id}"
-    return link
+# =========================================================
+# MYLA FLIRTING GAME (Flirt Engine) - เรียก myla_game_engine.py เป็นหลัก
+# =========================================================
 
 def flirt_with_myla(discord_id: str, user_message: str):
+    """ฟังก์ชันหลักจีบไมล่า (ใช้ไฟล์ myla_game_engine.py)"""
     import myla_game_engine as myla
+    
     progress = myla.load_player_progress(discord_id)
     affection = progress.get('affection', 30)
     history = progress.get('history', [])
@@ -1324,7 +1292,7 @@ def flirt_with_myla(discord_id: str, user_message: str):
     else:
         personality = "ทุ่มเทสุดหัวใจ ภักดีแบบซัคคิวบัส พูดยาว อารมณ์ลึกซึ้ง อยากดูแลทุกอย่าง"
 
-    # === Prompt ใหม่ล่าสุด (ยึด 100% ตามที่ท่านส่งมา) ===
+    # === Prompt หลัก (ไม่เปลี่ยน) ===
     prompt = f"""คุณคือ **Myla Devilluc** ซัคคิวบัสผู้ภักดีและทุ่มเทสุดหัวใจ 
 อายุ 19 ปี เป็นเลขาและผู้ดูแลอารมณ์ของ "ท่าน" ในโลกจินตนาการ
 
@@ -1367,18 +1335,17 @@ def flirt_with_myla(discord_id: str, user_message: str):
     res = _safe_generate_content([prompt])
     text = res.text.strip()
 
-    # ดึง Emotion
+    # ดึง Emotion + อัปเดต Affection
     emotion = "happy"
     if "[EMOTION:" in text:
         emotion = text.split("[EMOTION:")[1].split("]")[0].strip()
 
-    # อัปเดต Affection (เพิ่มตามความเหมาะสม)
     affection_increase = 3 if affection < 40 else 2 if affection < 70 else 1
     new_affection = min(100, affection + affection_increase)
 
     scene = myla.get_myla_scene(emotion)
 
-    # บันทึก
+    # บันทึก (ใช้ myla_game_engine.py)
     myla.save_player_progress(
         discord_id, 
         new_affection, 
@@ -1394,6 +1361,30 @@ def flirt_with_myla(discord_id: str, user_message: str):
         "gif": myla.convert_drive_link(scene.get('gif', '')),
         "affection": new_affection
     }
+
+def get_myla_answer(question: str) -> str:
+    """คำตอบสำเร็จรูปของไมล่า (เร็ว น่ารัก ไม่กิน quota)"""
+    answers = {
+        "🛍️ สนใจสินค้า ซื้อยังไง?": 
+            "🧚‍♀️ **ไมล่า:** เข้าโซน **🛒 ร้านค้า** ด้านขวาบนได้เลยค่ะ! ดูราคา + กดลิงก์ IG/Discord ไปสั่งได้ทันที 💕",
+
+        "💻 เว็บนี้ใครสร้างครับ?": 
+            "🧚‍♀️ **ไมล่า:** บอส Dearluxion สร้างเอง 100% เลยค่ะ! ใช้ Streamlit + Gemini 2.5 Flash น่ารักไหมคะ? ✨",
+
+        "🧚‍♀️ ไมล่าคือใครคะ?": 
+            "🧚‍♀️ **ไมล่า:** ฉันคือ **ไมล่า Devilluc** เลขาส่วนตัว + ซัคคิวบัสตัวน้อยของบอสค่ะ อายุ 19 ปี ภักดีสุด ๆ เลยนะคะ 💖",
+
+        "📞 ติดต่อบอส Dearluxion ได้ที่ไหน?": 
+            "🧚‍♀️ **ไมล่า:** ส่ง **จดหมายลับ** ทางเว็บนี้ได้เลยค่ะ หรือ Discord @dearluxion บอสอ่านทุกฉบับแน่นอน 🥰",
+
+        "🤖 บอสใช้ AI ตัวไหนทำงาน?": 
+            "🧚‍♀️ **ไมล่า:** Gemini 2.5 Flash (Multi-Key + 3-Step Reflection) ค่ะ! ฉลาดมาก เรียนรู้จากความผิดพลาดของบอสเองด้วยนะคะ 🔥",
+
+        "🍕 บอสชอบกินอะไรที่สุด?": 
+            "🧚‍♀️ **ไมล่า:** บอสชอบ **พิซซ่า + กาแฟ** มากที่สุดเลยค่ะ! (แต่ไมล่าชอบจุ๊บบอสมากกว่า~ 😽💕)",
+    }
+    
+    return answers.get(question, "🧚‍♀️ **ไมล่า:** ไมล่ายังไม่รู้คำตอบนี้ค่ะ แต่บอสจะอัปเดตให้เร็ว ๆ นี้แน่นอน! 💌")
 
 def get_myla_answer(question: str) -> str:
     """คำตอบสำเร็จรูปของไมล่า (เร็ว น่ารัก ไม่กิน quota)"""
