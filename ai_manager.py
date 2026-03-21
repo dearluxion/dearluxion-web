@@ -262,12 +262,20 @@ def _setup_model():
         "max_output_tokens": 8192,
     }
 
-    # ใช้ Model Gemini 2.5 Flash ตามปี 2026
+    # 🔥 เพิ่ม safety settings สำหรับเกมจีบไมล่า
+    safety_settings = [
+        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+    ]
+
     model = genai.GenerativeModel(
-        model_name='gemini-2.5-flash', 
-        generation_config=generation_config
+        model_name='gemini-2.5-flash',
+        generation_config=generation_config,
+        safety_settings=safety_settings
     )
-    print(f"🤖 AI switched to Key Index: {current_key_index+1} (Model: gemini-2.5-flash)")
+    print(f"🤖 AI switched to Key Index: {current_key_index+1} (Model: gemini-2.5-flash + Flirt Mode)")
 
 # ฟังก์ชันแจ้งเตือนแบบ DM (Bot API)
 def _rotate_key_and_notify(error_msg):
@@ -1319,33 +1327,39 @@ def flirt_with_myla(user_message: str, affection: float, history: list):
      ถ้าคุยทั่วไปให้ [SCORE:+0]
 """
 
-    res = _safe_generate_content([prompt])
-    text = res.text.strip()
+    # 🔥 กำหนดค่าเริ่มต้นก่อน try (ป้องกัน error)
+    text = "🥺 ท่าน... ไมล่าอายมากเลยค่ะ 💕 พูดอะไรหวานกว่านี้อีกนิดได้ไหมคะ~"
+    emotion = "blush"
+    score_change = 1
 
-    # ดึงอารมณ์ (Emotion)
-    emotion = "happy"
+    try:
+        res = _safe_generate_content([prompt])
+        text = res.text.strip()
+    except Exception as e:
+        print(f"⚠️ Gemini blocked flirt response: {e}")
+        # ใช้ค่า default ที่ตั้งไว้ด้านบน
+
+    # === แยก [EMOTION] และ [SCORE] ===
     if "[EMOTION:" in text:
         try:
             emotion = text.split("[EMOTION:")[1].split("]")[0].strip()
         except:
             pass
 
-    # ดึงคะแนนที่เปลี่ยนไป (Score Change)
-    score_change = 0
     score_match = re.search(r'\[SCORE:([+-]?\d+)\]', text)
     if score_match:
         score_change = int(score_match.group(1))
 
-    # ทำความสะอาดข้อความ ลบ Tag ออกก่อนให้ User เห็น
+    # ทำความสะอาดข้อความ
     clean_text = re.sub(r'\[EMOTION:.*?\]', '', text)
     clean_text = re.sub(r'\[SCORE:.*?\]', '', clean_text).strip()
 
-    # คำนวณ Affection ใหม่ (ไม่ต่ำกว่า 0 ไม่เกิน 100)
+    # คำนวณ Affection ใหม่
     new_affection = max(0.0, min(100.0, affection + score_change))
     scene = myla.get_myla_scene(emotion)
 
     return {
-        "text": clean_text,
+        "text": clean_text or "💕 ไมล่ารักท่านที่สุดเลยค่ะ~",
         "emotion": emotion,
         "score_change": score_change,
         "affection": new_affection,
