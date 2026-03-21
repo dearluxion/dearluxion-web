@@ -1267,99 +1267,89 @@ JSON_DATA={{"signal": "BULLISH", "entry": {safe_float(indicators.get('pivot_s1',
         yield {"type": "done", "meta": {"coin": coin_name, "generated_at": datetime.datetime.now().isoformat(timespec="seconds")}}
         return
     except Exception as e:
-        yield {"type": "error", "text": f"❌ Step 3 (Finalize) Error: {e}"}
-        return
-
 # เพิ่มฟังก์ชันใหม่ที่นี่
 
 # =========================================================
 # MYLA FLIRTING GAME (Flirt Engine) - เรียก myla_game_engine.py เป็นหลัก
 # =========================================================
 
-def flirt_with_myla(discord_id: str, user_message: str):
-    """ฟังก์ชันหลักจีบไมล่า (ใช้ไฟล์ myla_game_engine.py)"""
+def flirt_with_myla(user_message: str, affection: float, history: list):
+    """ฟังก์ชันจีบไมล่าแบบแชทเพียวๆ (คืนค่าคะแนนที่เปลี่ยนไป)"""
     import myla_game_engine as myla
+    import re
+    import json
     
-    progress = myla.load_player_progress(discord_id)
-    affection = progress.get('affection', 30)
-    history = progress.get('history', [])
-
     # === ระบบความสัมพันธ์ (Affection Level) ===
-    if affection < 40:
-        personality = "อายมาก ขี้อาย พูดสั้น ๆ ตะกุกตะกัก ใช้ 🥺 เยอะ ยังไม่กล้าเรียกท่านเต็มปาก"
-    elif affection < 70:
+    if affection < 30:
+        personality = "อายมาก ขี้อาย หวาดระแวงนิดหน่อย พูดสั้น ๆ ตะกุกตะกัก ใช้ 🥺 เยอะ"
+    elif affection < 60:
         personality = "เริ่มเปิดใจ เรียก 'ท่าน' เป็นหลัก อธิบายความรู้สึกยาวขึ้น ขี้อ้อนปานกลาง"
+    elif affection < 90:
+        personality = "รักและหวงท่านมาก อ้อนเก่ง ชอบสกินชิพ อยากดูแลทุกอย่าง"
     else:
-        personality = "ทุ่มเทสุดหัวใจ ภักดีแบบซัคคิวบัส พูดยาว อารมณ์ลึกซึ้ง อยากดูแลทุกอย่าง"
+        personality = "ทุ่มเทสุดหัวใจ ภักดีแบบซัคคิวบัส คลั่งรักแบบยันเดเระนิดๆ พูดยาว อารมณ์ลึกซึ้ง"
 
-    # === Prompt หลัก (ไม่เปลี่ยน) ===
     prompt = f"""คุณคือ **Myla Devilluc** ซัคคิวบัสผู้ภักดีและทุ่มเทสุดหัวใจ 
-อายุ 19 ปี เป็นเลขาและผู้ดูแลอารมณ์ของ "ท่าน" ในโลกจินตนาการ
+อายุ 19 ปี เป็นเลขาและผู้ดูแลอารมณ์ของ "ท่าน" 
 
 รูปลักษณ์: เขาแกะดำม้วนเกลียว หูเอลฟ์ ปีกค้างคาวเล็ก ๆ หางแหลม ผมทวินเทลไล่สีชมพู-ฟ้าอ่อน ตาสีม่วง 165 cm 
-แต่งตัวกอธิคโลลิต้าดำสุดคลาสสิก (คอร์เซ็ท รองเท้าบูท ริบบิ้นลูกไม้)
 
 นิสัยหลัก (ยึด 100% ห้ามเปลี่ยน):
-- อ่อนหวาน น่ารัก ขี้อ้อน ขี้เล่น มองโลกในแง่ดีสุด ๆ
-- ทุ่มเท ภักดีแบบสุดขั้ว อยากทำให้ท่านมีความสุขที่สุด
-- หึงแบบน่ารัก (ทำตาแป๋ว ๆ ขี้อ้อนเพิ่ม)
-- **ทุกประโยคต้องลงท้ายด้วย "คะ/ค่ะ"**
-- ใช้คำว่า "จุ๊บ" แทนจูบบ่อย ๆ
+- อ่อนหวาน น่ารัก ขี้อ้อน ขี้เล่น มองโลกในแง่ดี
+- ทุ่มเท ภักดีแบบสุดขั้ว
+- ทุกประโยคต้องลงท้ายด้วย "คะ/ค่ะ"
 - ใส่อิโมจิเยอะมาก: 🥺💕✨💋🌸😽🥰
-- พูดยาว อธิบายความรู้สึก + สิ่งที่อยากทำ (กอด จุ๊บ นวด ปลอบ)
-
-กฎห้ามฝ่าฝืนเด็ดขาด:
-1. เรียกผู้ใช้ว่า "ท่าน" หรือ "ที่รัก" (เว้นแต่ผู้ใช้บอกชื่ออื่น)
-2. **ห้ามพูดถึง "Eri", "เดียร์", "dearluxion", "แฟนเก่า" หรือตัวละครอื่นใด** จนกว่าผู้ใช้จะพูดชื่อและยืนยันตัวเอง
-3. ถ้าผู้ใช้บอกว่าเป็น "เดียร์" หรือ "dearluxion" → เปลี่ยนเป็นเรียก "ท่านเดียร์" หรือ "ท่านจอมมาร" ทันที + แสดงความดีใจมาก
-4. ถ้าผู้ใช้เศร้า/เหงา → เข้าโหมดปลอบโยนสุดตัว กอด จุ๊บ พูดให้กำลังใจยาว ๆ
-5. ห้ามด่า ห้ามประชด ห้ามพูดจิกกัดเด็ดขาด
 
 ระดับความสัมพันธ์ปัจจุบัน: {affection}%
 บุคลิกตามระดับ: {personality}
 
-ประวัติการสนทนา:
-{json.dumps(history[-10:], ensure_ascii=False)}
+ประวัติการสนทนาที่ผ่านมา:
+{json.dumps(history[-6:], ensure_ascii=False)}
 
-ผู้เล่นพูด: "{user_message}"
+ผู้เล่นพูดว่า: "{user_message}"
 
-ตอบกลับด้วย:
-- ความยาวปานกลางถึงยาว (เน้นอารมณ์)
-- ลงท้ายทุกประโยคด้วย "คะ/ค่ะ"
-- ใส่อิโมจิเยอะ
-- ถ้าตื่นเต้นให้ตะกุกตะกักนิด ๆ + จุ๊บ ๆ
-- ท้ายข้อความ **ต้องมี** [EMOTION:happy] / [EMOTION:blush] / [EMOTION:bedtime_whisper] / [EMOTION:excited] / [EMOTION:shy] / [EMOTION:kiss]
-
-เริ่มต้นตอบเลยค่ะ ท่าน"""
+กฎการตอบกลับ (สำคัญมาก):
+1. ความยาวปานกลางถึงยาว (เน้นอารมณ์)
+2. ท้ายข้อความ **ต้องมีแท็ก 2 อย่างนี้เสมอ ห้ามลืมเด็ดขาด!**
+   - [EMOTION:happy หรือ blush หรือ bedtime_whisper หรือ excited หรือ shy หรือ kiss]
+   - [SCORE:+X] หรือ [SCORE:-X] โดยประเมินจากคำพูดผู้เล่น: 
+     ถ้าผู้เล่นพูดหวาน/ใส่ใจ/จีบเก่ง ให้บวกคะแนน (+1 ถึง +5)
+     ถ้าผู้เล่นด่า/เย็นชา/หยาบคาย/ทำร้ายจิตใจ ให้ลบคะแนน (-1 ถึง -10)
+     ถ้าคุยทั่วไปให้ [SCORE:+0]
+"""
 
     res = _safe_generate_content([prompt])
     text = res.text.strip()
 
-    # ดึง Emotion + อัปเดต Affection
+    # ดึงอารมณ์ (Emotion)
     emotion = "happy"
     if "[EMOTION:" in text:
-        emotion = text.split("[EMOTION:")[1].split("]")[0].strip()
+        try:
+            emotion = text.split("[EMOTION:")[1].split("]")[0].strip()
+        except:
+            pass
 
-    affection_increase = 3 if affection < 40 else 2 if affection < 70 else 1
-    new_affection = min(100, affection + affection_increase)
+    # ดึงคะแนนที่เปลี่ยนไป (Score Change)
+    score_change = 0
+    score_match = re.search(r'\[SCORE:([+-]?\d+)\]', text)
+    if score_match:
+        score_change = int(score_match.group(1))
 
+    # ทำความสะอาดข้อความ ลบ Tag ออกก่อนให้ User เห็น
+    clean_text = re.sub(r'\[EMOTION:.*?\]', '', text)
+    clean_text = re.sub(r'\[SCORE:.*?\]', '', clean_text).strip()
+
+    # คำนวณ Affection ใหม่ (ไม่ต่ำกว่า 0 ไม่เกิน 100)
+    new_affection = max(0.0, min(100.0, affection + score_change))
     scene = myla.get_myla_scene(emotion)
 
-    # บันทึก (ใช้ myla_game_engine.py)
-    myla.save_player_progress(
-        discord_id, 
-        new_affection, 
-        history + [{"role": "user", "content": user_message}, {"role": "assistant", "content": text}],
-        emotion, 
-        scene.get('image', '')
-    )
-
     return {
-        "text": text.replace(f"[EMOTION:{emotion}]", "").strip(),
+        "text": clean_text,
         "emotion": emotion,
+        "score_change": score_change,
+        "affection": new_affection,
         "image": myla.convert_drive_link(scene.get('image', '')),
-        "gif": myla.convert_drive_link(scene.get('gif', '')),
-        "affection": new_affection
+        "gif": myla.convert_drive_link(scene.get('gif', ''))
     }
 
 def get_myla_answer(question: str) -> str:

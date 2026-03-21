@@ -67,6 +67,7 @@ if 'last_gossip_time' not in st.session_state: st.session_state['last_gossip_tim
 if 'last_mailbox_time' not in st.session_state: st.session_state['last_mailbox_time'] = 0
 if 'last_choice_time' not in st.session_state: st.session_state['last_choice_time'] = 0
 if 'last_stock_trade' not in st.session_state: st.session_state['last_stock_trade'] = 0
+if 'last_myla_chat' not in st.session_state: st.session_state['last_myla_chat'] = 0
 if 'show_shop' not in st.session_state: st.session_state['show_shop'] = False
 if 'is_admin' not in st.session_state: st.session_state['is_admin'] = False
 if 'feed_tokens' not in st.session_state: st.session_state['feed_tokens'] = 5
@@ -1528,11 +1529,12 @@ elif st.session_state.get('show_code_zone', False):
 
 # ==================== MYLA FULL GAME (สมบูรณ์แบบสุดท้าย) ====================
 # ==================== MYLA FULL GAME (มีปุ่มกลับชัดเจน) ====================
+# ==================== MYLA FULL GAME (จีบด้วยแชท 100%) ====================
 elif st.session_state.get('show_myla_game', False):
     st.markdown("## 🎮 Myla Flirting Game - Full Edition 💕")
-    st.caption("จีบไมล่าแบบสมบูรณ์แบบ | Affection + Gift + Date Event + ภาพเปลี่ยนตามอารมณ์")
+    st.caption("จีบไมล่าด้วยแชท 100% | ระบบคะแนนแปรผันตามคำพูด | ภาพเปลี่ยนตามอารมณ์")
     
-    # ปุ่มกลับด้านบน (เห็นชัดที่สุด)
+    # ปุ่มกลับด้านบน
     if st.button("🏠 กลับหน้าหลัก", 
                  type="primary", 
                  use_container_width=True,
@@ -1547,8 +1549,8 @@ elif st.session_state.get('show_myla_game', False):
         progress = myla.load_player_progress(user_id)
         
         aff = progress['affection']
-        st.progress(aff / 100)
-        st.markdown(f"**❤️ Affection Level: {aff:.1f}%** {'❤️' * int(aff//20)}")
+        st.progress(max(0.0, min(1.0, aff / 100)))
+        st.markdown(f"**❤️ Affection Level: {aff:.1f}%** {'❤️' * int(max(0, aff)//20)}")
 
         scene = myla.get_myla_scene(progress['emotion'])
         if scene.get('image'):
@@ -1556,50 +1558,45 @@ elif st.session_state.get('show_myla_game', False):
         if scene.get('gif'):
             st.image(myla.convert_drive_link(scene.get('gif', '')), use_column_width=True)
 
+        # แสดงประวัติแชท
         for msg in progress['history'][-8:]:
             with st.chat_message(msg['role']):
                 st.write(msg['content'])
 
+        # กล่องพิมพ์แชท
         if prompt := st.chat_input("พิมพ์คำหวานจีบไมล่า... 💌"):
-            with st.chat_message("user"):
-                st.write(prompt)
-            
-            result = ai.flirt_with_myla(str(user_id), prompt)
-            
-            with st.chat_message("assistant"):
-                st.write(result['text'])
-                if result.get('gif'):
-                    st.image(result['gif'])
-                elif result.get('image'):
-                    st.image(result['image'])
-            
-            new_history = progress['history'] + [
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": result['text']}
-            ]
-            myla.save_player_progress(user_id, result['affection'], new_history, result['emotion'], result['image'])
-            st.rerun()
+            now = time.time()
+            # เช็ค Cooldown 5 วินาที
+            if now - st.session_state['last_myla_chat'] < 5:
+                st.toast("ไมล่าตอบไม่ทันแล้วค่ะ! รอสัก 5 วินาทีน้า~ 🥺", icon="⏳")
+            else:
+                st.session_state['last_myla_chat'] = now
+                with st.chat_message("user"):
+                    st.write(prompt)
+                
+                with st.spinner("ไมล่ากำลังพิมพ์..."):
+                    # ส่ง History และ Affection ปัจจุบันไปให้ AI คิด
+                    result = ai.flirt_with_myla(prompt, aff, progress['history'])
+                
+                with st.chat_message("assistant"):
+                    st.write(result['text'])
+                    
+                    # แจ้งเตือนคะแนนว่าบวกหรือลบ
+                    if result.get('score_change', 0) > 0:
+                        st.toast(f"ไมล่ารู้สึกดีจัง! +{result['score_change']} Affection 💕", icon="💖")
+                    elif result.get('score_change', 0) < 0:
+                        st.toast(f"ไมล่าเสียใจนะ... {result['score_change']} Affection 💔", icon="🥀")
 
-        # ปุ่มพิเศษ
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🎁 ส่งของขวัญให้ไมล่า", use_container_width=True):
-                st.balloons()
-                st.success("ไมล่าดีใจมากเลยค่ะพี่จ๋า~ +15 Affection ❤️")
-                myla.save_player_progress(user_id, min(100, aff + 15), progress['history'], progress['emotion'], progress['image'])
+                # รวมประวัติเก่า + ใหม่
+                new_history = progress['history'] + [
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": result['text']}
+                ]
+                
+                # เซฟข้อมูลที่นี่ที่เดียวจบ!
+                myla.save_player_progress(user_id, result['affection'], new_history, result['emotion'], result['image'])
+                time.sleep(0.5)
                 st.rerun()
-        with col2:
-            if st.button("🌹 ชวนเดท", use_container_width=True):
-                st.success("เย้~ ไมล่ายอมเดทกับพี่แล้ว! 💕")
-                st.rerun()
-
-        # ปุ่มกลับด้านล่าง (กันพลาด)
-        if st.button("🏠 กลับหน้าหลัก", 
-                     type="primary", 
-                     use_container_width=True,
-                     key="back_myla_bottom"):
-            st.session_state['show_myla_game'] = False
-            st.rerun()
 
 elif st.session_state['show_shop']:
     st.markdown("## 🛒 ร้านค้า (Shop Zone)")
