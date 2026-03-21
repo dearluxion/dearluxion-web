@@ -1267,7 +1267,8 @@ JSON_DATA={{"signal": "BULLISH", "entry": {safe_float(indicators.get('pivot_s1',
         yield {"type": "done", "meta": {"coin": coin_name, "generated_at": datetime.datetime.now().isoformat(timespec="seconds")}}
         return
     except Exception as e:
-# เพิ่มฟังก์ชันใหม่ที่นี่
+        yield {"type": "error", "text": f"❌ Step 3 (Finalize) Error: {e}"}
+        return
 
 # =========================================================
 # MYLA FLIRTING GAME (Flirt Engine) - เรียก myla_game_engine.py เป็นหลัก
@@ -1351,30 +1352,6 @@ def flirt_with_myla(user_message: str, affection: float, history: list):
         "image": myla.convert_drive_link(scene.get('image', '')),
         "gif": myla.convert_drive_link(scene.get('gif', ''))
     }
-
-def get_myla_answer(question: str) -> str:
-    """คำตอบสำเร็จรูปของไมล่า (เร็ว น่ารัก ไม่กิน quota)"""
-    answers = {
-        "🛍️ สนใจสินค้า ซื้อยังไง?": 
-            "🧚‍♀️ **ไมล่า:** เข้าโซน **🛒 ร้านค้า** ด้านขวาบนได้เลยค่ะ! ดูราคา + กดลิงก์ IG/Discord ไปสั่งได้ทันที 💕",
-
-        "💻 เว็บนี้ใครสร้างครับ?": 
-            "🧚‍♀️ **ไมล่า:** บอส Dearluxion สร้างเอง 100% เลยค่ะ! ใช้ Streamlit + Gemini 2.5 Flash น่ารักไหมคะ? ✨",
-
-        "🧚‍♀️ ไมล่าคือใครคะ?": 
-            "🧚‍♀️ **ไมล่า:** ฉันคือ **ไมล่า Devilluc** เลขาส่วนตัว + ซัคคิวบัสตัวน้อยของบอสค่ะ อายุ 19 ปี ภักดีสุด ๆ เลยนะคะ 💖",
-
-        "📞 ติดต่อบอส Dearluxion ได้ที่ไหน?": 
-            "🧚‍♀️ **ไมล่า:** ส่ง **จดหมายลับ** ทางเว็บนี้ได้เลยค่ะ หรือ Discord @dearluxion บอสอ่านทุกฉบับแน่นอน 🥰",
-
-        "🤖 บอสใช้ AI ตัวไหนทำงาน?": 
-            "🧚‍♀️ **ไมล่า:** Gemini 2.5 Flash (Multi-Key + 3-Step Reflection) ค่ะ! ฉลาดมาก เรียนรู้จากความผิดพลาดของบอสเองด้วยนะคะ 🔥",
-
-        "🍕 บอสชอบกินอะไรที่สุด?": 
-            "🧚‍♀️ **ไมล่า:** บอสชอบ **พิซซ่า + กาแฟ** มากที่สุดเลยค่ะ! (แต่ไมล่าชอบจุ๊บบอสมากกว่า~ 😽💕)",
-    }
-    
-    return answers.get(question, "🧚‍♀️ **ไมล่า:** ไมล่ายังไม่รู้คำตอบนี้ค่ะ แต่บอสจะอัปเดตให้เร็ว ๆ นี้แน่นอน! 💌")
 
 def get_myla_answer(question: str) -> str:
     """คำตอบสำเร็จรูปของไมล่า (เร็ว น่ารัก ไม่กิน quota)"""
