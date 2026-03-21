@@ -1530,6 +1530,8 @@ elif st.session_state.get('show_code_zone', False):
 # ==================== MYLA FULL GAME (สมบูรณ์แบบสุดท้าย) ====================
 # ==================== MYLA FULL GAME (มีปุ่มกลับชัดเจน) ====================
 # ==================== MYLA FULL GAME (จีบด้วยแชท 100%) ====================
+# ==================== MYLA FULL GAME (สมบูรณ์แบบสุดท้าย) ====================
+# ==================== MYLA FULL GAME (สมบูรณ์แบบสุดท้าย) ====================
 elif st.session_state.get('show_myla_game', False):
     st.markdown("## 🎮 Myla Flirting Game - Full Edition 💕")
     st.caption("จีบไมล่าด้วยแชท 100% | ระบบคะแนนแปรผันตามคำพูด | ภาพเปลี่ยนตามอารมณ์")
@@ -1546,7 +1548,14 @@ elif st.session_state.get('show_myla_game', False):
         st.warning("กรุณา Login Discord ก่อนจีบไมล่านะพี่จ๋า~")
     else:
         user_id = st.session_state['discord_user']['id']
-        progress = myla.load_player_progress(user_id)
+        
+        # [🔥 ส่วนที่แก้: เช็คก่อนว่ามีข้อมูลใน Session State หรือยัง จะได้ไม่โหลดจาก Sheet ซ้ำๆ]
+        if 'myla_progress' not in st.session_state or st.session_state.get('myla_current_user') != user_id:
+            with st.spinner("กำลังปลุกไมล่า... 💕"):
+                st.session_state['myla_progress'] = myla.load_player_progress(user_id)
+                st.session_state['myla_current_user'] = user_id
+                
+        progress = st.session_state['myla_progress']
         
         aff = progress['affection']
         st.progress(max(0.0, min(1.0, aff / 100)))
@@ -1593,10 +1602,18 @@ elif st.session_state.get('show_myla_game', False):
                     {"role": "assistant", "content": result['text']}
                 ]
                 
-                # เซฟข้อมูลที่นี่ที่เดียวจบ!
-                myla.save_player_progress(user_id, result['affection'], new_history, result['emotion'], result['image'])
+                # [🔥 ส่วนที่แก้: อัปเดตข้อมูลลง Session State ทันที แชทจะได้ไม่หาย!]
+                st.session_state['myla_progress']['history'] = new_history
+                st.session_state['myla_progress']['affection'] = result['affection']
+                st.session_state['myla_progress']['emotion'] = result['emotion']
+                st.session_state['myla_progress']['image'] = result.get('image', '')
+                
+                # เซฟข้อมูลแบคอัพลง Google Sheets เป็นเบื้องหลัง
+                myla.save_player_progress(user_id, result['affection'], new_history, result['emotion'], result.get('image', ''))
+
                 time.sleep(0.5)
                 st.rerun()
+
 
 elif st.session_state['show_shop']:
     st.markdown("## 🛒 ร้านค้า (Shop Zone)")
