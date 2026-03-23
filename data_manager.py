@@ -6,6 +6,7 @@ DATA MANAGER - Pure Google Sheets Version
 import streamlit as st
 import datetime
 import json
+import gspread
 from utils import (
     _get_gspread_client, 
     _get_crypto_memory_sheet_config
@@ -34,17 +35,24 @@ def load_data():
     """โหลดโพสต์ + แปลง JSON อัตโนมัติ (สำคัญมาก!)"""
     client = _get_gspread_client()
     sheet_id = _get_main_sheet_config()
-    if not client or not sheet_id:
-        return []
+    if not client or not sheet_id: return []
 
     try:
         sh = client.open_by_key(sheet_id)
-        ws = sh.worksheet("Posts")
+        try:
+            ws = sh.worksheet("Posts")
+        except gspread.exceptions.WorksheetNotFound: # 👈 เฉพาะหาไม่เจอจริงๆ เท่านั้น
+            ws = sh.add_worksheet(title="Posts", rows=1000, cols=20)
+            # ใช้ column ตามโครงสร้างเดิมเพื่อไม่ให้ระบบพัง
+            ws.append_row(["id", "date", "content", "images", "video", "color", "price", "likes", "reactions", "comments"])
+            return []
+        except Exception as e: # 👈 ดูว่ามันพังเพราะอะไรกันแน่
+            st.error(f"Google Sheets API มีปัญหา: {e}")
+            return []
+            
         records = ws.get_all_records()
-    except:
-        sh = client.open_by_key(sheet_id)
-        ws = sh.add_worksheet(title="Posts", rows=1000, cols=20)
-        ws.append_row(["id", "date", "content", "images", "video", "color", "price", "likes", "reactions", "comments"])
+    except Exception as e:
+        st.error(f"เกิดข้อผิดพลาดในการโหลดข้อมูล: {e}")
         return []
 
     # === แปลงทุกคอลัมน์ที่เป็น JSON string ให้เป็น dict/list ===
