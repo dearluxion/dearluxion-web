@@ -6,6 +6,7 @@ import requests
 import re
 import data_manager as dm
 import ai_manager as ai
+import prediction_engine as pe  # ← เพิ่มการ Import ตรงนี้
 from utils import get_discord_login_url, send_secret_to_discord
 
 def render_sidebar(ai_available, posts=None):
@@ -101,6 +102,18 @@ def render_sidebar(ai_available, posts=None):
     
     if st.session_state.get('is_admin'):
         st.sidebar.success(f"👑 Admin: {profile_data.get('name', 'Boss')}")
+        
+        # --- [NEW] ปุ่มตรวจการบ้านด้วยตนเอง ---
+        if st.sidebar.button("⚖️ ตรวจการบ้าน (Manual Recap)", type="primary", use_container_width=True):
+            wh_url = st.secrets.get("general", {}).get("crypto_webhook", "")
+            if wh_url:
+                with st.sidebar.status("กำลังตรวจการบ้าน...", expanded=False) as status:
+                    res = pe.check_accuracy_and_broadcast(wh_url) # เรียกใช้ฟังก์ชันเดิมที่บอสต้องการ
+                    status.update(label=f"✅ {res}", state="complete", expanded=True)
+            else:
+                st.sidebar.error("ยังไม่ได้ตั้งค่า crypto_webhook ใน Secrets")
+        # ------------------------------------
+
         if st.sidebar.button("Log out (Admin)"):
             st.session_state['is_admin'] = False
             st.rerun()

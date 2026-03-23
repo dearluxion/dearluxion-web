@@ -1839,21 +1839,4 @@ else:
     if not st.session_state['show_shop'] and not st.session_state['show_crypto']: 
         st.info("ยังไม่มีโพสต์ครับ")
 
-# =========================================================
-# AUTO CHECK BACKTEST (Lazy Trigger at 21:00+)
-# =========================================================
-now_th = datetime.datetime.now()
-if now_th.hour >= 21:  # เทศเวลา 21:00 น.
-    if 'auto_checked' not in st.session_state:
-        pending = dm.get_pending_predictions()
-        if pending:
-            wh_url = st.secrets.get("general", {}).get("crypto_webhook", "")
-            if wh_url:
-                try:
-                    res = pe.check_accuracy_and_broadcast(wh_url)
-                    st.toast("✅ ระบบทำการสรุปผล Daily Recap อัตโนมัติแล้ว!", icon="⚖️")
-                except Exception as e:
-                    print(f"Auto Check Error: {e}")
-        st.session_state['auto_checked'] = True
-
 st.markdown("<br><center><small style='color:#A370F7'>Small Group by Dearluxion © 2025</small></center>", unsafe_allow_html=True)
