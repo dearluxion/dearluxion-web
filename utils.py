@@ -65,18 +65,16 @@ def _get_crypto_sheet_config():
 # =========================================================
 
 def _get_crypto_memory_sheet_config():
-    """ดึง config จาก [google_sheets] เท่านั้น"""
+    # ดึงจาก [google_sheets] ที่เราเพิ่งแก้ใน Secrets ไป
     cfg = st.secrets.get("google_sheets", {})
     
-    sheet_id = (
-        cfg.get("crypto_memory_sheet_id")
-        or cfg.get("crypto_learning_sheet_id")
-        or cfg.get("crypto_analysis_sheet_id")
-        or cfg.get("homework_sheet_id")
-    )
-    worksheet_name = cfg.get("crypto_memory_worksheet") or cfg.get("crypto_learning_worksheet") or "Crypto_Memory"
+    # ดึง ID (ใช้ตัวเดียวกับ main_sheet_id ตามที่บอสตั้งไว้)
+    sheet_id = cfg.get("crypto_memory_sheet_id") or cfg.get("main_sheet_id")
     
-    return sheet_id, worksheet_name
+    # ชื่อ Worksheet (แท็บ)
+    ws_name = cfg.get("crypto_memory_worksheet", "Crypto_Memory")
+    
+    return sheet_id, ws_name
 
 
 def append_crypto_memory_to_gsheet(
