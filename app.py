@@ -499,9 +499,15 @@ if st.session_state['is_admin']:
         st.markdown("## 🎮 Myla Scene Manager (Admin Only)")
         st.caption("วางลิงก์ Google Drive ปกติได้เลย ระบบจะแปลงเป็น lh3 ให้อัตโนมัติ 💖")
 
-        # 1. ดึงรายการอารมณ์ที่มีอยู่ทั้งหมดมาทำเป็น List
+        # 1. ดึงรายการอารมณ์ที่มีอยู่ทั้งหมดจาก Sheet
         existing_scenes = myla.load_myla_scenes()
-        emotion_list = list(existing_scenes.keys())
+        
+        # --- [FIX] ดึงรายการอารมณ์พื้นฐานจาก myla_game_engine มารวมด้วยเพื่อไม่ให้หาย ---
+        default_emotions = list(myla.MYLA_SCENES.keys())
+        emotion_list = default_emotions.copy()
+        for e in existing_scenes.keys():
+            if e not in emotion_list:
+                emotion_list.append(e)
 
         # 2. เพิ่มตัวเลือก "เพิ่มอารมณ์ใหม่" เผื่อบอสอยากได้อะไรแปลกๆ
         options = emotion_list + ["➕ เพิ่มอารมณ์ใหม่..."]
@@ -515,9 +521,21 @@ if st.session_state['is_admin']:
         else:
             final_emotion = selected_emotion
 
-        # 5. ช่องใส่ลิงค์ภาพ/GIF (อันนี้ให้บอสวางได้ง่ายๆ เลย)
-        new_image_link = st.text_input(f"🖼️ ใส่ลิงค์รูปภาพสำหรับอารมณ์ [{final_emotion}]:", value=existing_scenes.get(selected_emotion, {}).get('image', '') if selected_emotion != "➕ เพิ่มอารมณ์ใหม่..." else "")
-        new_gif_link = st.text_input(f"🎥 ใส่ลิงค์ GIF สำหรับอารมณ์ [{final_emotion}]:", value=existing_scenes.get(selected_emotion, {}).get('gif', '') if selected_emotion != "➕ เพิ่มอารมณ์ใหม่..." else "")
+        # 5. เตรียมค่ารูปภาพเริ่มต้น (ดึงจาก Sheet ก่อน ถ้าไม่มีให้ดึงจาก Default ระบบ)
+        if selected_emotion != "➕ เพิ่มอารมณ์ใหม่...":
+            current_data = existing_scenes.get(selected_emotion)
+            # ถ้าใน Sheet ไม่มีข้อมูล ให้ไปดึงค่า Default มาแสดงแทน
+            if not current_data:
+                current_data = myla.MYLA_SCENES.get(selected_emotion, {})
+            current_img = current_data.get('image', '')
+            current_gif = current_data.get('gif', '')
+        else:
+            current_img = ""
+            current_gif = ""
+
+        # 6. ช่องใส่ลิงค์ภาพ/GIF (ดึงค่า value จากที่เราเช็คด้านบน)
+        new_image_link = st.text_input(f"🖼️ ใส่ลิงค์รูปภาพสำหรับอารมณ์ [{final_emotion}]:", value=current_img)
+        new_gif_link = st.text_input(f"🎥 ใส่ลิงค์ GIF สำหรับอารมณ์ [{final_emotion}]:", value=current_gif)
 
         col1, col2 = st.columns(2)
         with col1:
