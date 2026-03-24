@@ -29,9 +29,10 @@ def load_myla_scenes():
             raise ValueError('No scene data')
         return scenes
     except Exception:
+        # อัปเดต Fallback ให้เป็นอารมณ์แบบใหม่
         return {
-            'happy': {'image': '', 'gif': ''},
-            'blush': {'image': '', 'gif': ''},
+            'เฉยๆมองเย็นชา': {'image': '', 'gif': ''},
+            'เขินแบบเย็นชา': {'image': '', 'gif': ''},
         }
 
 
@@ -65,10 +66,31 @@ def save_myla_scene_config(emotion, image_url, gif_url):
         return False
 
 
-# ==================== PLAYER PROGRESS (Optimized) ====================
+def delete_myla_scene_config(emotion):
+    """ฟังก์ชันสำหรับ Admin ในการลบฉากออกจาก Google Sheets"""
+    client = _get_gspread_client()
+    if not client:
+        return False
+
+    sheet_id = get_myla_sheet_info()
+    ws_name = "Myla_Scenes_Config"
+
+    try:
+        ws = client.open_by_key(sheet_id).worksheet(ws_name)
+        cell = ws.find(str(emotion))
+        if cell:
+            ws.delete_rows(cell.row) 
+            st.cache_data.clear() 
+            return True
+        return False
+    except Exception as e:
+        print(f"Error deleting scene: {e}")
+        return False
+
+
+# ==================== PLAYER PROGRESS ====================
 
 def save_player_progress(discord_id, affection, history, current_emotion, current_image):
-    """บันทึกความคืบหน้าแบบ Update แถวเดิม (ไม่เพิ่มแถวใหม่เรื่อยๆ)"""
     client = _get_gspread_client()
     if not client:
         return
@@ -105,10 +127,9 @@ def save_player_progress(discord_id, affection, history, current_emotion, curren
 
 
 def load_player_progress(discord_id):
-    """โหลดความคืบหน้าของผู้เล่นจากแถวเดียว (หรือ fallback ค่าเริ่มต้น)"""
     client = _get_gspread_client()
     if not client:
-        return {'affection': 30, 'history': [], 'emotion': 'happy', 'image': ''}
+        return {'affection': 30, 'history': [], 'emotion': 'เฉยๆมองเย็นชา', 'image': ''}
 
     sheet_id = get_myla_sheet_info()
     ws_name = 'Myla_Game_Progress'
@@ -125,27 +146,28 @@ def load_player_progress(discord_id):
                 return {
                     'affection': float(r.get('affection', 30)),
                     'history': history,
-                    'emotion': r.get('emotion', 'happy'),
+                    'emotion': r.get('emotion', 'เฉยๆมองเย็นชา'),
                     'image': r.get('image', '')
                 }
     except Exception:
         pass
 
-    return {'affection': 30, 'history': [], 'emotion': 'happy', 'image': ''}
+    return {'affection': 30, 'history': [], 'emotion': 'เฉยๆมองเย็นชา', 'image': ''}
 
 
-# ==================== SCENES (6 อารมณ์) ====================
+# ==================== SCENES (ระบบอารมณ์ใหม่ภาษาไทย) ====================
 MYLA_SCENES = {
-    "happy": {"image": "https://lh3.googleusercontent.com/d/1ABC123...YOUR_LINK_1", "gif": ""},
-    "blush": {"image": "https://lh3.googleusercontent.com/d/1GHI789...YOUR_LINK_2", "gif": ""},
-    "bedtime_whisper": {"image": "https://lh3.googleusercontent.com/d/1JKL012...YOUR_LINK_3", "gif": ""},
-    "excited": {"image": "https://lh3.googleusercontent.com/d/1PQR678...YOUR_LINK_4", "gif": ""},
-    "shy": {"image": "https://lh3.googleusercontent.com/d/1STU901...YOUR_LINK_5", "gif": ""},
-    "kiss": {"image": "https://lh3.googleusercontent.com/d/1VWX234...YOUR_LINK_6", "gif": ""}
+    "เฉยๆมองเย็นชา": {"image": "https://lh3.googleusercontent.com/d/1ABC123...YOUR_LINK_1", "gif": ""},
+    "สงสัยแบบเย็นชา": {"image": "https://lh3.googleusercontent.com/d/1GHI789...YOUR_LINK_2", "gif": ""},
+    "ตื่นเต้นแบบนิ่งๆ": {"image": "https://lh3.googleusercontent.com/d/1JKL012...YOUR_LINK_3", "gif": ""},
+    "เกลียดขยะแขยง": {"image": "https://lh3.googleusercontent.com/d/1PQR678...YOUR_LINK_4", "gif": ""},
+    "เขินแบบเย็นชา": {"image": "https://lh3.googleusercontent.com/d/1STU901...YOUR_LINK_5", "gif": ""},
+    "ตกใจแบบเย็นชา": {"image": "https://lh3.googleusercontent.com/d/1VWX234...YOUR_LINK_6", "gif": ""},
+    "เขินสุดขีด ปิดหน้า": {"image": "https://lh3.googleusercontent.com/d/", "gif": ""},
+    "อายแอบมอง": {"image": "http://googleusercontent.com/profile/picture/7", "gif": ""}
 }
 
 def get_myla_scene(emotion):
-    """เลือกฉากจากโปรไฟล์ Admin > Google Sheets > ค่าเริ่มต้น"""
     try:
         profile = dm.load_profile()
         dynamic_scenes = profile.get('myla_scenes', {})
@@ -161,4 +183,4 @@ def get_myla_scene(emotion):
     except Exception:
         pass
 
-    return MYLA_SCENES.get(emotion, MYLA_SCENES.get('happy', {'image': '', 'gif': ''}))
+    return MYLA_SCENES.get(emotion, MYLA_SCENES.get('เฉยๆมองเย็นชา', {'image': '', 'gif': ''}))

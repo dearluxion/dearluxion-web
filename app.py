@@ -522,18 +522,33 @@ if st.session_state['is_admin']:
             if preview_url:
                 st.image(preview_url, caption="Preview Image", width=150)
 
-        if st.button("💾 บันทึกการตั้งค่าฉาก", type="primary"):
-            if new_emo_name and img_url:
-                converted_img = convert_drive_link(img_url) or img_url
-                converted_gif = convert_drive_link(gif_url) if gif_url else ''
-                success = myla.save_myla_scene_config(new_emo_name, converted_img, converted_gif)
-                if success:
-                    st.success(f"บันทึกฉาก '{new_emo_name}' เรียบร้อยแล้ว!")
-                    st.experimental_rerun()
+        # แบ่งคอลัมน์ให้ปุ่มบันทึกและปุ่มลบอยู่ข้างกัน
+        btn_col1, btn_col2 = st.columns(2)
+
+        with btn_col1:
+            if st.button("💾 บันทึกการตั้งค่าฉาก", type="primary", use_container_width=True):
+                if new_emo_name and img_url:
+                    converted_img = convert_drive_link(img_url) or img_url
+                    converted_gif = convert_drive_link(gif_url) if gif_url else ''
+                    success = myla.save_myla_scene_config(new_emo_name, converted_img, converted_gif)
+                    if success:
+                        st.success(f"บันทึกฉาก '{new_emo_name}' เรียบร้อยแล้ว!")
+                        st.rerun() # เปลี่ยนมาใช้ st.rerun() แบบใหม่นะคะบอส
+                    else:
+                        st.error("เกิดข้อผิดพลาดในการบันทึก")
                 else:
-                    st.error("เกิดข้อผิดพลาดในการบันทึก")
-            else:
-                st.error("กรุณากรอกชื่ออารมณ์และ Image URL")
+                    st.error("กรุณากรอกชื่ออารมณ์และ Image URL")
+
+        with btn_col2:
+            # ถ้าเป็นโหมดสร้างใหม่ จะซ่อนปุ่มลบเอาไว้นะคะ
+            if edit_target != "+ เพิ่มอารมณ์ใหม่":
+                if st.button("🗑️ ลบฉากนี้", type="secondary", use_container_width=True):
+                    success = myla.delete_myla_scene_config(edit_target)
+                    if success:
+                        st.success(f"ลบฉาก '{edit_target}' ออกจากระบบเรียบร้อยแล้วค่ะ!")
+                        st.rerun()
+                    else:
+                        st.error("เกิดข้อผิดพลาดในการลบฉาก (อาจจะเป็นฉาก Default หรือหาข้อมูลไม่พบ)")
 
         st.markdown("---")
         st.markdown("### 📌 สถานะฉากที่มีอยู่")
@@ -1524,13 +1539,9 @@ elif st.session_state.get('show_code_zone', False):
     filtered = []  # รีเซต filtered สำหรับโหมด Code Zone
 
 # ==================== MYLA FULL GAME (สมบูรณ์แบบสุดท้าย) ====================
-# ==================== MYLA FULL GAME (มีปุ่มกลับชัดเจน) ====================
-# ==================== MYLA FULL GAME (จีบด้วยแชท 100%) ====================
-# ==================== MYLA FULL GAME (สมบูรณ์แบบสุดท้าย) ====================
-# ==================== MYLA FULL GAME (สมบูรณ์แบบสุดท้าย) ====================
 elif st.session_state.get('show_myla_game', False):
-    st.markdown("## 🎮 Myla Flirting Game - Full Edition 💕")
-    st.caption("จีบไมล่าด้วยแชท 100% | ระบบคะแนนแปรผันตามคำพูด | ภาพเปลี่ยนตามอารมณ์")
+    st.markdown("## 🎮 Myla Flirting Game - Cold Tsundere Edition ❄️")
+    st.caption("จีบสาวซึนเดเระ | ระบบคะแนนแปรผันตามคำพูด | ภาพเปลี่ยนตามอารมณ์")
     
     # ปุ่มกลับด้านบน
     if st.button("🏠 กลับหน้าหลัก", 
@@ -1541,21 +1552,51 @@ elif st.session_state.get('show_myla_game', False):
         st.rerun()
 
     if not st.session_state.get('discord_user'):
-        st.warning("กรุณา Login Discord ก่อนจีบไมล่านะพี่จ๋า~")
+        st.warning("กรุณา Login Discord ก่อนเข้าไปคุยกับไมล่านะครับ!")
     else:
         user_id = st.session_state['discord_user']['id']
         
-        # [🔥 ส่วนที่แก้: เช็คก่อนว่ามีข้อมูลใน Session State หรือยัง จะได้ไม่โหลดจาก Sheet ซ้ำๆ]
         if 'myla_progress' not in st.session_state or st.session_state.get('myla_current_user') != user_id:
-            with st.spinner("กำลังปลุกไมล่า... 💕"):
+            with st.spinner("กำลังปลุกไมล่า..."):
                 st.session_state['myla_progress'] = myla.load_player_progress(user_id)
                 st.session_state['myla_current_user'] = user_id
                 
         progress = st.session_state['myla_progress']
         
+        # --- ตรวจสอบโปรไฟล์ผู้เล่น (ทำความรู้จักครั้งแรก) ---
+        has_profile = False
+        player_name = ""
+        player_pronoun = "นาย"
+        
+        # เช็คจากประวัติว่าเคยแนะนำตัวหรือยัง
+        if progress['history'] and progress['history'][0].get('role') == 'system':
+            has_profile = True
+            player_name = progress['history'][0].get('name', '')
+            player_pronoun = progress['history'][0].get('pronoun', 'นาย')
+            
+        if not has_profile:
+            st.markdown("### 📝 ก่อนเริ่มเกม: ตั้งค่าตัวละครของคุณ")
+            with st.form("setup_myla_profile"):
+                p_name = st.text_input("ชื่อของคุณ (ที่อยากให้ไมล่าเรียก):")
+                p_pronoun = st.radio("สรรพนามแทนตัวคุณ:", ["นาย (สำหรับผู้ชาย)", "เธอ (สำหรับผู้หญิง)"])
+                
+                if st.form_submit_button("ยืนยันและเริ่มแชท"):
+                    if p_name:
+                        pronoun_clean = "นาย" if "นาย" in p_pronoun else "เธอ"
+                        # เซฟข้อมูลแอบไว้ใน History บรรทัดแรก
+                        sys_msg = {"role": "system", "content": "profile", "name": p_name, "pronoun": pronoun_clean}
+                        progress['history'].insert(0, sys_msg)
+                        # บันทึกลงเซิร์ฟเวอร์
+                        myla.save_player_progress(user_id, progress['affection'], progress['history'], progress['emotion'], progress['image'])
+                        st.rerun()
+                    else:
+                        st.error("กรุณากรอกชื่อก่อนเริ่มแชทครับ!")
+            st.stop() # หยุดทำงานหน้าแชทจนกว่าจะกรอกเสร็จ
+        # -----------------------------------------------
+
         aff = progress['affection']
         st.progress(max(0.0, min(1.0, aff / 100)))
-        st.markdown(f"**❤️ Affection Level: {aff:.1f}%** {'❤️' * int(max(0, aff)//20)}")
+        st.markdown(f"**❤️ Affection Level: {aff:.1f}%** {'❄️' if aff < 50 else '❤️' * int(max(0, aff)//20)}")
 
         scene = myla.get_myla_scene(progress['emotion'])
         if scene.get('image'):
@@ -1563,48 +1604,45 @@ elif st.session_state.get('show_myla_game', False):
         if scene.get('gif'):
             st.image(myla.convert_drive_link(scene.get('gif', '')), use_column_width=True)
 
-        # แสดงประวัติแชท
+        # แสดงประวัติแชท (ซ่อน System Message ของโปรไฟล์)
         for msg in progress['history'][-8:]:
+            if msg['role'] == 'system': 
+                continue
             with st.chat_message(msg['role']):
                 st.write(msg['content'])
 
         # กล่องพิมพ์แชท
-        if prompt := st.chat_input("พิมพ์คำหวานจีบไมล่า... 💌"):
+        if prompt := st.chat_input("พิมพ์ข้อความตอบกลับ..."):
             now = time.time()
-            # เช็ค Cooldown 5 วินาที
             if now - st.session_state['last_myla_chat'] < 5:
-                st.toast("ไมล่าตอบไม่ทันแล้วค่ะ! รอสัก 5 วินาทีน้า~ 🥺", icon="⏳")
+                st.toast("ส่งข้อความเร็วเกินไป! ไมล่ารำคาญนะ...", icon="⏳")
             else:
                 st.session_state['last_myla_chat'] = now
                 with st.chat_message("user"):
                     st.write(prompt)
                 
-                with st.spinner("ไมล่ากำลังพิมพ์..."):
-                    # ส่ง History และ Affection ปัจจุบันไปให้ AI คิด
-                    result = ai.flirt_with_myla(prompt, aff, progress['history'])
+                with st.spinner("ไมล่ากำลังมองด้วยสายตาเย็นชา..."):
+                    # ส่ง Name และ Pronoun ไปให้ AI
+                    result = ai.flirt_with_myla(prompt, aff, progress['history'], player_name, player_pronoun)
                 
                 with st.chat_message("assistant"):
                     st.write(result['text'])
                     
-                    # แจ้งเตือนคะแนนว่าบวกหรือลบ
                     if result.get('score_change', 0) > 0:
-                        st.toast(f"ไมล่ารู้สึกดีจัง! +{result['score_change']} Affection 💕", icon="💖")
+                        st.toast(f"ไมล่าแอบรู้สึกดีนิดหน่อย... +{result['score_change']} Affection", icon="📈")
                     elif result.get('score_change', 0) < 0:
-                        st.toast(f"ไมล่าเสียใจนะ... {result['score_change']} Affection 💔", icon="🥀")
+                        st.toast(f"ไมล่าหงุดหงิด! {result['score_change']} Affection", icon="📉")
 
-                # รวมประวัติเก่า + ใหม่
                 new_history = progress['history'] + [
                     {"role": "user", "content": prompt},
                     {"role": "assistant", "content": result['text']}
                 ]
                 
-                # [🔥 ส่วนที่แก้: อัปเดตข้อมูลลง Session State ทันที แชทจะได้ไม่หาย!]
                 st.session_state['myla_progress']['history'] = new_history
                 st.session_state['myla_progress']['affection'] = result['affection']
                 st.session_state['myla_progress']['emotion'] = result['emotion']
                 st.session_state['myla_progress']['image'] = result.get('image', '')
                 
-                # เซฟข้อมูลแบคอัพลง Google Sheets เป็นเบื้องหลัง
                 myla.save_player_progress(user_id, result['affection'], new_history, result['emotion'], result.get('image', ''))
 
                 time.sleep(0.5)
