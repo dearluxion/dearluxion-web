@@ -525,12 +525,15 @@ if st.session_state['is_admin']:
             pass
 
         with col2:
-            preview_url = convert_drive_link(new_image_link) if new_image_link else None
-            if preview_url:
-                st.image(preview_url, caption="Preview Image", width=150)
-            preview_url = convert_drive_link(img_url) if img_url else None
-            if preview_url:
-                st.image(preview_url, caption="Preview Image", width=150)
+            # 1. พรีวิวภาพนิ่ง
+            preview_img = convert_drive_link(new_image_link) if new_image_link else None
+            if preview_img:
+                st.image(preview_img, caption="Preview Image (ภาพนิ่ง)", width=150)
+            
+            # 2. พรีวิวภาพ GIF
+            preview_gif = convert_drive_link(new_gif_link) if new_gif_link else None
+            if preview_gif:
+                st.image(preview_gif, caption="Preview GIF (ภาพเคลื่อนไหว)", width=150)
 
         # แบ่งคอลัมน์ให้ปุ่มบันทึกและปุ่มลบอยู่ข้างกัน
         btn_col1, btn_col2 = st.columns(2)
