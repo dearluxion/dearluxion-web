@@ -89,6 +89,13 @@ if 'realtime_all_request' not in st.session_state: st.session_state['realtime_al
 if 'realtime_all_result' not in st.session_state: st.session_state['realtime_all_result'] = None
 if 'realtime_all_summary' not in st.session_state: st.session_state['realtime_all_summary'] = None
 
+if 'myla_chat_history' not in st.session_state:
+    st.session_state.myla_chat_history = []
+if 'flirt_options' not in st.session_state:
+    st.session_state.flirt_options = []
+if 'turn_since_last_save' not in st.session_state:
+    st.session_state.turn_since_last_save = 0
+
 # === PERFORMANCE BOOST: Session State Cache (โหลดครั้งเดียว) ===
 if 'posts' not in st.session_state:
     st.session_state.posts = dm.load_data()
@@ -1635,48 +1642,70 @@ elif st.session_state.get('show_myla_game', False):
         if scene.get('gif'):
             st.image(myla.convert_drive_link(scene.get('gif', '')), use_column_width=True)
 
-        # แสดงประวัติแชท (ซ่อน System Message ของโปรไฟล์)
-        for msg in progress['history'][-8:]:
-            if msg['role'] == 'system': 
-                continue
-            with st.chat_message(msg['role']):
-                st.write(msg['content'])
+        # --- แสดงประวัติแชทพร้อมรูปภาพ ---
+        for msg in st.session_state.myla_chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+                # ถ้าระบบส่งรูปมา ให้แสดงรูปในแชทบับเบิ้ลเลย
+                if "image" in msg and msg["image"]:
+                    st.image(msg["image"], width=300)
 
-        # กล่องพิมพ์แชท
-        if prompt := st.chat_input("พิมพ์ข้อความตอบกลับ..."):
-            now = time.time()
-            if now - st.session_state['last_myla_chat'] < 5:
-                st.toast("ส่งข้อความเร็วเกินไป! ไมล่ารำคาญนะ...", icon="⏳")
-            else:
-                st.session_state['last_myla_chat'] = now
-                with st.chat_message("user"):
-                    st.write(prompt)
-                
-                with st.spinner("ไมล่ากำลังมองด้วยสายตาเย็นชา..."):
-                    # ส่ง Name และ Pronoun ไปให้ AI
-                    result = ai.flirt_with_myla(prompt, aff, progress['history'], player_name, player_pronoun)
-                
-                with st.chat_message("assistant"):
-                    st.write(result['text'])
-                    
-                    if result.get('score_change', 0) > 0:
-                        st.toast(f"ไมล่าแอบรู้สึกดีนิดหน่อย... +{result['score_change']} Affection", icon="📈")
-                    elif result.get('score_change', 0) < 0:
-                        st.toast(f"ไมล่าหงุดหงิด! {result['score_change']} Affection", icon="📉")
+        # --- ระบบแจ้งเตือน Auto-Save (ไม่จุกจิก) ---
+        if st.session_state.turn_since_last_save >= 5:
+            st.info("💡 แชทเพลินเลยนะบอส! อย่าลืมกด 'บันทึกคะแนน' เพื่อเซฟความสัมพันธ์ล่าสุดด้วยล่ะ")
 
-                new_history = progress['history'] + [
-                    {"role": "user", "content": prompt},
-                    {"role": "assistant", "content": result['text']}
-                ]
-                
-                st.session_state['myla_progress']['history'] = new_history
-                st.session_state['myla_progress']['affection'] = result['affection']
-                st.session_state['myla_progress']['emotion'] = result['emotion']
-                st.session_state['myla_progress']['image'] = result.get('image', '')
-                
-                myla.save_player_progress(user_id, result['affection'], new_history, result['emotion'], result.get('image', ''))
+        # --- ปุ่ม Save แบบ Manual (ซ่อนไว้มุมขวาหรือบนสุดก็ได้) ---
+        col1, col2 = st.columns([8, 2])
+        with col2:
+            if st.button("💾 บันทึกคะแนน"):
+                # ใส่ฟังก์ชันเซฟลง Google Sheets ของคุณตรงนี้ (เช่น dm.save_myla_score(...))
+                st.session_state.turn_since_last_save = 0
+                st.toast("เซฟคะแนนความสัมพันธ์สำเร็จ!", icon="💕")
 
-                time.sleep(0.5)
+        # --- แสดงปุ่มตัวเลือกการจีบ (ถ้ามี) ---
+        selected_option = None
+        if st.session_state.flirt_options:
+            st.markdown("🎯 **ตัวเลือกการจีบ:**")
+            opt_cols = st.columns(3)
+            for i, option in enumerate(st.session_state.flirt_options):
+                if opt_cols[i].button(option, key=f"flirt_btn_{i}", use_container_width=True):
+                    selected_option = option
+
+        # --- รับข้อความ (จากปุ่มที่กด หรือ พิมพ์เอง) ---
+        user_input = st.chat_input("พิมพ์ข้อความเพื่อคุยกับไมล่า...")
+
+        if user_input or selected_option:
+            message_to_send = selected_option if selected_option else user_input
+            
+            # 1. แสดงข้อความผู้เล่น
+            st.session_state.myla_chat_history.append({"role": "user", "content": message_to_send})
+            with st.chat_message("user"):
+                st.markdown(message_to_send)
+                
+            # 2. ประมวลผลคำตอบไมล่า (ดึงจาก game_engine หรือ ai_manager)
+            with st.spinner("ไมล่ากำลังพิมพ์..."):
+                # สมมติว่า myla_reply คืนค่าเป็น dict ที่มี text, emotion, image
+                myla_response = ai.get_myla_game_response(message_to_send, aff, progress['history'], player_name, player_pronoun) 
+                
+                reply_text = myla_response["text"]
+                reply_img = myla_response["image"]
+                emotion = myla_response["emotion"]
+                
+                # เก็บลงประวัติแชท
+                st.session_state.myla_chat_history.append({
+                    "role": "assistant", 
+                    "content": reply_text, 
+                    "image": reply_img
+                })
+                
+                # 3. ตั้งตัวเลือกการจีบรอบถัดไป
+                st.session_state.flirt_options = myla_response.get("flirt_options", [])
+                
+                # นับ Turn เพิ่มสำหรับระบบเตือนเซฟ
+                st.session_state.turn_since_last_save += 1
+                
+                # ล้างตัวเลือกเก่าและรีเฟรชหน้า
+                st.session_state.flirt_options = []
                 st.rerun()
 
 

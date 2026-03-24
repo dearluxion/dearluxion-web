@@ -1393,3 +1393,42 @@ def get_myla_answer(question: str) -> str:
     }
     
     return answers.get(question, "🧚‍♀️ **ไมล่า:** ไมล่ายังไม่รู้คำตอบนี้ค่ะ แต่บอสจะอัปเดตให้เร็ว ๆ นี้แน่นอน! 💌")
+
+
+def generate_flirt_options(myla_reply: str, emotion: str) -> list:
+    """สร้างตัวเลือกการตอบกลับ 3 แบบให้ผู้เล่นเลือกจีบ"""
+    if not check_ready():
+        return ["อืม", "เข้าใจแล้ว", "น่ารักดีนะ"]
+        
+    prompt = f"""
+    คุณคือผู้ช่วยสร้างเกมจีบสาว 'Myla' (ซึนเดเระ เย็นชา)
+    ล่าสุดไมล่าตอบกลับผู้เล่นว่า: "{myla_reply}" (แสดงอารมณ์: {emotion})
+    
+    จงคิดคำตอบโต้ตอบ 3 ตัวเลือกให้ผู้เล่นใช้จีบ/ตอบกลับไมล่า โดยแบ่งเป็น:
+    1. ปลอดภัย/สุภาพ
+    2. หยอดมุก/กวนๆ นิดๆ
+    3. รุกจีบตรงๆ (เสี่ยงโดนด่าแต่ได้ใจ)
+    
+    ตอบกลับมาเป็น JSON Array ของ String 3 ข้อเท่านั้น ห้ามมีข้อความอื่นหรือ Markdown
+    ตัวอย่าง: ["ครับผม", "แหม ปากแข็งจังนะ", "ยิ่งด่ายิ่งชอบนะครับเนี่ย"]
+    """
+    try:
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content(prompt)
+        # ทำความสะอาดและแปลงเป็น List
+        clean_text = response.text.replace('```json', '').replace('```', '').strip()
+        options = json.loads(clean_text)
+        if isinstance(options, list) and len(options) == 3:
+            return options
+    except Exception as e:
+        print(f"Gen Options Error: {e}")
+    
+    # กรณี Error คืนค่าพื้นฐาน
+    return ["เปลี่ยนเรื่องคุยดีกว่า", "หยอกเล่นน่า", "เธอนี่น่ารักจริงๆ"]
+
+
+def get_myla_game_response(user_message: str, affection: float, history: list, player_name: str, player_pronoun: str):
+    response = flirt_with_myla(user_message, affection, history, player_name, player_pronoun)
+    flirt_options = generate_flirt_options(response["text"], response["emotion"])
+    response["flirt_options"] = flirt_options
+    return response
