@@ -499,25 +499,35 @@ if st.session_state['is_admin']:
         st.markdown("## 🎮 Myla Scene Manager (Admin Only)")
         st.caption("วางลิงก์ Google Drive ปกติได้เลย ระบบจะแปลงเป็น lh3 ให้อัตโนมัติ 💖")
 
-        current_scenes = myla.load_myla_scenes() or myla.MYLA_SCENES.copy()
+        # 1. ดึงรายการอารมณ์ที่มีอยู่ทั้งหมดมาทำเป็น List
+        existing_scenes = myla.load_myla_scenes()
+        emotion_list = list(existing_scenes.keys())
 
-        edit_target = st.selectbox(
-            "เลือกอารมณ์ที่จะแก้ไข",
-            options=list(current_scenes.keys()) + ["+ เพิ่มอารมณ์ใหม่"]
-        )
+        # 2. เพิ่มตัวเลือก "เพิ่มอารมณ์ใหม่" เผื่อบอสอยากได้อะไรแปลกๆ
+        options = emotion_list + ["➕ เพิ่มอารมณ์ใหม่..."]
+
+        # 3. ใช้ Selectbox แทนการพิมพ์
+        selected_emotion = st.selectbox("🎭 เลือกอารมณ์ที่ต้องการจัดการ:", options)
+
+        # 4. ถ้าเลือก "เพิ่มอารมณ์ใหม่" ค่อยให้พิมพ์เอง
+        if selected_emotion == "➕ เพิ่มอารมณ์ใหม่...":
+            final_emotion = st.text_input("📝 ระบุชื่ออารมณ์ใหม่:")
+        else:
+            final_emotion = selected_emotion
+
+        # 5. ช่องใส่ลิงค์ภาพ/GIF (อันนี้ให้บอสวางได้ง่ายๆ เลย)
+        new_image_link = st.text_input(f"🖼️ ใส่ลิงค์รูปภาพสำหรับอารมณ์ [{final_emotion}]:", value=existing_scenes.get(selected_emotion, {}).get('image', '') if selected_emotion != "➕ เพิ่มอารมณ์ใหม่..." else "")
+        new_gif_link = st.text_input(f"🎥 ใส่ลิงค์ GIF สำหรับอารมณ์ [{final_emotion}]:", value=existing_scenes.get(selected_emotion, {}).get('gif', '') if selected_emotion != "➕ เพิ่มอารมณ์ใหม่..." else "")
 
         col1, col2 = st.columns(2)
         with col1:
-            if edit_target == "+ เพิ่มอารมณ์ใหม่":
-                new_emo_name = st.text_input("ชื่ออารมณ์ (เช่น happy, angry)")
-                img_url = st.text_input("Image URL (Google Drive/Direct Link)")
-                gif_url = st.text_input("GIF URL (Giphy/Direct Link)")
-            else:
-                new_emo_name = edit_target
-                img_url = st.text_input("Image URL", value=current_scenes[edit_target].get('image', ''))
-                gif_url = st.text_input("GIF URL", value=current_scenes[edit_target].get('gif', ''))
+            # ส่วนนี้ถูกแทนที่แล้วด้านบน
+            pass
 
         with col2:
+            preview_url = convert_drive_link(new_image_link) if new_image_link else None
+            if preview_url:
+                st.image(preview_url, caption="Preview Image", width=150)
             preview_url = convert_drive_link(img_url) if img_url else None
             if preview_url:
                 st.image(preview_url, caption="Preview Image", width=150)
@@ -527,32 +537,32 @@ if st.session_state['is_admin']:
 
         with btn_col1:
             if st.button("💾 บันทึกการตั้งค่าฉาก", type="primary", use_container_width=True):
-                if new_emo_name and img_url:
-                    converted_img = convert_drive_link(img_url) or img_url
-                    converted_gif = convert_drive_link(gif_url) if gif_url else ''
-                    success = myla.save_myla_scene_config(new_emo_name, converted_img, converted_gif)
+                if final_emotion and new_image_link:
+                    converted_img = convert_drive_link(new_image_link) or new_image_link
+                    converted_gif = convert_drive_link(new_gif_link) if new_gif_link else ''
+                    success = myla.save_myla_scene_config(final_emotion, converted_img, converted_gif)
                     if success:
-                        st.success(f"บันทึกฉาก '{new_emo_name}' เรียบร้อยแล้ว!")
+                        st.success(f"บันทึกฉาก '{final_emotion}' เรียบร้อยแล้ว!")
                         st.rerun() # เปลี่ยนมาใช้ st.rerun() แบบใหม่นะคะบอส
                     else:
                         st.error("เกิดข้อผิดพลาดในการบันทึก")
                 else:
-                    st.error("กรุณากรอกชื่ออารมณ์และ Image URL")
+                    st.error("กรุณากรอกชื่ออารมณ์และลิงค์รูปภาพ")
 
         with btn_col2:
             # ถ้าเป็นโหมดสร้างใหม่ จะซ่อนปุ่มลบเอาไว้นะคะ
-            if edit_target != "+ เพิ่มอารมณ์ใหม่":
+            if selected_emotion != "➕ เพิ่มอารมณ์ใหม่...":
                 if st.button("🗑️ ลบฉากนี้", type="secondary", use_container_width=True):
-                    success = myla.delete_myla_scene_config(edit_target)
+                    success = myla.delete_myla_scene_config(selected_emotion)
                     if success:
-                        st.success(f"ลบฉาก '{edit_target}' ออกจากระบบเรียบร้อยแล้วค่ะ!")
+                        st.success(f"ลบฉาก '{selected_emotion}' ออกจากระบบเรียบร้อยแล้วค่ะ!")
                         st.rerun()
                     else:
                         st.error("เกิดข้อผิดพลาดในการลบฉาก (อาจจะเป็นฉาก Default หรือหาข้อมูลไม่พบ)")
 
         st.markdown("---")
         st.markdown("### 📌 สถานะฉากที่มีอยู่")
-        for emo, assets in current_scenes.items():
+        for emo, assets in existing_scenes.items():
             st.write(f"- `{emo}`: image={assets.get('image','')} gif={assets.get('gif','')}")
 
 
