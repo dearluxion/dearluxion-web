@@ -499,50 +499,46 @@ if st.session_state['is_admin']:
         st.markdown("## 🎮 Myla Scene Manager (Admin Only)")
         st.caption("วางลิงก์ Google Drive ปกติได้เลย ระบบจะแปลงเป็น lh3 ให้อัตโนมัติ 💖")
 
-        profile = dm.load_profile()
-        if 'myla_scenes' not in profile or not isinstance(profile['myla_scenes'], dict):
-            profile['myla_scenes'] = myla.MYLA_SCENES.copy()  # ใช้ค่าเริ่มต้นจาก myla_game_engine
+        current_scenes = myla.load_myla_scenes() or myla.MYLA_SCENES.copy()
 
-        for emotion in ["happy", "blush", "bedtime_whisper", "excited", "shy", "kiss"]:
-            st.subheader(f"😊 {emotion.upper()}")
-            
-            col_img, col_gif = st.columns([3, 2])
-            
-            with col_img:
-                new_image = st.text_input(
-                    "🖼️ Image Link (Google Drive ได้เลย)",
-                    value=profile['myla_scenes'].get(emotion, {}).get('image', ''),
-                    key=f"myla_img_{emotion}"
-                )
-            
-            with col_gif:
-                new_gif = st.text_input(
-                    "🎞️ GIF Link (Google Drive ได้เลย)",
-                    value=profile['myla_scenes'].get(emotion, {}).get('gif', ''),
-                    key=f"myla_gif_{emotion}"
-                )
-            
-            # แสดงตัวอย่าง (Preview) ทันที
-            converted_img = convert_drive_link(new_image)
-            converted_gif = convert_drive_link(new_gif)
-            
-            if converted_img:
-                st.image(converted_img, caption="ตัวอย่าง Image (จะใช้ตัวนี้จริง)", width=300)
-            if converted_gif:
-                st.image(converted_gif, caption="ตัวอย่าง GIF", width=300)
+        edit_target = st.selectbox(
+            "เลือกอารมณ์ที่จะแก้ไข",
+            options=list(current_scenes.keys()) + ["+ เพิ่มอารมณ์ใหม่"]
+        )
 
-            if st.button(f"💾 บันทึก {emotion}", key=f"save_{emotion}", use_container_width=True):
-                profile['myla_scenes'][emotion] = {
-                    "image": converted_img,   # เก็บเป็น lh3 อัตโนมัติ
-                    "gif": converted_gif
-                }
-                dm.save_profile(profile)
-                st.session_state.profile = profile.copy()
-                st.success(f"✅ บันทึก {emotion} เรียบร้อย! (แปลงเป็น lh3 แล้ว)")
-                st.rerun()
+        col1, col2 = st.columns(2)
+        with col1:
+            if edit_target == "+ เพิ่มอารมณ์ใหม่":
+                new_emo_name = st.text_input("ชื่ออารมณ์ (เช่น happy, angry)")
+                img_url = st.text_input("Image URL (Google Drive/Direct Link)")
+                gif_url = st.text_input("GIF URL (Giphy/Direct Link)")
+            else:
+                new_emo_name = edit_target
+                img_url = st.text_input("Image URL", value=current_scenes[edit_target].get('image', ''))
+                gif_url = st.text_input("GIF URL", value=current_scenes[edit_target].get('gif', ''))
 
-        st.info("✅ ตอนนี้พี่สามารถวางลิงก์ Drive ปกติได้เลย ไม่ต้องแปลงเองอีกต่อไป 💕")
+        with col2:
+            preview_url = convert_drive_link(img_url) if img_url else None
+            if preview_url:
+                st.image(preview_url, caption="Preview Image", width=150)
 
+        if st.button("💾 บันทึกการตั้งค่าฉาก", type="primary"):
+            if new_emo_name and img_url:
+                converted_img = convert_drive_link(img_url) or img_url
+                converted_gif = convert_drive_link(gif_url) if gif_url else ''
+                success = myla.save_myla_scene_config(new_emo_name, converted_img, converted_gif)
+                if success:
+                    st.success(f"บันทึกฉาก '{new_emo_name}' เรียบร้อยแล้ว!")
+                    st.experimental_rerun()
+                else:
+                    st.error("เกิดข้อผิดพลาดในการบันทึก")
+            else:
+                st.error("กรุณากรอกชื่ออารมณ์และ Image URL")
+
+        st.markdown("---")
+        st.markdown("### 📌 สถานะฉากที่มีอยู่")
+        for emo, assets in current_scenes.items():
+            st.write(f"- `{emo}`: image={assets.get('image','')} gif={assets.get('gif','')}")
 
 
 # ==================== MYLA LOGIN POPUP (น่ารักมาก) ====================
